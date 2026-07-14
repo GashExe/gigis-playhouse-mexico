@@ -1,80 +1,91 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Marca de la casita (playhouse) con corazón, en versión multicolor.
- * Techo naranja, cuerpo teal y corazón rosa: guiño al arcoíris de GiGi's.
+ * Marca oficial de GiGi's Playhouse.
+ *
+ * Los assets (`/brand/*.png`) son la versión knockout (blanca) del logo
+ * oficial. Se usan como MÁSCARA CSS: la silueta oficial se rellena con el
+ * color/degradado que se indique, así el mismo asset sirve en claro, oscuro
+ * o a todo color sin perder fidelidad al logo real.
  */
-export function LogoMark({ className }: { className?: string }) {
+
+const WORDMARK_SRC = "/brand/gigis-wordmark-white.png"; // 627 x 317
+const LOCKUP_SRC = "/brand/gigis-lockup-white.png"; //   698 x 585
+
+type Tone = "rainbow" | "brand" | "ink" | "white";
+
+function toneBackground(tone: Tone): string {
+  switch (tone) {
+    case "rainbow":
+      return "var(--brand-rainbow)";
+    case "brand":
+      return "var(--primary)";
+    case "white":
+      return "#ffffff";
+    case "ink":
+    default:
+      return "var(--ink)";
+  }
+}
+
+function maskStyle(src: string): React.CSSProperties {
+  return {
+    WebkitMaskImage: `url("${src}")`,
+    maskImage: `url("${src}")`,
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center",
+    maskPosition: "center",
+    WebkitMaskSize: "contain",
+    maskSize: "contain",
+  };
+}
+
+/** Wordmark oficial "GiGi's Playhouse™" (compacto, para barras y encabezados). */
+export function Logo({
+  className,
+  tone = "rainbow",
+}: {
+  className?: string;
+  tone?: Tone;
+}) {
   return (
-    <svg
-      viewBox="0 0 40 40"
-      className={cn("size-9", className)}
+    <span
       role="img"
-      aria-label="Gigi's Playhouse"
-    >
-      {/* Techo */}
-      <path
-        d="M20 3.5 5 15.5v2.4L20 6.6l15 11.3v-2.4L20 3.5Z"
-        fill="var(--brand-orange)"
-      />
-      {/* Alero amarillo (banda bajo el techo) */}
-      <path d="M20 6.6 6 17.6l1.7 1.3L20 9.2l12.3 9.7 1.7-1.3L20 6.6Z" fill="var(--brand-yellow)" />
-      {/* Cuerpo de la casa */}
-      <path
-        d="M8.3 17.4 20 8.4l11.7 9v17.1a2 2 0 0 1-2 2H10.3a2 2 0 0 1-2-2V17.4Z"
-        fill="var(--brand-teal)"
-      />
-      {/* Corazón (ventana) */}
-      <path
-        d="M20 31.4c-3.3-2.7-5.4-4.6-5.4-7.1a3 3 0 0 1 5.4-1.85 3 3 0 0 1 5.4 1.85c0 2.5-2.1 4.4-5.4 7.1Z"
-        fill="var(--brand-pink)"
-      />
-    </svg>
+      aria-label="GiGi's Playhouse México"
+      className={cn("block h-9", className)}
+      style={{
+        aspectRatio: "627 / 317",
+        background: toneBackground(tone),
+        ...maskStyle(WORDMARK_SRC),
+      }}
+    />
   );
 }
 
-/** Letras del wordmark "GiGi's", cada una con un color de la marca. */
-const WORDMARK: { ch: string; color: string }[] = [
-  { ch: "G", color: "var(--brand-pink)" },
-  { ch: "i", color: "var(--brand-teal)" },
-  { ch: "G", color: "var(--brand-orange)" },
-  { ch: "i", color: "var(--brand-blue)" },
-  { ch: "’", color: "var(--brand-green)" },
-  { ch: "s", color: "var(--brand-purple)" },
-];
-
-/**
- * Wordmark multicolor. `showText` muestra el lockup completo
- * ("GiGi's" + PLAYHOUSE + México); si es false, solo la casita.
- */
-export function Logo({
+/** Lockup completo (wordmark + lema + "Quéretaro, México"), para el login. */
+export function LogoLockup({
   className,
-  showText = true,
+  tone = "white",
 }: {
   className?: string;
-  showText?: boolean;
+  tone?: Tone;
 }) {
   return (
-    <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <LogoMark />
-      {showText && (
-        <span className="flex flex-col leading-none">
-          <span
-            className="text-[1.15rem] font-extrabold tracking-tight"
-            aria-label="Gigi's"
-          >
-            {WORDMARK.map((l, i) => (
-              <span key={i} style={{ color: l.color }}>
-                {l.ch}
-              </span>
-            ))}
-          </span>
-          <span className="mt-0.5 text-[0.6rem] font-bold uppercase tracking-[0.24em] text-muted">
-            Playhouse
-            <span className="ml-1.5 text-primary-strong">México</span>
-          </span>
-        </span>
-      )}
-    </span>
+    <span
+      role="img"
+      aria-label="GiGi's Playhouse México · Centro de éxito del síndrome de Down"
+      className={cn("block w-56", className)}
+      style={{
+        aspectRatio: "698 / 585",
+        background: toneBackground(tone),
+        ...maskStyle(LOCKUP_SRC),
+      }}
+    />
   );
+}
+
+/** Marca compacta = wordmark en tamaño reducido (para el encabezado móvil). */
+export function LogoMark({ className }: { className?: string }) {
+  return <Logo className={cn("h-7", className)} tone="rainbow" />;
 }

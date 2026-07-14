@@ -13,7 +13,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { cn, initials } from "@/lib/utils";
-import { Logo, LogoMark } from "@/components/brand";
+import { Logo } from "@/components/brand";
 import { logout } from "@/lib/actions/auth";
 import type { Role } from "@/lib/generated/prisma/client";
 
@@ -106,10 +106,7 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
       {/* Barra superior móvil */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-sidebar/95 px-4 backdrop-blur lg:hidden">
         <span aria-hidden className="rainbow-strip absolute inset-x-0 top-0 h-1" />
-        <Logo showText={false} />
-        <span className="text-sm font-extrabold tracking-tight text-ink">
-          Gigi&apos;s Playhouse
-        </span>
+        <Logo className="h-7" />
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menú"

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Heart, Sparkle, UsersThree } from "@phosphor-icons/react/dist/ssr";
-import { Logo } from "@/components/brand";
+import { Logo, LogoLockup } from "@/components/brand";
 import { LoginForm } from "@/components/login-form";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -20,9 +20,7 @@ export default function LoginPage() {
           }}
         />
         <div className="relative">
-          <span className="inline-flex rounded-[var(--radius-card)] bg-white px-4 py-3 shadow-[var(--shadow-md)]">
-            <Logo />
-          </span>
+          <LogoLockup tone="white" className="w-52 xl:w-60" />
         </div>
 
         <div className="relative max-w-md space-y-6">
@@ -73,7 +71,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-bg px-6 py-12 sm:px-10">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <Logo />
+            <Logo tone="rainbow" className="h-8" />
           </div>
           <div className="mb-7 space-y-1.5">
             <h2 className="text-2xl font-extrabold tracking-tight text-ink">
