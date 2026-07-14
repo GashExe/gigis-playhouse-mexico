@@ -8,7 +8,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 /// Cuentas del sistema: la directora administra todo; las maestras consultan y registran.

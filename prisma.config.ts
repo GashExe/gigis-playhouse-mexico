@@ -10,6 +10,8 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Migraciones y CLI usan la conexión directa (sesión, 5432); pgbouncer
+    // en modo transacción (6543) no soporta todas las operaciones DDL.
+    url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });
