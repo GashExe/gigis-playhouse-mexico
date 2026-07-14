@@ -1,0 +1,273 @@
+@import "tailwindcss";
+
+/* =========================================================================
+   Plataforma Gigi's Playhouse México — Sistema de diseño
+   Mood: salón soleado, cálido y ordenado. Estrategia: Restrained.
+   Marca: teal (confianza, calma) + ámbar (alegría). Superficie casi pura.
+   Colores en OKLCH.
+   ========================================================================= */
+
+:root {
+  /* Superficies / neutros */
+  --bg: oklch(0.985 0.006 195);          /* lienzo de la app (near-white teal-tint) */
+  --surface: oklch(1 0 0);               /* tarjetas / contenido */
+  --surface-2: oklch(0.972 0.008 195);   /* hover / zonas elevadas sutiles */
+  --sidebar: oklch(0.995 0.004 195);     /* barra lateral */
+  --border: oklch(0.918 0.008 200);
+  --border-strong: oklch(0.86 0.011 200);
+
+  /* Texto (tinta) — verificado para contraste sobre superficies claras */
+  --ink: oklch(0.24 0.015 225);          /* principal */
+  --ink-muted: oklch(0.47 0.016 225);    /* secundario (≥4.5:1 sobre blanco) */
+  --ink-subtle: oklch(0.58 0.014 225);   /* terciario (texto grande / no crítico) */
+  --ink-on-brand: oklch(0.99 0.005 195); /* texto sobre teal/ámbar oscuros */
+
+  /* Marca — primaria (teal) */
+  --primary: oklch(0.52 0.113 194);      /* acciones, selección (blanco encima ≈4.6:1) */
+  --primary-hover: oklch(0.46 0.115 194);
+  --primary-strong: oklch(0.42 0.11 196);/* enlaces / texto teal sobre claro */
+  --primary-weak: oklch(0.955 0.028 194);/* fondo de estado seleccionado */
+  --primary-ring: oklch(0.62 0.10 194 / 0.45);
+
+  /* Marca — acento (ámbar, alegría) */
+  --accent: oklch(0.82 0.138 78);
+  --accent-strong: oklch(0.56 0.12 62);  /* texto ámbar sobre claro */
+  --accent-weak: oklch(0.96 0.05 82);
+
+  /* ---- Arcoíris de marca (colores del logo oficial GiGi's) ----
+     Cada hue es alegre pero legible. Para "chips" suaves se mezcla con
+     la superficie (color-mix); para texto sobre claro usar la -ink. */
+  --brand-pink:   oklch(0.62 0.21 358);
+  --brand-green:  oklch(0.72 0.16 145);
+  --brand-yellow: oklch(0.83 0.15 88);
+  --brand-orange: oklch(0.70 0.16 52);
+  --brand-blue:   oklch(0.64 0.15 235);
+  --brand-teal:   oklch(0.64 0.10 190);
+  --brand-purple: oklch(0.52 0.18 322);
+
+  /* Variantes oscuras para texto sobre superficies claras (≥4.5:1) */
+  --brand-pink-ink:   oklch(0.50 0.20 358);
+  --brand-green-ink:  oklch(0.46 0.13 145);
+  --brand-yellow-ink: oklch(0.52 0.12 74);
+  --brand-orange-ink: oklch(0.52 0.15 48);
+  --brand-blue-ink:   oklch(0.50 0.15 245);
+  --brand-teal-ink:   oklch(0.46 0.09 190);
+  --brand-purple-ink: oklch(0.46 0.17 322);
+
+  /* Degradado arcoíris (barras decorativas, encabezados) */
+  --brand-rainbow: linear-gradient(
+    90deg,
+    var(--brand-pink) 0%,
+    var(--brand-orange) 20%,
+    var(--brand-yellow) 38%,
+    var(--brand-green) 56%,
+    var(--brand-teal) 72%,
+    var(--brand-blue) 86%,
+    var(--brand-purple) 100%
+  );
+
+  /* Semánticos */
+  --success: oklch(0.58 0.13 150);
+  --success-weak: oklch(0.95 0.045 150);
+  --success-strong: oklch(0.44 0.11 150);
+  --warning: oklch(0.75 0.14 74);
+  --warning-weak: oklch(0.955 0.055 80);
+  --warning-strong: oklch(0.52 0.11 60);
+  --danger: oklch(0.57 0.205 25);
+  --danger-weak: oklch(0.955 0.04 25);
+  --danger-strong: oklch(0.5 0.19 25);
+  --info: oklch(0.58 0.12 240);
+  --info-weak: oklch(0.95 0.04 240);
+
+  /* Sombras tintadas al hue de marca */
+  --shadow-color: 200 30% 22%;
+  --shadow-sm: 0 1px 2px oklch(0.4 0.03 220 / 0.06), 0 1px 3px oklch(0.4 0.03 220 / 0.05);
+  --shadow-md: 0 2px 4px oklch(0.4 0.03 220 / 0.05), 0 6px 16px oklch(0.4 0.03 220 / 0.08);
+  --shadow-lg: 0 4px 8px oklch(0.4 0.03 220 / 0.06), 0 16px 40px oklch(0.4 0.03 220 / 0.12);
+
+  /* Radios — regla: tarjetas 16px, controles 10px, inputs 8px, píldoras full */
+  --radius-card: 16px;
+  --radius-control: 10px;
+  --radius-input: 8px;
+  --radius-pill: 9999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.205 0.014 235);
+    --surface: oklch(0.245 0.015 235);
+    --surface-2: oklch(0.285 0.016 235);
+    --sidebar: oklch(0.185 0.013 235);
+    --border: oklch(0.33 0.017 235);
+    --border-strong: oklch(0.42 0.02 235);
+
+    --ink: oklch(0.95 0.008 220);
+    --ink-muted: oklch(0.75 0.012 220);
+    --ink-subtle: oklch(0.62 0.012 220);
+    --ink-on-brand: oklch(0.99 0.005 195);
+
+    --primary: oklch(0.68 0.12 194);
+    --primary-hover: oklch(0.74 0.12 194);
+    --primary-strong: oklch(0.78 0.11 194);
+    --primary-weak: oklch(0.32 0.05 194);
+    --primary-ring: oklch(0.68 0.12 194 / 0.5);
+
+    --accent: oklch(0.82 0.138 78);
+    --accent-strong: oklch(0.84 0.12 80);
+    --accent-weak: oklch(0.36 0.06 74);
+
+    /* Arcoíris — fills un poco más luminosos sobre lienzo oscuro */
+    --brand-pink:   oklch(0.68 0.20 358);
+    --brand-green:  oklch(0.78 0.16 145);
+    --brand-yellow: oklch(0.85 0.15 88);
+    --brand-orange: oklch(0.75 0.16 52);
+    --brand-blue:   oklch(0.70 0.15 235);
+    --brand-teal:   oklch(0.72 0.10 190);
+    --brand-purple: oklch(0.64 0.18 322);
+
+    /* Texto de color sobre superficies oscuras → variantes claras */
+    --brand-pink-ink:   oklch(0.78 0.16 358);
+    --brand-green-ink:  oklch(0.84 0.15 145);
+    --brand-yellow-ink: oklch(0.87 0.14 88);
+    --brand-orange-ink: oklch(0.82 0.14 52);
+    --brand-blue-ink:   oklch(0.80 0.13 235);
+    --brand-teal-ink:   oklch(0.80 0.10 190);
+    --brand-purple-ink: oklch(0.76 0.16 322);
+
+    --success: oklch(0.68 0.13 150);
+    --success-weak: oklch(0.33 0.06 150);
+    --success-strong: oklch(0.78 0.12 150);
+    --warning: oklch(0.8 0.14 74);
+    --warning-weak: oklch(0.36 0.06 74);
+    --warning-strong: oklch(0.84 0.12 74);
+    --danger: oklch(0.68 0.19 25);
+    --danger-weak: oklch(0.36 0.08 25);
+    --danger-strong: oklch(0.78 0.16 25);
+    --info: oklch(0.7 0.12 240);
+    --info-weak: oklch(0.34 0.06 240);
+
+    --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3), 0 1px 3px oklch(0 0 0 / 0.25);
+    --shadow-md: 0 2px 4px oklch(0 0 0 / 0.3), 0 6px 16px oklch(0 0 0 / 0.4);
+    --shadow-lg: 0 4px 8px oklch(0 0 0 / 0.35), 0 16px 40px oklch(0 0 0 / 0.5);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-sidebar: var(--sidebar);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-ink: var(--ink);
+  --color-muted: var(--ink-muted);
+  --color-subtle: var(--ink-subtle);
+  --color-on-brand: var(--ink-on-brand);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-weak: var(--primary-weak);
+
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-weak: var(--accent-weak);
+
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-green: var(--brand-green);
+  --color-brand-yellow: var(--brand-yellow);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-teal: var(--brand-teal);
+  --color-brand-purple: var(--brand-purple);
+
+  --color-success: var(--success);
+  --color-success-weak: var(--success-weak);
+  --color-success-strong: var(--success-strong);
+  --color-warning: var(--warning);
+  --color-warning-weak: var(--warning-weak);
+  --color-warning-strong: var(--warning-strong);
+  --color-danger: var(--danger);
+  --color-danger-weak: var(--danger-weak);
+  --color-danger-strong: var(--danger-strong);
+  --color-info: var(--info);
+  --color-info-weak: var(--info-weak);
+
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --radius-input: var(--radius-input);
+
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Números tabulares para datos y calificaciones */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Franja arcoíris de marca (acento decorativo, ej. borde superior) */
+.rainbow-strip {
+  background: var(--brand-rainbow);
+}
+
+/* Texto con degradado arcoíris (para títulos de marca puntuales) */
+.rainbow-text {
+  background: var(--brand-rainbow);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+::selection {
+  background: var(--primary-weak);
+  color: var(--primary-strong);
+}
+
+/* Anillo de foco consistente y accesible */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-input);
+}
+
+/* Scrollbar discreto (no reinventado, solo afinado) */
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

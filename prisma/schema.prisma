@@ -1,0 +1,133 @@
+// Plataforma Gigi's Playhouse México
+// Esquema de datos: usuarios (roles), estudiantes, programas, inscripciones y evaluaciones.
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Cuentas del sistema: la directora administra todo; las maestras consultan y registran.
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(MAESTRA)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  evaluations Evaluation[] @relation("EvaluadorEvaluaciones")
+
+  @@index([role])
+}
+
+enum Role {
+  DIRECTORA
+  MAESTRA
+}
+
+/// Estudiantes ("participantes") de Gigi's Playhouse.
+model Student {
+  id            String        @id @default(cuid())
+  firstName     String
+  lastName      String
+  birthDate     DateTime?
+  gender        Gender?
+  photoUrl      String?
+  // Tutor / familiar responsable
+  guardianName  String?
+  guardianPhone String?
+  guardianEmail String?
+  address       String?
+  // Notas generales (intereses, apoyos, observaciones). Datos sensibles: acceso solo autenticado.
+  notes         String?
+  enrollmentDate DateTime     @default(now())
+  status        StudentStatus @default(ACTIVO)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  enrollments Enrollment[]
+  evaluations Evaluation[]
+
+  @@index([status])
+  @@index([lastName])
+}
+
+enum Gender {
+  FEMENINO
+  MASCULINO
+  OTRO
+}
+
+enum StudentStatus {
+  ACTIVO
+  INACTIVO
+  EGRESADO
+}
+
+/// Catálogo de programas ofrecidos (ej. lectura, lenguaje, habilidades para la vida).
+model Program {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  area        String?  // Área o categoría del programa
+  color       String?  // Color para identificarlo visualmente
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  enrollments Enrollment[]
+  evaluations Evaluation[]
+
+  @@index([active])
+}
+
+/// Inscripción de un estudiante a un programa (relación con historial).
+model Enrollment {
+  id        String           @id @default(cuid())
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  program   Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId String
+  startDate DateTime         @default(now())
+  endDate   DateTime?
+  status    EnrollmentStatus @default(ACTIVA)
+  notes     String?
+  createdAt DateTime         @default(now())
+
+  @@unique([studentId, programId])
+  @@index([programId])
+}
+
+enum EnrollmentStatus {
+  ACTIVA
+  PAUSADA
+  FINALIZADA
+}
+
+/// Evaluación / calificación de un estudiante en un momento dado.
+model Evaluation {
+  id          String   @id @default(cuid())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  program     Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  programId   String?
+  date        DateTime @default(now())
+  title       String
+  score       Float?   // Calificación numérica (opcional)
+  scale       String?  // Escala o rúbrica usada (ej. "1-10", "Logrado / En proceso")
+  level       String?  // Nivel cualitativo (ej. "Logrado", "En proceso", "Inicial")
+  notes       String?
+  evaluator   User?    @relation("EvaluadorEvaluaciones", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  evaluatorId String?
+  createdAt   DateTime @default(now())
+
+  @@index([studentId])
+  @@index([date])
+}
