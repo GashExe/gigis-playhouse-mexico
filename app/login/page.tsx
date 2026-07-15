@@ -82,7 +82,7 @@ export default function LoginPage() {
       </section>
 
       {/* Formulario */}
-      <section className="flex items-center justify-center bg-bg px-6 py-12 sm:px-10">
+      <section className="flex items-center justify-center bg-bg px-6 pb-[calc(env(safe-area-inset-bottom)+3rem)] pt-[calc(env(safe-area-inset-top)+3rem)] sm:px-10 lg:py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <Logo tone="rainbow" className="h-8" />

@@ -26,13 +26,16 @@ export function LoginForm() {
         </div>
       )}
 
-      <Field label="Correo electrónico" htmlFor="email">
+      <Field label="Usuario" htmlFor="username">
         <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="tucorreo@gigisplayhouse.mx"
+          id="username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="tu usuario"
           required
           autoFocus
         />

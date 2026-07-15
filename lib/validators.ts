@@ -1,9 +1,20 @@
 import * as z from "zod";
 
 export const LoginSchema = z.object({
-  email: z.string().trim().email({ message: "Ingresa un correo válido." }),
+  username: z.string().trim().min(1, { message: "Ingresa tu usuario." }),
   password: z.string().min(1, { message: "Ingresa tu contraseña." }),
 });
+
+/** Usuario: minúsculas, sin espacios; solo letras, números y . _ - */
+const usernameField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, { message: "El usuario debe tener al menos 3 caracteres." })
+  .max(30, { message: "El usuario es demasiado largo." })
+  .regex(/^[a-z0-9._-]+$/, {
+    message: "Usa solo letras, números y . _ - (sin espacios).",
+  });
 
 export const StudentSchema = z.object({
   firstName: z.string().trim().min(1, { message: "El nombre es obligatorio." }),
@@ -50,7 +61,13 @@ export const EvaluationSchema = z.object({
 
 export const UserSchema = z.object({
   name: z.string().trim().min(1, { message: "El nombre es obligatorio." }),
-  email: z.string().trim().email({ message: "Correo no válido." }),
+  username: usernameField,
+  email: z
+    .string()
+    .trim()
+    .email({ message: "Correo no válido." })
+    .optional()
+    .or(z.literal("")),
   role: z.enum(["DIRECTORA", "MAESTRA"]).default("MAESTRA"),
   password: z
     .string()

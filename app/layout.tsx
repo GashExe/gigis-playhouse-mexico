@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -16,6 +16,16 @@ export const metadata: Metadata = {
   },
   description:
     "Plataforma de registro y seguimiento de participantes, programas y evaluaciones de Gigi's Playhouse México.",
+};
+
+export const viewport: Viewport = {
+  // `cover` permite que el contenido use toda la pantalla y expone las
+  // safe-areas (notch arriba, barra de gestos abajo) vía env(safe-area-inset-*).
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f7fbfb" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b2027" },
+  ],
 };
 
 export default function RootLayout({

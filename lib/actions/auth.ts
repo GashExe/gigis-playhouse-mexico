@@ -15,21 +15,21 @@ export async function login(
   formData: FormData,
 ): Promise<LoginState> {
   const parsed = LoginSchema.safeParse({
-    email: formData.get("email"),
+    username: formData.get("username"),
     password: formData.get("password"),
   });
 
   if (!parsed.success) {
-    return { error: "Revisa el correo y la contraseña." };
+    return { error: "Revisa el usuario y la contraseña." };
   }
 
-  const { email, password } = parsed.data;
+  const { username, password } = parsed.data;
   const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
+    where: { username: username.toLowerCase() },
   });
 
-  // Mensaje genérico para no revelar si el correo existe.
-  const invalid = { error: "Correo o contraseña incorrectos." };
+  // Mensaje genérico para no revelar si el usuario existe.
+  const invalid = { error: "Usuario o contraseña incorrectos." };
   if (!user || !user.active) return invalid;
 
   const ok = await bcrypt.compare(password, user.passwordHash);

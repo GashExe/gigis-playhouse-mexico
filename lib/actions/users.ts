@@ -26,6 +26,7 @@ export async function createUser(
   await requireDirectora();
   const parsed = UserSchema.safeParse({
     name: formData.get("name"),
+    username: formData.get("username"),
     email: formData.get("email"),
     role: (formData.get("role") as string) || "MAESTRA",
     password: formData.get("password") ?? "",
@@ -38,15 +39,20 @@ export async function createUser(
     return { errors: { password: ["Define una contraseña inicial."] } };
   }
 
-  const email = d.email.toLowerCase();
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
+  const username = d.username.toLowerCase();
+  const email = d.email ? d.email.toLowerCase() : null;
+
+  if (await prisma.user.findUnique({ where: { username } })) {
+    return { errors: { username: ["Ese usuario ya está en uso."] } };
+  }
+  if (email && (await prisma.user.findUnique({ where: { email } }))) {
     return { errors: { email: ["Ya existe una cuenta con este correo."] } };
   }
 
   await prisma.user.create({
     data: {
       name: d.name,
+      username,
       email,
       role: d.role,
       passwordHash: await bcrypt.hash(d.password, 10),
@@ -64,6 +70,7 @@ export async function updateUser(
   await requireDirectora();
   const parsed = UserSchema.safeParse({
     name: formData.get("name"),
+    username: formData.get("username"),
     email: formData.get("email"),
     role: (formData.get("role") as string) || "MAESTRA",
     password: formData.get("password") ?? "",
@@ -72,18 +79,29 @@ export async function updateUser(
     return { errors: parsed.error.flatten().fieldErrors };
   }
   const d = parsed.data;
-  const email = d.email.toLowerCase();
-  const clash = await prisma.user.findFirst({
-    where: { email, NOT: { id } },
+  const username = d.username.toLowerCase();
+  const email = d.email ? d.email.toLowerCase() : null;
+
+  const usernameClash = await prisma.user.findFirst({
+    where: { username, NOT: { id } },
   });
-  if (clash) {
-    return { errors: { email: ["Ya existe una cuenta con este correo."] } };
+  if (usernameClash) {
+    return { errors: { username: ["Ese usuario ya está en uso."] } };
+  }
+  if (email) {
+    const emailClash = await prisma.user.findFirst({
+      where: { email, NOT: { id } },
+    });
+    if (emailClash) {
+      return { errors: { email: ["Ya existe una cuenta con este correo."] } };
+    }
   }
 
   await prisma.user.update({
     where: { id },
     data: {
       name: d.name,
+      username,
       email,
       role: d.role,
       ...(d.password ? { passwordHash: await bcrypt.hash(d.password, 10) } : {}),

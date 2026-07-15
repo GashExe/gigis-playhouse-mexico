@@ -24,7 +24,8 @@ import { initials } from "@/lib/utils";
 type UserRow = {
   id: string;
   name: string;
-  email: string;
+  username: string;
+  email: string | null;
   role: "DIRECTORA" | "MAESTRA";
   active: boolean;
   createdAt: Date;
@@ -95,7 +96,10 @@ export function UsersManager({
                     {!u.active && <Badge tone="neutral">Desactivada</Badge>}
                     {u.id === currentUserId && <Badge tone="neutral">Tú</Badge>}
                   </div>
-                  <p className="truncate text-sm text-muted">{u.email}</p>
+                  <p className="truncate text-sm text-muted">
+                    <span className="font-medium text-ink">@{u.username}</span>
+                    {u.email ? ` · ${u.email}` : ""}
+                  </p>
                 </div>
                 <div className="hidden text-right text-xs text-muted sm:block">
                   <p className="tnum font-semibold text-ink">{u._count.evaluations}</p>
@@ -181,8 +185,26 @@ function UserForm({
           <Field label="Nombre completo" htmlFor="name" required error={err.name?.[0]}>
             <Input id="name" name="name" defaultValue={defaults?.name} required autoFocus />
           </Field>
-          <Field label="Correo electrónico" htmlFor="email" required error={err.email?.[0]}>
-            <Input id="email" name="email" type="email" defaultValue={defaults?.email} required />
+          <Field
+            label="Usuario"
+            htmlFor="username"
+            required
+            error={err.username?.[0]}
+            hint="Con lo que inicia sesión. Solo letras, números y . _ -"
+          >
+            <Input
+              id="username"
+              name="username"
+              defaultValue={defaults?.username}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="ej. maria"
+              required
+            />
+          </Field>
+          <Field label="Correo electrónico" htmlFor="email" error={err.email?.[0]} hint="Opcional.">
+            <Input id="email" name="email" type="email" defaultValue={defaults?.email ?? ""} />
           </Field>
           <Field label="Rol" htmlFor="role">
             <Select id="role" name="role" defaultValue={defaults?.role ?? "MAESTRA"}>

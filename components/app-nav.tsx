@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import {
   House,
   UsersThree,
   Books,
   UserGear,
   SignOut,
-  List,
-  X,
 } from "@phosphor-icons/react";
 import { cn, initials } from "@/lib/utils";
 import { Logo } from "@/components/brand";
@@ -31,25 +28,28 @@ const NAV: NavItem[] = [
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
 ];
 
-function NavLinks({
-  role,
-  onNavigate,
-}: {
-  role: Role;
-  onNavigate?: () => void;
-}) {
+function useVisibleNav(role: Role) {
+  return NAV.filter((i) => !i.roles || i.roles.includes(role));
+}
+
+function isActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+/* ---------- Escritorio: barra lateral ---------- */
+
+function NavLinks({ role }: { role: Role }) {
   const pathname = usePathname();
+  const items = useVisibleNav(role);
   return (
     <nav className="flex flex-col gap-1">
-      {NAV.filter((i) => !i.roles || i.roles.includes(role)).map((item) => {
-        const active =
-          pathname === item.href || pathname.startsWith(item.href + "/");
+      {items.map((item) => {
+        const active = isActive(pathname, item.href);
         const Icon = item.icon;
         return (
           <Link
             key={item.href}
             href={item.href}
-            onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
               "group flex items-center gap-3 rounded-[var(--radius-control)] px-3 py-2.5 text-sm font-semibold transition-colors",
@@ -60,7 +60,10 @@ function NavLinks({
           >
             <Icon
               weight={active ? "fill" : "regular"}
-              className={cn("size-[1.15rem]", active ? "text-primary" : "text-subtle group-hover:text-ink")}
+              className={cn(
+                "size-[1.15rem]",
+                active ? "text-primary" : "text-subtle group-hover:text-ink",
+              )}
             />
             {item.label}
           </Link>
@@ -116,22 +119,83 @@ function MexNodusCredit() {
   );
 }
 
-export function AppNav({ name, role }: { name: string; role: Role }) {
-  const [open, setOpen] = useState(false);
+/* ---------- Móvil: barra flotante "liquid glass" ---------- */
 
+function GlassTabBar({ role }: { role: Role }) {
+  const pathname = usePathname();
+  const items = useVisibleNav(role);
+  return (
+    <nav
+      aria-label="Navegación principal"
+      className={cn(
+        "liquid-glass fixed inset-x-0 bottom-0 z-40 mx-auto flex w-[min(92%,26rem)]",
+        "items-stretch justify-around gap-1 rounded-[1.6rem] p-1.5 lg:hidden",
+      )}
+      // Separación del borde inferior respetando la barra de gestos (Android/iOS).
+      style={{ marginBottom: "calc(env(safe-area-inset-bottom) + 0.6rem)" }}
+    >
+      {items.map((item) => {
+        const active = isActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "relative flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-1 py-2 transition-colors",
+              active ? "text-primary-strong" : "text-muted hover:text-ink",
+            )}
+          >
+            {active && (
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-[1.2rem] bg-primary-weak shadow-[inset_0_1px_0_oklch(1_0_0_/_0.5)]"
+              />
+            )}
+            <Icon
+              weight={active ? "fill" : "regular"}
+              className={cn("relative size-[1.4rem]", active ? "text-primary" : "text-subtle")}
+            />
+            <span className="relative whitespace-nowrap text-[0.62rem] font-semibold leading-none">
+              {item.label}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function AppNav({ name, role }: { name: string; role: Role }) {
   return (
     <>
-      {/* Barra superior móvil */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-sidebar/95 px-4 backdrop-blur lg:hidden">
+      {/* Barra superior móvil (respeta el notch con safe-area arriba) */}
+      <header
+        className="sticky top-0 z-30 border-b border-border bg-sidebar/95 backdrop-blur lg:hidden"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <span aria-hidden className="rainbow-strip absolute inset-x-0 top-0 h-1" />
-        <Logo className="h-7" />
-        <button
-          onClick={() => setOpen(true)}
-          aria-label="Abrir menú"
-          className="flex size-9 items-center justify-center rounded-[var(--radius-input)] text-ink hover:bg-surface-2"
-        >
-          <List className="size-5" />
-        </button>
+        <div className="flex h-14 items-center justify-between px-4">
+          <Logo className="h-7" />
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden
+              className="flex size-8 items-center justify-center rounded-full bg-primary-weak text-xs font-bold text-primary-strong"
+            >
+              {initials(name)}
+            </span>
+            <form action={logout}>
+              <button
+                type="submit"
+                aria-label="Cerrar sesión"
+                className="flex size-9 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+              >
+                <SignOut className="size-[1.2rem]" />
+              </button>
+            </form>
+          </div>
+        </div>
       </header>
 
       {/* Sidebar escritorio */}
@@ -149,34 +213,8 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
         </div>
       </aside>
 
-      {/* Drawer móvil */}
-      {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col gap-6 border-r border-border bg-sidebar px-4 py-5 shadow-[var(--shadow-lg)]">
-            <div className="flex items-center justify-between px-2">
-              <Logo />
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Cerrar menú"
-                className="flex size-9 items-center justify-center rounded-[var(--radius-input)] text-ink hover:bg-surface-2"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-            <div className="flex-1">
-              <NavLinks role={role} onNavigate={() => setOpen(false)} />
-            </div>
-            <div className="flex flex-col gap-3">
-              <UserCard name={name} role={role} />
-              <MexNodusCredit />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Barra flotante liquid glass (solo móvil) */}
+      <GlassTabBar role={role} />
     </>
   );
 }

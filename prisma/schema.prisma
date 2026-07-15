@@ -15,7 +15,8 @@ datasource db {
 model User {
   id           String   @id @default(cuid())
   name         String
-  email        String   @unique
+  username     String   @unique // Identificador de acceso (usuario)
+  email        String?  @unique // Opcional: dato de contacto, ya no se usa para entrar
   passwordHash String
   role         Role     @default(MAESTRA)
   active       Boolean  @default(true)

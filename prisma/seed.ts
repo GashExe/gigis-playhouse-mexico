@@ -16,10 +16,11 @@ async function main() {
   const hash = (pw: string) => bcrypt.hash(pw, 10);
 
   const directora = await prisma.user.upsert({
-    where: { email: "directora@gigisplayhouse.mx" },
-    update: {},
+    where: { username: "directora" },
+    update: { username: "directora" },
     create: {
       name: "Marisol Cervantes",
+      username: "directora",
       email: "directora@gigisplayhouse.mx",
       passwordHash: await hash("Gigis2026!"),
       role: "DIRECTORA",
@@ -28,15 +29,16 @@ async function main() {
 
   const maestras = await Promise.all(
     [
-      { name: "Renata Ávila", email: "renata@gigisplayhouse.mx" },
-      { name: "Ximena Bustos", email: "ximena@gigisplayhouse.mx" },
-      { name: "Paulina Escobedo", email: "paulina@gigisplayhouse.mx" },
+      { name: "Renata Ávila", username: "renata", email: "renata@gigisplayhouse.mx" },
+      { name: "Ximena Bustos", username: "ximena", email: "ximena@gigisplayhouse.mx" },
+      { name: "Paulina Escobedo", username: "paulina", email: "paulina@gigisplayhouse.mx" },
     ].map(async (m) =>
       prisma.user.upsert({
-        where: { email: m.email },
-        update: {},
+        where: { username: m.username },
+        update: { username: m.username },
         create: {
           name: m.name,
+          username: m.username,
           email: m.email,
           passwordHash: await hash("Maestra2026!"),
           role: "MAESTRA",
@@ -131,8 +133,8 @@ async function main() {
     evaluaciones: await prisma.evaluation.count(),
   };
   console.log("✅ Listo:", counts);
-  console.log(`\n   Directora: ${directora.email}  /  Gigis2026!`);
-  console.log(`   Maestra:   renata@gigisplayhouse.mx  /  Maestra2026!\n`);
+  console.log(`\n   Directora: usuario "${directora.username}"  /  Gigis2026!`);
+  console.log(`   Maestra:   usuario "renata"  /  Maestra2026!\n`);
 }
 
 main()

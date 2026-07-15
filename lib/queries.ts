@@ -119,6 +119,7 @@ export async function listUsers() {
     select: {
       id: true,
       name: true,
+      username: true,
       email: true,
       role: true,
       active: true,

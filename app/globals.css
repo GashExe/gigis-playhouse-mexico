@@ -233,6 +233,36 @@ body {
   background: var(--brand-rainbow);
 }
 
+/* Material "liquid glass" (estilo Apple): translúcido, con desenfoque +
+   saturación, reflejo especular arriba y sombra profunda. */
+.liquid-glass {
+  background: color-mix(in oklab, var(--surface) 55%, transparent);
+  backdrop-filter: blur(22px) saturate(185%);
+  -webkit-backdrop-filter: blur(22px) saturate(185%);
+  border: 1px solid color-mix(in oklab, var(--border-strong) 50%, transparent);
+  box-shadow:
+    var(--shadow-lg),
+    inset 0 1px 0 oklch(1 0 0 / 0.55),
+    inset 0 -1px 1px oklch(1 0 0 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .liquid-glass {
+    background: color-mix(in oklab, var(--surface) 62%, transparent);
+    border-color: color-mix(in oklab, oklch(1 0 0) 14%, transparent);
+    box-shadow: var(--shadow-lg), inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+}
+
+/* Respaldo: si el navegador no soporta desenfoque, usamos superficie sólida. */
+@supports not (
+  (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+  .liquid-glass {
+    background: var(--surface);
+  }
+}
+
 /* Texto con degradado arcoíris (para títulos de marca puntuales) */
 .rainbow-text {
   background: var(--brand-rainbow);
