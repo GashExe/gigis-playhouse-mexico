@@ -82,13 +82,6 @@ export async function getStudent(id: string) {
         include: { program: true },
         orderBy: { startDate: "desc" },
       },
-      evaluations: {
-        include: {
-          program: { select: { name: true, color: true } },
-          evaluator: { select: { name: true } },
-        },
-        orderBy: { date: "desc" },
-      },
     },
   });
 }

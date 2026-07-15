@@ -2,13 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
-  Cake,
   Phone,
   EnvelopeSimple,
   MapPin,
   User,
-  ChartLineUp,
-  Star,
+  Stack,
   GraduationCap,
   Key,
 } from "@phosphor-icons/react/dist/ssr";
@@ -28,7 +26,6 @@ import { Card } from "@/components/ui/card";
 import { StudentStatusBadge } from "@/components/status";
 import { StudentActions } from "@/components/student-actions";
 import { EnrollmentsPanel } from "@/components/enrollments-panel";
-import { EvaluationsPanel } from "@/components/evaluations-panel";
 import { LevelRecordsPanel } from "@/components/level-records-panel";
 
 const genderLabel: Record<string, string> = {
@@ -74,11 +71,6 @@ export default async function StudentDetailPage({
   const levelRecords = selectedCycleId ? await getStudentLevels(id, selectedCycleId) : [];
 
   const age = ageFrom(student.birthDate);
-  const scored = student.evaluations.filter((e) => e.score != null);
-  const avg =
-    scored.length > 0
-      ? Math.round((scored.reduce((s, e) => s + (e.score ?? 0), 0) / scored.length) * 10) / 10
-      : null;
   const activeEnrollments = student.enrollments.filter((e) => e.status === "ACTIVA").length;
 
   const contactRows = [
@@ -123,21 +115,16 @@ export default async function StudentDetailPage({
       </div>
 
       {/* Resumen de progreso */}
-      <div className="mb-6 grid grid-cols-3 gap-3">
+      <div className="mb-6 grid grid-cols-2 gap-3">
         <SummaryTile
           icon={<GraduationCap weight="fill" className="size-[1.15rem]" />}
           value={activeEnrollments}
           label="Programas activos"
         />
         <SummaryTile
-          icon={<Star weight="fill" className="size-[1.15rem]" />}
-          value={student.evaluations.length}
-          label="Evaluaciones"
-        />
-        <SummaryTile
-          icon={<ChartLineUp weight="fill" className="size-[1.15rem]" />}
-          value={avg != null ? avg : "—"}
-          label="Promedio general"
+          icon={<Stack weight="fill" className="size-[1.15rem]" />}
+          value={levelRecords.length}
+          label="Niveles registrados (este ciclo)"
         />
       </div>
 
@@ -150,9 +137,6 @@ export default async function StudentDetailPage({
               id: e.id,
               status: e.status,
               startDate: e.startDate,
-              level: e.level,
-              levelNote: e.levelNote,
-              gradedAt: e.gradedAt,
               program: {
                 id: e.program.id,
                 name: e.program.name,
@@ -178,11 +162,6 @@ export default async function StudentDetailPage({
               selectedCycleId={selectedCycleId}
             />
           )}
-          <EvaluationsPanel
-            studentId={student.id}
-            evaluations={student.evaluations}
-            programs={programs.map((p) => ({ id: p.id, name: p.name }))}
-          />
         </div>
 
         {/* Barra lateral: información */}
