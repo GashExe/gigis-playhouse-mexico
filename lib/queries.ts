@@ -58,10 +58,11 @@ export async function listStudents(query?: string) {
   return prisma.student.findMany({
     where: q
       ? {
+          // insensitive: que buscar en minúsculas o mayúsculas dé lo mismo.
           OR: [
-            { firstName: { contains: q } },
-            { lastName: { contains: q } },
-            { guardianName: { contains: q } },
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { guardianName: { contains: q, mode: "insensitive" } },
           ],
         }
       : undefined,
