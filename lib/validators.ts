@@ -39,6 +39,14 @@ export const ProgramSchema = z.object({
   description: z.string().trim().optional(),
   area: z.string().trim().optional(),
   color: z.string().trim().optional(),
+  // Datos de la actividad (se reciben como texto del formulario)
+  schedule: z.string().trim().optional(),
+  type: z.string().trim().optional(),
+  ageMin: z.string().trim().optional().or(z.literal("")),
+  ageMax: z.string().trim().optional().or(z.literal("")),
+  studentCapacity: z.string().trim().optional().or(z.literal("")),
+  collaboratorCapacity: z.string().trim().optional().or(z.literal("")),
+  teacherId: z.string().trim().optional().or(z.literal("")),
 });
 
 export const EnrollmentSchema = z.object({

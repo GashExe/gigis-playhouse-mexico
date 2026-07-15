@@ -15,7 +15,7 @@ datasource db {
 model User {
   id           String   @id @default(cuid())
   name         String
-  username     String   @unique // Identificador de acceso (usuario)
+  username     String   @unique // Identificador de acceso (usuario). Para alumnos: su matrícula.
   email        String?  @unique // Opcional: dato de contacto, ya no se usa para entrar
   passwordHash String
   role         Role     @default(MAESTRA)
@@ -23,7 +23,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Contraseña inicial autogenerada (texto). Visible SOLO para la directora, para
+  // poder entregársela/reimprimirla a la familia. No se expone al cliente en general.
+  initialPassword String?
+
+  // Cuenta ligada a un participante (solo para role ALUMNO).
+  studentId String?  @unique
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
   evaluations Evaluation[] @relation("EvaluadorEvaluaciones")
+  programs    Program[]    @relation("MaestroPrograma") // Programas/actividades a su cargo
 
   @@index([role])
 }
@@ -31,11 +40,13 @@ model User {
 enum Role {
   DIRECTORA
   MAESTRA
+  ALUMNO
 }
 
 /// Estudiantes ("participantes") de Gigi's Playhouse.
 model Student {
   id            String        @id @default(cuid())
+  matricula     String?       @unique // Matrícula Gigi's (solo dígitos). Es el usuario de acceso.
   firstName     String
   lastName      String
   birthDate     DateTime?
@@ -55,6 +66,7 @@ model Student {
 
   enrollments Enrollment[]
   evaluations Evaluation[]
+  account     User? // Cuenta de acceso del participante (role ALUMNO)
 
   @@index([status])
   @@index([lastName])
@@ -72,7 +84,8 @@ enum StudentStatus {
   EGRESADO
 }
 
-/// Catálogo de programas ofrecidos (ej. lectura, lenguaje, habilidades para la vida).
+/// Programa / actividad que se ofrece a los participantes.
+/// Cada programa es una actividad con horario, cupo y un maestro a cargo.
 model Program {
   id          String   @id @default(cuid())
   name        String
@@ -80,16 +93,32 @@ model Program {
   area        String?  // Área o categoría del programa
   color       String?  // Color para identificarlo visualmente
   active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  // Datos de la actividad (todos editables)
+  schedule             String? // Horario (ej. "Lunes y miércoles 10:00–11:00")
+  type                 String? // Tipo de actividad
+  ageMin               Int? // Rango de edad: edad mínima (años)
+  ageMax               Int? // Rango de edad: edad máxima (años)
+  studentCapacity      Int     @default(7) // Cupo de alumnos
+  collaboratorCapacity Int? // Cupo de colaboradores
+
+  // Maestro a cargo del programa/actividad
+  teacher   User?   @relation("MaestroPrograma", fields: [teacherId], references: [id], onDelete: SetNull)
+  teacherId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   enrollments Enrollment[]
   evaluations Evaluation[]
 
   @@index([active])
+  @@index([teacherId])
 }
 
 /// Inscripción de un estudiante a un programa (relación con historial).
+/// La calificación es POR PROGRAMA: un nivel que el maestro registra/actualiza
+/// para el alumno en ese programa (no es un examen con título/puntaje).
 model Enrollment {
   id        String           @id @default(cuid())
   student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -100,7 +129,13 @@ model Enrollment {
   endDate   DateTime?
   status    EnrollmentStatus @default(ACTIVA)
   notes     String?
-  createdAt DateTime         @default(now())
+
+  // Calificación por programa
+  level     String? // Nivel: "Inicial", "En proceso", "Logrado"
+  levelNote String? // Nota breve del maestro sobre el nivel
+  gradedAt  DateTime? // Última vez que se registró la calificación
+
+  createdAt DateTime @default(now())
 
   @@unique([studentId, programId])
   @@index([programId])

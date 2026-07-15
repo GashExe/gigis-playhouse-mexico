@@ -1,6 +1,12 @@
 import Link from "next/link";
-import { UserPlus, UsersThree, CaretRight } from "@phosphor-icons/react/dist/ssr";
+import {
+  UserPlus,
+  UsersThree,
+  CaretRight,
+  DownloadSimple,
+} from "@phosphor-icons/react/dist/ssr";
 import { listStudents } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/dal";
 import { ageFrom } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -18,7 +24,8 @@ export default async function StudentsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const { q } = await searchParams;
-  const students = await listStudents(q);
+  const [students, me] = await Promise.all([listStudents(q), getCurrentUser()]);
+  const isDirectora = me.role === "DIRECTORA";
 
   return (
     <div>
@@ -26,10 +33,22 @@ export default async function StudentsPage({
         title="Participantes"
         subtitle="Expediente de cada niño y niña de la playhouse."
         actions={
-          <Button href="/estudiantes/nuevo">
-            <UserPlus weight="bold" className="size-4" />
-            Nuevo participante
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {isDirectora && (
+              <a
+                href="/api/credenciales"
+                download
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-control)] border border-border-strong bg-surface px-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+              >
+                <DownloadSimple weight="bold" className="size-4" />
+                Descargar credenciales
+              </a>
+            )}
+            <Button href="/estudiantes/nuevo">
+              <UserPlus weight="bold" className="size-4" />
+              Nuevo participante
+            </Button>
+          </div>
         }
       />
 

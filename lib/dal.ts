@@ -28,7 +28,7 @@ export const getCurrentUser = cache(async () => {
   const session = await verifySession();
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true, role: true, active: true },
+    select: { id: true, name: true, email: true, role: true, active: true, studentId: true },
   });
   if (!user || !user.active) {
     redirect("/login");
@@ -41,6 +41,18 @@ export async function requireRole(...roles: Role[]) {
   const user = await getCurrentUser();
   if (!roles.includes(user.role)) {
     redirect("/panel");
+  }
+  return user;
+}
+
+/**
+ * Exige que sea personal (DIRECTORA o MAESTRA). Las cuentas de alumno se envían
+ * a su propio espacio, nunca al panel de administración.
+ */
+export async function requireStaff() {
+  const user = await getCurrentUser();
+  if (user.role === "ALUMNO") {
+    redirect("/mi-espacio");
   }
   return user;
 }

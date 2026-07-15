@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, DotsThree, Pause, Play, Flag, Trash } from "@phosphor-icons/react";
+import { Plus, DotsThree, Pause, Play, Flag, Trash, Star, PencilSimple } from "@phosphor-icons/react";
 import {
   addEnrollment,
   setEnrollmentStatus,
   removeEnrollment,
+  setEnrollmentGrade,
 } from "@/lib/actions/enrollments";
+import { NIVELES } from "@/lib/levels";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/field";
+import { Select, Input } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EnrollmentStatusBadge } from "@/components/status";
 import { Books } from "@phosphor-icons/react";
@@ -20,7 +22,17 @@ type EnrollmentItem = {
   id: string;
   status: EnrollmentStatus;
   startDate: Date;
+  level: string | null;
+  levelNote: string | null;
+  gradedAt: Date | null;
   program: { id: string; name: string; color: string | null; area: string | null };
+};
+
+/** Color del badge según el nivel alcanzado. */
+const LEVEL_TONE: Record<string, string> = {
+  Inicial: "bg-warning-weak text-warning-strong",
+  "En proceso": "bg-primary-weak text-primary-strong",
+  Logrado: "bg-success-weak text-success-strong",
 };
 
 type ProgramOption = { id: string; name: string };
@@ -103,31 +115,110 @@ export function EnrollmentsPanel({
       ) : (
         <ul className="divide-y divide-border">
           {enrollments.map((e) => (
-            <li key={e.id} className="flex items-center gap-3 px-5 py-3.5">
-              <span
-                className="size-9 shrink-0 rounded-[var(--radius-input)]"
-                style={{ backgroundColor: (e.program.color ?? "var(--primary)") + "22" }}
-              >
-                <span
-                  className="flex size-full items-center justify-center rounded-[var(--radius-input)]"
-                  style={{ color: e.program.color ?? "var(--primary)" }}
-                >
-                  <Books weight="fill" className="size-[1.1rem]" />
-                </span>
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-ink">{e.program.name}</p>
-                <p className="text-xs text-muted">
-                  {e.program.area ? `${e.program.area} · ` : ""}Desde {fecha(e.startDate)}
-                </p>
-              </div>
-              <EnrollmentStatusBadge status={e.status} />
-              <EnrollmentMenu enrollmentId={e.id} studentId={studentId} status={e.status} />
-            </li>
+            <EnrollmentRow key={e.id} enrollment={e} studentId={studentId} />
           ))}
         </ul>
       )}
     </Card>
+  );
+}
+
+function EnrollmentRow({
+  enrollment: e,
+  studentId,
+}: {
+  enrollment: EnrollmentItem;
+  studentId: string;
+}) {
+  const [grading, setGrading] = useState(false);
+
+  return (
+    <li className="px-5 py-3.5">
+      <div className="flex items-center gap-3">
+        <span
+          className="size-9 shrink-0 rounded-[var(--radius-input)]"
+          style={{ backgroundColor: (e.program.color ?? "var(--primary)") + "22" }}
+        >
+          <span
+            className="flex size-full items-center justify-center rounded-[var(--radius-input)]"
+            style={{ color: e.program.color ?? "var(--primary)" }}
+          >
+            <Books weight="fill" className="size-[1.1rem]" />
+          </span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-ink">{e.program.name}</p>
+          <p className="text-xs text-muted">
+            {e.program.area ? `${e.program.area} · ` : ""}Desde {fecha(e.startDate)}
+          </p>
+        </div>
+        {e.level && (
+          <span
+            className={`hidden rounded-full px-2.5 py-1 text-xs font-semibold sm:inline-block ${
+              LEVEL_TONE[e.level] ?? "bg-surface-2 text-muted"
+            }`}
+          >
+            {e.level}
+          </span>
+        )}
+        <EnrollmentStatusBadge status={e.status} />
+        <EnrollmentMenu enrollmentId={e.id} studentId={studentId} status={e.status} />
+      </div>
+
+      {/* Calificación por programa */}
+      <div className="mt-2 flex items-center gap-2 pl-12">
+        {!grading ? (
+          <button
+            onClick={() => setGrading(true)}
+            className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            {e.level ? (
+              <>
+                <PencilSimple className="size-3.5" />
+                {e.levelNote ? `Nivel: ${e.levelNote}` : "Editar calificación"}
+                {e.gradedAt ? ` · ${fecha(e.gradedAt)}` : ""}
+              </>
+            ) : (
+              <>
+                <Star className="size-3.5" />
+                Calificar
+              </>
+            )}
+          </button>
+        ) : (
+          <form
+            action={async (fd) => {
+              await setEnrollmentGrade(e.id, studentId, fd);
+              setGrading(false);
+            }}
+            className="flex w-full flex-col gap-2 rounded-[var(--radius-control)] bg-surface-2/60 p-2.5 sm:flex-row sm:items-center"
+          >
+            <Select name="level" defaultValue={e.level ?? ""} className="sm:w-40">
+              <option value="">Sin calificar</option>
+              {NIVELES.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </Select>
+            <Input
+              name="levelNote"
+              placeholder="Nota breve (opcional)"
+              defaultValue={e.levelNote ?? ""}
+              className="flex-1"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" size="sm">
+                Guardar
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setGrading(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </li>
   );
 }
 

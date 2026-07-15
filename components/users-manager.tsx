@@ -20,13 +20,14 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { fecha } from "@/lib/format";
 import { initials } from "@/lib/utils";
+import type { Role } from "@/lib/generated/prisma/client";
 
 type UserRow = {
   id: string;
   name: string;
   username: string;
   email: string | null;
-  role: "DIRECTORA" | "MAESTRA";
+  role: Role;
   active: boolean;
   createdAt: Date;
   _count: { evaluations: number };

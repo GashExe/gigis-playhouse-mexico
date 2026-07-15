@@ -12,6 +12,7 @@ export type SessionPayload = {
   userId: string;
   role: Role;
   name: string;
+  studentId?: string; // solo para cuentas ALUMNO: expediente ligado
 };
 
 export async function encrypt(payload: SessionPayload) {
