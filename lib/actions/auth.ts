@@ -26,6 +26,14 @@ export async function login(
   const { username, password } = parsed.data;
   const user = await prisma.user.findUnique({
     where: { username: username.toLowerCase() },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+      active: true,
+      passwordHash: true,
+      studentId: true,
+    },
   });
 
   // Mensaje genérico para no revelar si el usuario existe.
@@ -35,8 +43,15 @@ export async function login(
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return invalid;
 
-  await createSession({ userId: user.id, role: user.role, name: user.name });
-  redirect("/panel");
+  await createSession({
+    userId: user.id,
+    role: user.role,
+    name: user.name,
+    studentId: user.studentId ?? undefined,
+  });
+
+  // Los alumnos entran a su propio espacio; el equipo, al panel.
+  redirect(user.role === "ALUMNO" ? "/mi-espacio" : "/panel");
 }
 
 export async function logout() {

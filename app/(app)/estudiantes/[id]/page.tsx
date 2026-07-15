@@ -10,8 +10,9 @@ import {
   ChartLineUp,
   Star,
   GraduationCap,
+  Key,
 } from "@phosphor-icons/react/dist/ssr";
-import { verifySession } from "@/lib/dal";
+import { getCurrentUser } from "@/lib/dal";
 import { getStudent, listActivePrograms } from "@/lib/queries";
 import { ageFrom } from "@/lib/utils";
 import { fechaLarga } from "@/lib/format";
@@ -43,10 +44,12 @@ export default async function StudentDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await verifySession();
+  const me = await getCurrentUser();
   const { id } = await params;
   const [student, programs] = await Promise.all([getStudent(id), listActivePrograms()]);
   if (!student) notFound();
+
+  const isDirectora = me.role === "DIRECTORA";
 
   const age = ageFrom(student.birthDate);
   const scored = student.evaluations.filter((e) => e.score != null);
@@ -125,6 +128,9 @@ export default async function StudentDetailPage({
               id: e.id,
               status: e.status,
               startDate: e.startDate,
+              level: e.level,
+              levelNote: e.levelNote,
+              gradedAt: e.gradedAt,
               program: {
                 id: e.program.id,
                 name: e.program.name,
@@ -168,6 +174,35 @@ export default async function StudentDetailPage({
               </dl>
             )}
           </Card>
+
+          {/* Acceso del alumno — solo visible para la directora */}
+          {isDirectora && student.account && (
+            <Card className="p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-[var(--radius-input)] bg-primary-weak text-primary">
+                  <Key weight="fill" className="size-[1.05rem]" />
+                </span>
+                <h2 className="text-sm font-bold text-ink">Acceso del alumno</h2>
+              </div>
+              <dl className="space-y-3">
+                <div>
+                  <dt className="text-xs font-medium text-subtle">Usuario (matrícula)</dt>
+                  <dd className="select-all font-mono text-sm font-semibold text-ink">
+                    {student.account.username}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-subtle">Contraseña inicial</dt>
+                  <dd className="select-all font-mono text-sm font-semibold text-ink">
+                    {student.account.initialPassword ?? "—"}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-3 text-xs leading-relaxed text-muted">
+                Compártela con la familia. Es confidencial: solo tú puedes verla.
+              </p>
+            </Card>
+          )}
 
           {student.notes && (
             <Card className="p-5">

@@ -9,7 +9,8 @@ import {
   Eye,
   EyeSlash,
   UsersThree,
-  Star,
+  Clock,
+  ChalkboardTeacher,
 } from "@phosphor-icons/react";
 import {
   createProgram,
@@ -19,9 +20,11 @@ import {
 } from "@/lib/actions/programs";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+
+type Teacher = { id: string; name: string };
 
 type Program = {
   id: string;
@@ -30,15 +33,37 @@ type Program = {
   area: string | null;
   color: string | null;
   active: boolean;
+  schedule: string | null;
+  type: string | null;
+  ageMin: number | null;
+  ageMax: number | null;
+  studentCapacity: number;
+  collaboratorCapacity: number | null;
+  teacherId: string | null;
+  teacher: { id: string; name: string } | null;
   _count: { enrollments: number; evaluations: number };
 };
+
+/** Texto legible del rango de edad. */
+function ageRangeLabel(min: number | null, max: number | null): string | null {
+  if (min != null && max != null) return `${min}–${max} años`;
+  if (min != null) return `Desde ${min} años`;
+  if (max != null) return `Hasta ${max} años`;
+  return null;
+}
 
 const SWATCHES = [
   "#E4572E", "#2E86AB", "#8AA624", "#C05299", "#F2A541",
   "#3E7C59", "#6C63FF", "#0EAD9C", "#D7263D", "#B5651D",
 ];
 
-export function ProgramsManager({ programs }: { programs: Program[] }) {
+export function ProgramsManager({
+  programs,
+  teachers,
+}: {
+  programs: Program[];
+  teachers: Teacher[];
+}) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -58,6 +83,7 @@ export function ProgramsManager({ programs }: { programs: Program[] }) {
           action={createProgram}
           onClose={() => setCreating(false)}
           title="Nuevo programa"
+          teachers={teachers}
         />
       )}
 
@@ -83,6 +109,7 @@ export function ProgramsManager({ programs }: { programs: Program[] }) {
                   onClose={() => setEditingId(null)}
                   title={`Editar “${p.name}”`}
                   defaults={p}
+                  teachers={teachers}
                 />
               </div>
             ) : (
@@ -119,20 +146,46 @@ function ProgramCard({
       </div>
 
       <h3 className="mt-3 font-bold text-ink">{p.name}</h3>
+      {p.type && (
+        <p className="mt-0.5 text-xs font-semibold text-primary-strong">{p.type}</p>
+      )}
       {p.description && (
         <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">
           {p.description}
         </p>
       )}
 
+      {/* Datos de la actividad */}
+      <dl className="mt-3 space-y-1.5 text-sm text-muted">
+        {p.schedule && (
+          <div className="flex items-center gap-2">
+            <Clock className="size-4 shrink-0 text-subtle" />
+            <span>{p.schedule}</span>
+          </div>
+        )}
+        {ageRangeLabel(p.ageMin, p.ageMax) && (
+          <div className="flex items-center gap-2">
+            <UsersThree className="size-4 shrink-0 text-subtle" />
+            <span>{ageRangeLabel(p.ageMin, p.ageMax)}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <ChalkboardTeacher className="size-4 shrink-0 text-subtle" />
+          <span>
+            {p.teacher ? (
+              <>Maestro: <span className="font-medium text-ink">{p.teacher.name}</span></>
+            ) : (
+              <span className="italic">Sin maestro asignado</span>
+            )}
+          </span>
+        </div>
+      </dl>
+
       <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-sm text-muted">
         <span className="flex items-center gap-1.5">
           <UsersThree className="size-4" />
-          <span className="tnum font-semibold text-ink">{p._count.enrollments}</span> activos
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Star className="size-4" />
-          <span className="tnum font-semibold text-ink">{p._count.evaluations}</span>
+          <span className="tnum font-semibold text-ink">{p._count.enrollments}</span>
+          <span>/ {p.studentCapacity} cupos</span>
         </span>
         <div className="ml-auto flex items-center gap-1">
           <form action={toggleProgram.bind(null, p.id, !p.active)}>
@@ -162,11 +215,13 @@ function ProgramForm({
   onClose,
   title,
   defaults,
+  teachers,
 }: {
   action: (prev: ProgramFormState, fd: FormData) => Promise<ProgramFormState>;
   onClose: () => void;
   title: string;
   defaults?: Partial<Program>;
+  teachers: Teacher[];
 }) {
   const [state, formAction, pending] = useActionState<ProgramFormState, FormData>(
     action,
@@ -206,6 +261,54 @@ function ProgramForm({
 
         <Field label="Descripción" htmlFor="description">
           <Textarea id="description" name="description" rows={2} defaultValue={defaults?.description ?? ""} />
+        </Field>
+
+        {/* Datos de la actividad */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Horario" htmlFor="schedule" hint="Ej. Lun y mié 10:00–11:00.">
+            <Input id="schedule" name="schedule" defaultValue={defaults?.schedule ?? ""} />
+          </Field>
+          <Field label="Tipo de actividad" htmlFor="type">
+            <Input id="type" name="type" defaultValue={defaults?.type ?? ""} />
+          </Field>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-4">
+          <Field label="Edad mín." htmlFor="ageMin">
+            <Input id="ageMin" name="ageMin" type="number" min={0} max={120} defaultValue={defaults?.ageMin ?? ""} />
+          </Field>
+          <Field label="Edad máx." htmlFor="ageMax">
+            <Input id="ageMax" name="ageMax" type="number" min={0} max={120} defaultValue={defaults?.ageMax ?? ""} />
+          </Field>
+          <Field label="Cupo alumnos" htmlFor="studentCapacity">
+            <Input
+              id="studentCapacity"
+              name="studentCapacity"
+              type="number"
+              min={0}
+              defaultValue={defaults?.studentCapacity ?? 7}
+            />
+          </Field>
+          <Field label="Cupo colab." htmlFor="collaboratorCapacity">
+            <Input
+              id="collaboratorCapacity"
+              name="collaboratorCapacity"
+              type="number"
+              min={0}
+              defaultValue={defaults?.collaboratorCapacity ?? ""}
+            />
+          </Field>
+        </div>
+
+        <Field label="Maestro a cargo" htmlFor="teacherId">
+          <Select id="teacherId" name="teacherId" defaultValue={defaults?.teacherId ?? ""}>
+            <option value="">Sin asignar</option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <div>

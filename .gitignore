@@ -46,6 +46,9 @@ next-env.d.ts
 *.db
 *.db-journal
 
+# credenciales exportadas (contraseñas en texto) — nunca subir a GitHub
+/exports
+
 # cliente Prisma generado — se regenera en cada build (postinstall)
 /lib/generated/prisma
 /app/generated/prisma

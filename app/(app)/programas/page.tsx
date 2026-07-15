@@ -1,5 +1,5 @@
 import { verifySession } from "@/lib/dal";
-import { listPrograms } from "@/lib/queries";
+import { listPrograms, listTeachers } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgramsManager } from "@/components/programs-manager";
 
@@ -7,15 +7,15 @@ export const metadata = { title: "Programas" };
 
 export default async function ProgramsPage() {
   await verifySession();
-  const programs = await listPrograms();
+  const [programs, teachers] = await Promise.all([listPrograms(), listTeachers()]);
 
   return (
     <div>
       <PageHeader
-        title="Programas"
-        subtitle="Los programas en los que se inscribe a los participantes."
+        title="Programas y actividades"
+        subtitle="Cada programa es una actividad con horario, cupo y un maestro a cargo."
       />
-      <ProgramsManager programs={programs} />
+      <ProgramsManager programs={programs} teachers={teachers} />
     </div>
   );
 }

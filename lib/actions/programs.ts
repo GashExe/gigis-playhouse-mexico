@@ -14,17 +14,47 @@ const PALETTE = [
   "#3E7C59", "#6C63FF", "#D7263D", "#0EAD9C", "#B5651D",
 ];
 
+/** Convierte un campo de texto a entero (o null si viene vacío/no numérico). */
+function toInt(value: string | undefined): number | null {
+  const n = Number((value ?? "").trim());
+  return Number.isFinite(n) && value?.trim() ? Math.trunc(n) : null;
+}
+
+function parseProgramForm(formData: FormData) {
+  return ProgramSchema.safeParse({
+    name: formData.get("name"),
+    description: formData.get("description") ?? "",
+    area: formData.get("area") ?? "",
+    color: formData.get("color") ?? "",
+    schedule: formData.get("schedule") ?? "",
+    type: formData.get("type") ?? "",
+    ageMin: formData.get("ageMin") ?? "",
+    ageMax: formData.get("ageMax") ?? "",
+    studentCapacity: formData.get("studentCapacity") ?? "",
+    collaboratorCapacity: formData.get("collaboratorCapacity") ?? "",
+    teacherId: formData.get("teacherId") ?? "",
+  });
+}
+
+/** Campos de actividad comunes a crear/editar. */
+function activityData(d: ReturnType<typeof ProgramSchema.parse>) {
+  return {
+    schedule: d.schedule || null,
+    type: d.type || null,
+    ageMin: toInt(d.ageMin),
+    ageMax: toInt(d.ageMax),
+    studentCapacity: toInt(d.studentCapacity) ?? 7,
+    collaboratorCapacity: toInt(d.collaboratorCapacity),
+    teacherId: d.teacherId || null,
+  };
+}
+
 export async function createProgram(
   _prev: ProgramFormState,
   formData: FormData,
 ): Promise<ProgramFormState> {
   await verifySession();
-  const parsed = ProgramSchema.safeParse({
-    name: formData.get("name"),
-    description: formData.get("description") ?? "",
-    area: formData.get("area") ?? "",
-    color: formData.get("color") ?? "",
-  });
+  const parsed = parseProgramForm(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
   }
@@ -36,6 +66,7 @@ export async function createProgram(
       description: d.description || null,
       area: d.area || null,
       color: d.color || PALETTE[count % PALETTE.length],
+      ...activityData(d),
     },
   });
   revalidatePath("/programas");
@@ -49,12 +80,7 @@ export async function updateProgram(
   formData: FormData,
 ): Promise<ProgramFormState> {
   await verifySession();
-  const parsed = ProgramSchema.safeParse({
-    name: formData.get("name"),
-    description: formData.get("description") ?? "",
-    area: formData.get("area") ?? "",
-    color: formData.get("color") ?? "",
-  });
+  const parsed = parseProgramForm(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
   }
@@ -66,9 +92,11 @@ export async function updateProgram(
       description: d.description || null,
       area: d.area || null,
       color: d.color || null,
+      ...activityData(d),
     },
   });
   revalidatePath("/programas");
+  revalidatePath("/panel");
   return { ok: true };
 }
 

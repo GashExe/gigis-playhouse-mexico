@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/dal";
+import { requireStaff } from "@/lib/dal";
 import { AppNav } from "@/components/app-nav";
 
 export default async function AppLayout({
@@ -6,7 +6,8 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  // Solo personal (DIRECTORA/MAESTRA). Un ALUMNO se redirige a /mi-espacio.
+  const user = await requireStaff();
 
   return (
     <div className="min-h-[100dvh]">

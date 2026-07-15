@@ -76,6 +76,7 @@ export async function getStudent(id: string) {
   return prisma.student.findUnique({
     where: { id },
     include: {
+      account: { select: { username: true, initialPassword: true, active: true } },
       enrollments: {
         include: { program: true },
         orderBy: { startDate: "desc" },
@@ -91,10 +92,31 @@ export async function getStudent(id: string) {
   });
 }
 
+/** Datos propios del alumno para su espacio (solo su expediente y programas activos). */
+export async function getStudentSpace(studentId: string) {
+  return prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      firstName: true,
+      lastName: true,
+      matricula: true,
+      enrollments: {
+        where: { status: "ACTIVA" },
+        orderBy: { startDate: "desc" },
+        select: {
+          id: true,
+          program: { select: { name: true, color: true, area: true } },
+        },
+      },
+    },
+  });
+}
+
 export async function listPrograms() {
   return prisma.program.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
     include: {
+      teacher: { select: { id: true, name: true } },
       _count: {
         select: {
           enrollments: { where: { status: "ACTIVA" } },
@@ -102,6 +124,15 @@ export async function listPrograms() {
         },
       },
     },
+  });
+}
+
+/** Personal disponible para asignar como maestro de un programa. */
+export async function listTeachers() {
+  return prisma.user.findMany({
+    where: { role: { in: ["DIRECTORA", "MAESTRA"] }, active: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
   });
 }
 
@@ -115,6 +146,9 @@ export async function listActivePrograms() {
 
 export async function listUsers() {
   return prisma.user.findMany({
+    // Solo cuentas del equipo. Las cuentas de alumno se administran desde
+    // el módulo de estudiantes (son cientos y tienen otro flujo).
+    where: { role: { in: ["DIRECTORA", "MAESTRA"] } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: {
       id: true,

@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
+    "db:import-alumnos": "tsx prisma/import-alumnos.ts",
+    "db:seed-programas": "tsx prisma/seed-programas.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"
   },
