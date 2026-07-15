@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="420" viewBox="0 0 1240 420" role="img" aria-label="MexNodus">
+  <!-- Isotipo monocromo blanco (para fondos de color/oscuros) -->
+  <g>
+    <rect x="0" y="0" width="420" height="420" rx="96" fill="#FFFFFF" fill-opacity="0.16"/>
+    <g stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="98" y1="112" x2="98" y2="308"/>
+      <line x1="322" y1="112" x2="322" y2="308"/>
+      <line x1="98" y1="112" x2="210" y2="210"/>
+      <line x1="322" y1="112" x2="210" y2="210"/>
+      <line x1="98" y1="308" x2="210" y2="210"/>
+      <line x1="322" y1="308" x2="210" y2="210"/>
+    </g>
+    <g fill="#FFFFFF">
+      <circle cx="98" cy="112" r="28"/>
+      <circle cx="322" cy="112" r="28"/>
+      <circle cx="98" cy="308" r="28"/>
+      <circle cx="322" cy="308" r="28"/>
+      <circle cx="210" cy="210" r="34"/>
+    </g>
+  </g>
+
+  <text x="490" y="210"
+        font-family="Inter, Montserrat, Poppins, Arial, sans-serif"
+        font-size="150"
+        font-weight="800"
+        letter-spacing="-6"
+        dominant-baseline="central"
+        fill="#FFFFFF">MexNodus</text>
+</svg>

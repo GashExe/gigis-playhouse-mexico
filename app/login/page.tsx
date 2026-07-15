@@ -62,9 +62,23 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <p className="relative text-xs text-on-brand/70">
-          Hecho con cariño para el equipo de Gigi&apos;s Playhouse México.
-        </p>
+        <a
+          href="https://www.mexnodus.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="relative inline-flex items-center gap-3 text-on-brand/85 transition-opacity hover:opacity-100"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/mexnodus-white.svg"
+            alt="MexNodus"
+            className="h-7 w-auto"
+          />
+          <span className="flex flex-col text-xs leading-tight">
+            <span className="text-on-brand/70">Plataforma diseñada por</span>
+            <span className="font-semibold">www.mexnodus.com</span>
+          </span>
+        </a>
       </section>
 
       {/* Formulario */}
@@ -90,19 +104,32 @@ export default function LoginPage() {
             administra las cuentas del equipo.
           </p>
 
-          {/* Crédito de diseño — MexNodus */}
-          <div className="mt-8 flex justify-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 shadow-[var(--shadow-sm)]">
-              <span className="text-[0.7rem] font-medium text-[#6B667B]">
+          {/* Crédito de diseño — MexNodus (solo móvil; en escritorio va en el panel) */}
+          <div className="mt-8 flex flex-col items-center gap-2 lg:hidden">
+            <a
+              href="https://www.mexnodus.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2.5 rounded-full border border-border bg-white px-4 py-2 shadow-[var(--shadow-sm)] transition-shadow hover:shadow-[var(--shadow-md)]"
+            >
+              <span className="text-xs font-medium text-[#6B667B]">
                 Diseñada por
               </span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/brand/mexnodus.svg"
                 alt="MexNodus"
-                className="h-3.5 w-auto"
+                className="h-5 w-auto"
               />
-            </span>
+            </a>
+            <a
+              href="https://www.mexnodus.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-subtle transition-colors hover:text-ink"
+            >
+              www.mexnodus.com
+            </a>
           </div>
         </div>
       </section>
