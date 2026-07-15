@@ -64,9 +64,10 @@ model Student {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  enrollments Enrollment[]
-  evaluations Evaluation[]
-  account     User? // Cuenta de acceso del participante (role ALUMNO)
+  enrollments  Enrollment[]
+  evaluations  Evaluation[]
+  levelRecords LevelRecord[] // Ubicación de nivel por programa y ciclo
+  account      User? // Cuenta de acceso del participante (role ALUMNO)
 
   @@index([status])
   @@index([lastName])
@@ -111,9 +112,85 @@ model Program {
 
   enrollments Enrollment[]
   evaluations Evaluation[]
+  levels      ProgramLevel[] // Niveles propios de este programa (ordenados)
+  levelRecords LevelRecord[]
 
   @@index([active])
   @@index([teacherId])
+}
+
+/// Nivel propio de un programa. Cada programa define su propia lista ordenada
+/// (ej. Lectura: Prerrequisitos, Inicial, Intermedio, Avanzado). Es la base sobre
+/// la que colgarán, más adelante, los BLOQUES desbloqueables por nivel.
+model ProgramLevel {
+  id          String  @id @default(cuid())
+  program     Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId   String
+  name        String // Nombre del nivel (ej. "Nivel intermedio")
+  order       Int // Posición dentro del programa (1 = primero)
+  description String? // Qué abarca el nivel (ej. "ser un lector")
+
+  records LevelRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([programId, order])
+  @@index([programId])
+}
+
+/// Ciclo escolar por temporada. Los cursos corren en tres ciclos al año:
+/// Ene–Jun (largo), Jul–Ago (verano, corto) y Sep–Dic (largo).
+model Cycle {
+  id     String      @id @default(cuid())
+  season CycleSeason // Temporada del ciclo
+  year   Int // Año calendario
+  label  String // Etiqueta legible (ej. "Ene–Jun 2026")
+  active Boolean     @default(false) // Ciclo vigente para registrar
+
+  records LevelRecord[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([season, year])
+  @@index([active])
+}
+
+enum CycleSeason {
+  ENE_JUN
+  JUL_AGO
+  SEP_DIC
+}
+
+/// Ubicación de un alumno en un nivel de un programa, en un ciclo concreto.
+/// Es la "calificación por programa" con historial por ciclo (el xlsx de titulares
+/// por niveles es exactamente esto para Lectura/Escritura/Matemáticas).
+model LevelRecord {
+  id             String          @id @default(cuid())
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId      String
+  program        Program         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId      String
+  cycle          Cycle           @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId        String
+  level          ProgramLevel    @relation(fields: [programLevelId], references: [id], onDelete: Restrict)
+  programLevelId String
+  placement      PlacementStatus @default(REGULAR) // Regular / Probatorio / Posible graduado
+  note           String? // Nota breve del maestro
+  gradedAt       DateTime        @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, programId, cycleId])
+  @@index([programId, cycleId])
+  @@index([cycleId])
+}
+
+enum PlacementStatus {
+  REGULAR
+  PROBATORIO
+  POSIBLE_GRADUADO
 }
 
 /// Inscripción de un estudiante a un programa (relación con historial).

@@ -61,7 +61,16 @@ export const EvaluationSchema = z.object({
   programId: z.string().trim().optional().or(z.literal("")),
   title: z.string().trim().min(1, { message: "Ponle un título a la evaluación." }),
   date: z.string().trim().optional().or(z.literal("")),
-  score: z.string().trim().optional().or(z.literal("")),
+  // Regla absoluta de Gigi's: la calificación va de 0 a 4; el 4 es el máximo. Nunca mayor.
+  score: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      (v) => !v || (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 4),
+      { message: "La calificación va de 0 a 4 (el 4 es el máximo)." },
+    ),
   scale: z.string().trim().optional(),
   level: z.string().trim().optional(),
   notes: z.string().trim().optional(),
