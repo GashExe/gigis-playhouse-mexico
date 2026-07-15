@@ -75,7 +75,7 @@ export default function LoginPage() {
           </div>
           <div className="mb-7 space-y-1.5">
             <h2 className="text-2xl font-extrabold tracking-tight text-ink">
-              Bienvenida de nuevo
+              Bienvenid@ de nuevo
             </h2>
             <p className="text-sm text-muted">
               Entra con tu cuenta para continuar.
@@ -85,10 +85,25 @@ export default function LoginPage() {
           <LoginForm />
 
           <p className="mt-8 rounded-[var(--radius-input)] border border-border bg-surface-2 px-3.5 py-3 text-xs leading-relaxed text-muted">
-            ¿No tienes cuenta o la olvidaste? Pídele acceso a la{" "}
-            <span className="font-semibold text-ink">directora</span>, quien administra
-            las cuentas del equipo.
+            ¿No tienes cuenta o la olvidaste? Solicítala a la{" "}
+            <span className="font-semibold text-ink">persona encargada</span>, quien
+            administra las cuentas del equipo.
           </p>
+
+          {/* Crédito de diseño — MexNodus */}
+          <div className="mt-8 flex justify-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1.5 shadow-[var(--shadow-sm)]">
+              <span className="text-[0.7rem] font-medium text-[#6B667B]">
+                Diseñada por
+              </span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/mexnodus.svg"
+                alt="MexNodus"
+                className="h-3.5 w-auto"
+              />
+            </span>
+          </div>
         </div>
       </section>
     </main>

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="420" viewBox="0 0 1240 420" role="img" aria-label="MexNodus">
+  <defs>
+    <linearGradient id="mexnodusPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5B21B6"/>
+      <stop offset="52%" stop-color="#7C3AED"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Isotipo: M formada por nodos conectados -->
+  <g>
+    <rect x="0" y="0" width="420" height="420" rx="96" fill="url(#mexnodusPurple)"/>
+    <g stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="98" y1="112" x2="98" y2="308"/>
+      <line x1="322" y1="112" x2="322" y2="308"/>
+      <line x1="98" y1="112" x2="210" y2="210"/>
+      <line x1="322" y1="112" x2="210" y2="210"/>
+      <line x1="98" y1="308" x2="210" y2="210"/>
+      <line x1="322" y1="308" x2="210" y2="210"/>
+    </g>
+    <g fill="#FFFFFF">
+      <circle cx="98" cy="112" r="28"/>
+      <circle cx="322" cy="112" r="28"/>
+      <circle cx="98" cy="308" r="28"/>
+      <circle cx="322" cy="308" r="28"/>
+      <circle cx="210" cy="210" r="34"/>
+    </g>
+  </g>
+
+  <!-- Wordmark, centrado verticalmente con el isotipo -->
+  <text x="490" y="210"
+        font-family="Inter, Montserrat, Poppins, Arial, sans-serif"
+        font-size="150"
+        font-weight="800"
+        letter-spacing="-6"
+        dominant-baseline="central">
+    <tspan fill="#17142B">Mex</tspan><tspan fill="#6D28D9">Nodus</tspan>
+  </text>
+</svg>
