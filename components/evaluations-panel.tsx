@@ -93,8 +93,8 @@ export function EvaluationsPanel({
             <Field label="Fecha" htmlFor="date">
               <Input id="date" name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
             </Field>
-            <Field label="Calificación" htmlFor="score" hint="Numérica (opcional).">
-              <Input id="score" name="score" type="number" step="0.1" min="0" placeholder="8.5" />
+            <Field label="Calificación" htmlFor="score" hint="De 0 a 4 (el 4 es el máximo).">
+              <Input id="score" name="score" type="number" step="0.1" min="0" max="4" placeholder="4" />
             </Field>
             <Field label="Nivel alcanzado" htmlFor="level">
               <Select id="level" name="level" defaultValue="">

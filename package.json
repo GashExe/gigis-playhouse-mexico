@@ -11,6 +11,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:import-alumnos": "tsx prisma/import-alumnos.ts",
     "db:seed-programas": "tsx prisma/seed-programas.ts",
+    "db:seed-niveles": "tsx prisma/seed-niveles.ts",
+    "db:import-niveles": "tsx prisma/import-niveles.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"
   },
@@ -44,7 +46,8 @@
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,

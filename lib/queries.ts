@@ -144,6 +144,48 @@ export async function listActivePrograms() {
   });
 }
 
+/** Ciclos por temporada, del más reciente al más antiguo. */
+export async function listCycles() {
+  // La temporada es alfabéticamente cronológica: ENE_JUN < JUL_AGO < SEP_DIC.
+  return prisma.cycle.findMany({ orderBy: [{ year: "desc" }, { season: "asc" }] });
+}
+
+/** Ciclo vigente para registrar (marcado activo); si no hay, el más reciente. */
+export async function getActiveCycle() {
+  const active = await prisma.cycle.findFirst({
+    where: { active: true },
+    orderBy: [{ year: "desc" }, { season: "asc" }],
+  });
+  return active ?? prisma.cycle.findFirst({ orderBy: [{ year: "desc" }, { season: "desc" }] });
+}
+
+/** Ubicaciones de nivel de un alumno en un ciclo (una por programa). */
+export async function getStudentLevels(studentId: string, cycleId: string) {
+  return prisma.levelRecord.findMany({
+    where: { studentId, cycleId },
+    include: {
+      program: { select: { id: true, name: true, color: true, area: true } },
+      level: { select: { id: true, name: true, order: true } },
+    },
+    orderBy: { program: { name: "asc" } },
+  });
+}
+
+/** Programas que tienen niveles definidos, con su lista de niveles ordenada. */
+export async function listProgramsWithLevels() {
+  return prisma.program.findMany({
+    where: { levels: { some: {} } },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      area: true,
+      levels: { orderBy: { order: "asc" }, select: { id: true, name: true, order: true, description: true } },
+    },
+  });
+}
+
 export async function listUsers() {
   return prisma.user.findMany({
     // Solo cuentas del equipo. Las cuentas de alumno se administran desde

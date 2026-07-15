@@ -13,7 +13,14 @@ import {
   Key,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
-import { getStudent, listActivePrograms } from "@/lib/queries";
+import {
+  getStudent,
+  listActivePrograms,
+  listCycles,
+  getActiveCycle,
+  getStudentLevels,
+  listProgramsWithLevels,
+} from "@/lib/queries";
 import { ageFrom } from "@/lib/utils";
 import { fechaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
@@ -22,6 +29,7 @@ import { StudentStatusBadge } from "@/components/status";
 import { StudentActions } from "@/components/student-actions";
 import { EnrollmentsPanel } from "@/components/enrollments-panel";
 import { EvaluationsPanel } from "@/components/evaluations-panel";
+import { LevelRecordsPanel } from "@/components/level-records-panel";
 
 const genderLabel: Record<string, string> = {
   FEMENINO: "Femenino",
@@ -41,15 +49,29 @@ export async function generateMetadata({
 
 export default async function StudentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ ciclo?: string }>;
 }) {
   const me = await getCurrentUser();
   const { id } = await params;
-  const [student, programs] = await Promise.all([getStudent(id), listActivePrograms()]);
+  const { ciclo } = await searchParams;
+  const [student, programs, cycles, activeCycle, programsWithLevels] = await Promise.all([
+    getStudent(id),
+    listActivePrograms(),
+    listCycles(),
+    getActiveCycle(),
+    listProgramsWithLevels(),
+  ]);
   if (!student) notFound();
 
   const isDirectora = me.role === "DIRECTORA";
+
+  // Ciclo seleccionado: el de la URL si es válido, si no el activo.
+  const validCiclo = ciclo && cycles.some((c) => c.id === ciclo) ? ciclo : null;
+  const selectedCycleId = validCiclo ?? activeCycle?.id ?? cycles[0]?.id ?? "";
+  const levelRecords = selectedCycleId ? await getStudentLevels(id, selectedCycleId) : [];
 
   const age = ageFrom(student.birthDate);
   const scored = student.evaluations.filter((e) => e.score != null);
@@ -140,6 +162,22 @@ export default async function StudentDetailPage({
             }))}
             allPrograms={programs.map((p) => ({ id: p.id, name: p.name }))}
           />
+          {cycles.length > 0 && (
+            <LevelRecordsPanel
+              studentId={student.id}
+              records={levelRecords.map((r) => ({
+                id: r.id,
+                placement: r.placement,
+                note: r.note,
+                gradedAt: r.gradedAt,
+                program: r.program,
+                level: r.level,
+              }))}
+              programs={programsWithLevels}
+              cycles={cycles.map((c) => ({ id: c.id, label: c.label, active: c.active }))}
+              selectedCycleId={selectedCycleId}
+            />
+          )}
           <EvaluationsPanel
             studentId={student.id}
             evaluations={student.evaluations}
