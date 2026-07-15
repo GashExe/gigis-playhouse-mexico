@@ -98,6 +98,24 @@ function UserCard({ name, role }: { name: string; role: Role }) {
   );
 }
 
+/** Crédito discreto de MexNodus al pie de la navegación. */
+function MexNodusCredit() {
+  return (
+    <a
+      href="https://www.mexnodus.com"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-center gap-1.5 px-2 pt-0.5 text-[0.7rem] font-medium text-subtle transition-colors hover:text-ink"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/mexnodus-icon.svg" alt="" className="size-3.5" />
+      <span>
+        Diseñada por <span className="font-semibold">MexNodus</span>
+      </span>
+    </a>
+  );
+}
+
 export function AppNav({ name, role }: { name: string; role: Role }) {
   const [open, setOpen] = useState(false);
 
@@ -125,7 +143,10 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
         <div className="flex-1">
           <NavLinks role={role} />
         </div>
-        <UserCard name={name} role={role} />
+        <div className="flex flex-col gap-3">
+          <UserCard name={name} role={role} />
+          <MexNodusCredit />
+        </div>
       </aside>
 
       {/* Drawer móvil */}
@@ -149,7 +170,10 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
             <div className="flex-1">
               <NavLinks role={role} onNavigate={() => setOpen(false)} />
             </div>
-            <UserCard name={name} role={role} />
+            <div className="flex flex-col gap-3">
+              <UserCard name={name} role={role} />
+              <MexNodusCredit />
+            </div>
           </div>
         </div>
       )}
