@@ -18,7 +18,6 @@ type Defaults = {
   address?: string;
   notes?: string;
   status?: string;
-  matricula?: string;
 };
 
 export function StudentForm({
@@ -26,13 +25,13 @@ export function StudentForm({
   defaults = {},
   submitLabel = "Guardar participante",
   cancelHref = "/estudiantes",
-  showMatricula = false,
+  showAccountInfo = false,
 }: {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   defaults?: Defaults;
   submitLabel?: string;
   cancelHref?: string;
-  showMatricula?: boolean;
+  showAccountInfo?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(
     action,
@@ -69,21 +68,12 @@ export function StudentForm({
               <option value="EGRESADO">Egresado</option>
             </Select>
           </Field>
-          {showMatricula && (
-            <Field
-              label="Matrícula (opcional)"
-              htmlFor="matricula"
-              hint="Se usará como usuario. Si la dejas vacía, se genera del nombre."
-            >
-              <Input id="matricula" name="matricula" defaultValue={defaults.matricula} placeholder="00123456" />
-            </Field>
-          )}
         </div>
       </Card>
-      {showMatricula && (
+      {showAccountInfo && (
         <div className="rounded-[var(--radius-control)] border border-border bg-surface-2/50 px-4 py-3 text-xs leading-relaxed text-muted">
           Al guardar se crea automáticamente su <strong className="text-ink">usuario y contraseña</strong> de
-          acceso. Los verás en su expediente para entregárselos a la familia.
+          acceso, generados a partir de su nombre. Los verás en su expediente para entregárselos a la familia.
         </div>
       )}
 

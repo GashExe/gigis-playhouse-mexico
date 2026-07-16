@@ -21,7 +21,6 @@ function parseStudent(formData: FormData) {
   return StudentSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
-    matricula: formData.get("matricula") ?? "",
     birthDate: formData.get("birthDate") ?? "",
     gender: formData.get("gender") ?? "",
     guardianName: formData.get("guardianName") ?? "",
@@ -58,9 +57,9 @@ export async function createStudent(
     },
   });
 
-  // Genera automáticamente su cuenta de acceso (usuario + contraseña).
+  // Genera automáticamente su cuenta de acceso (usuario del nombre + contraseña).
   // La contraseña inicial queda visible para la directora en el expediente.
-  await ensureAlumnoAccount(student, d.matricula || undefined);
+  await ensureAlumnoAccount(student);
 
   revalidatePath("/estudiantes");
   revalidatePath("/panel");

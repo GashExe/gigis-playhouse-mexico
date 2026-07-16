@@ -39,6 +39,7 @@ model User {
 
 enum Role {
   DIRECTORA
+  COORDINADOR // Coordinador de programas educativos: arma y edita las plantillas de evaluación
   MAESTRA
   ALUMNO
 }
@@ -74,6 +75,7 @@ model Student {
   enrollments  Enrollment[]
   evaluations  Evaluation[]
   levelRecords LevelRecord[] // Ubicación de nivel por programa y ciclo
+  itemScores   ItemScore[] // Calificaciones por tema de la plantilla (1–4) por ciclo
   health       HealthProfile? // Cuestionario de salud del participante
   account      User? // Cuenta de acceso del participante (role ALUMNO)
 
@@ -127,6 +129,10 @@ model Program {
   color       String?  // Color para identificarlo visualmente
   active      Boolean  @default(true)
 
+  // Plantilla de evaluación: qué forma tiene y con qué % se pasa de nivel.
+  evalFormat    EvalFormat @default(BLOQUES) // BLOQUES (Mate/Lecto), AREAS (Lenguaje), PLANO (Danza/T.O./T.Física)
+  passThreshold Int        @default(80) // % del nivel para pasar al siguiente
+
   // Datos de la actividad (todos editables)
   schedule             String? // Horario (ej. "Lunes y miércoles 10:00–11:00")
   type                 String? // Tipo de actividad
@@ -163,6 +169,7 @@ model ProgramLevel {
   description String? // Qué abarca el nivel (ej. "ser un lector")
 
   records LevelRecord[]
+  blocks  EvalBlock[] // Bloques/áreas de la plantilla que cuelgan de este nivel
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -180,7 +187,8 @@ model Cycle {
   label  String // Etiqueta legible (ej. "Ene–Jun 2026")
   active Boolean     @default(false) // Ciclo vigente para registrar
 
-  records LevelRecord[]
+  records    LevelRecord[]
+  itemScores ItemScore[] // Calificaciones por tema registradas en este ciclo
 
   createdAt DateTime @default(now())
 
@@ -275,4 +283,71 @@ model Evaluation {
 
   @@index([studentId])
   @@index([date])
+}
+
+/// Forma de la plantilla de evaluación de un programa.
+enum EvalFormat {
+  BLOQUES // Nivel → Bloque numerado (1.1, 1.2…) → Temas (a, b, c). Ej. Matemáticas, Lectura.
+  AREAS // Nivel → Área (Receptivo, Expresivo, Social…) → Ítems. Ej. Lenguaje.
+  PLANO // Un solo formato sin niveles, secciones con ítems. Ej. Danza, Terapia Ocupacional.
+}
+
+/// Bloque / área / sección de un nivel. Es la PLANTILLA (la editan los coordinadores
+/// de programas educativos, no la maestra). Para formatos BLOQUES el `code` es "1.1";
+/// para AREAS es "Receptivo"; para PLANO agrupa una sección del formato.
+model EvalBlock {
+  id          String       @id @default(cuid())
+  level       ProgramLevel @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  levelId     String
+  code        String? // "1.2", "Receptivo"… (opcional)
+  name        String // Nombre del bloque/área (ej. "Sentido numérico y conteo hasta 10")
+  order       Int // Posición dentro del nivel (1 = primero)
+  description String?
+
+  items EvalItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([levelId, order])
+  @@index([levelId])
+}
+
+/// Tema / objetivo dentro de un bloque (ej. "Puedo contar hasta 10"). Parte de la plantilla.
+model EvalItem {
+  id      String    @id @default(cuid())
+  block   EvalBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  blockId String
+  code    String? // "a", "b"… (opcional)
+  text    String // Redacción del objetivo ("Puedo contar hasta 10")
+  order   Int // Posición dentro del bloque
+
+  scores ItemScore[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([blockId, order])
+  @@index([blockId])
+}
+
+/// Calificación de un alumno en un tema, por ciclo. Escala 1–4 (4 = máximo, dominado).
+/// Es la capa de DATOS del alumno; los porcentajes por bloque y nivel se calculan de aquí.
+model ItemScore {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  item      EvalItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId    String
+  cycle     Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId   String
+  score     Int // 1–4 (respeta la regla: la calificación máxima es 4)
+  note      String? // Nota breve del maestro sobre este tema
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, itemId, cycleId])
+  @@index([itemId, cycleId])
+  @@index([cycleId])
 }
