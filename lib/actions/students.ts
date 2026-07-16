@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
 import { StudentSchema } from "@/lib/validators";
+import { ensureAlumnoAccount } from "@/lib/accounts";
 
 export type FormState =
   | { errors?: Record<string, string[]>; message?: string }
@@ -20,6 +21,7 @@ function parseStudent(formData: FormData) {
   return StudentSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
+    matricula: formData.get("matricula") ?? "",
     birthDate: formData.get("birthDate") ?? "",
     gender: formData.get("gender") ?? "",
     guardianName: formData.get("guardianName") ?? "",
@@ -55,6 +57,11 @@ export async function createStudent(
       status: d.status,
     },
   });
+
+  // Genera automáticamente su cuenta de acceso (usuario + contraseña).
+  // La contraseña inicial queda visible para la directora en el expediente.
+  await ensureAlumnoAccount(student, d.matricula || undefined);
+
   revalidatePath("/estudiantes");
   revalidatePath("/panel");
   redirect(`/estudiantes/${student.id}`);

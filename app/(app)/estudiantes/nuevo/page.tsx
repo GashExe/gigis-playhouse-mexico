@@ -23,7 +23,7 @@ export default async function NewStudentPage() {
         title="Nuevo participante"
         subtitle="Registra los datos básicos. Después podrás inscribirlo en programas y registrar evaluaciones."
       />
-      <StudentForm action={createStudent} />
+      <StudentForm action={createStudent} showMatricula />
     </div>
   );
 }

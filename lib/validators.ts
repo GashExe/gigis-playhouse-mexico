@@ -19,6 +19,8 @@ const usernameField = z
 export const StudentSchema = z.object({
   firstName: z.string().trim().min(1, { message: "El nombre es obligatorio." }),
   lastName: z.string().trim().min(1, { message: "El apellido es obligatorio." }),
+  // Matrícula Gigi's (opcional al alta). Si se deja vacía, el usuario se genera del nombre.
+  matricula: z.string().trim().optional().or(z.literal("")),
   birthDate: z.string().trim().optional().or(z.literal("")),
   gender: z.enum(["FEMENINO", "MASCULINO", "OTRO"]).optional().or(z.literal("")),
   guardianName: z.string().trim().optional(),

@@ -42,6 +42,19 @@ export function normalizeMatricula(raw: string | null | undefined): string {
   return cleaned.toUpperCase();
 }
 
+/**
+ * Usuario de acceso a partir del nombre, para altas manuales sin matrícula:
+ * primer nombre + primer apellido, sin acentos ni espacios, en minúsculas.
+ * Ej.: "Test", "Prueba García" -> "testprueba". La unicidad se resuelve aparte.
+ */
+export function usernameFromName(firstName: string, lastName: string): string {
+  const slug = (s: string) =>
+    stripAccents(cleanText(s).split(" ")[0] ?? "")
+      .replace(/[^A-Za-z0-9]/g, "")
+      .toLowerCase();
+  return `${slug(firstName)}${slug(lastName)}` || "alumno";
+}
+
 /** Toma las primeras `n` letras de la primera palabra, con Inicial Mayúscula. */
 function letterBlock(word: string, n: number): string {
   const letters = stripAccents(word)
