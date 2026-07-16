@@ -23,6 +23,16 @@ const prisma = new PrismaClient({
 // Nivel: [nombre, descripción?]
 type Nivel = [string, string?];
 
+/**
+ * Orden del PRIMER nivel de un programa. Por defecto 1; Lenguaje arranca en 0
+ * porque el prelingüístico es el nivel de entrada. Importa que sea exacto: el
+ * upsert va por (programa, orden), así que un offset mal puesto RENOMBRA niveles
+ * existentes y reasigna en silencio a los alumnos ya ubicados en ellos.
+ */
+const ORDEN_INICIAL: Record<string, number> = {
+  "Lenguaje individual o en pareja": 0,
+};
+
 /** Niveles por nombre EXACTO de programa (deben coincidir con seed-programas.ts). */
 const NIVELES_POR_PROGRAMA: Record<string, Nivel[]> = {
   Lectura: [
@@ -42,12 +52,18 @@ const NIVELES_POR_PROGRAMA: Record<string, Nivel[]> = {
     ["Nivel intermedio", "Adición y sustracción"],
     ["Nivel avanzado", "Multiplicación y división"],
   ],
+  // Empieza en 0: el prelingüístico es el nivel de entrada, con el que se ubica al
+  // participante antes de colocarlo en básico. Los otros tres conservan su orden
+  // 1/2/3 de siempre, así que las ubicaciones ya registradas no se mueven.
   "Lenguaje individual o en pareja": [
+    ["Nivel prelingüístico", "Nivel de entrada: ubica al participante"],
     ["Nivel básico"],
     ["Nivel intermedio"],
     ["Nivel avanzado"],
   ],
-  "Lenguaje, música y gestos": [["Nivel prelingüístico"]],
+  // Su único nivel se llamaba "Nivel prelingüístico", pero ese nivel es de Lenguaje
+  // individual (tiene su propio formato). LMYG es un programa aparte, sin progresión.
+  "Lenguaje, música y gestos": [["Nivel único"]],
   "Habilidades sociales": [
     ["Inicial", "3 a 7 años"],
     ["Intermedio", "7 a 12 años"],
@@ -62,6 +78,22 @@ const NIVELES_POR_PROGRAMA: Record<string, Nivel[]> = {
     ["Nivel 5", "Bipedestación"],
     ["Nivel 6", "Marcha"],
   ],
+
+  // --- Programas de formato PLANO: un solo nivel ---
+  // Su formato de evaluación es una lista única de objetivos, sin progresión por
+  // niveles. El nivel existe solo porque los bloques cuelgan de uno (EvalItem
+  // exige bloque, y el bloque exige nivel).
+  "Brinco, salto y corro": [["Nivel único"]],
+  "Terapia orofacial": [["Nivel único"]],
+  "Vida independiente": [["Nivel único"]],
+  "Terapia ocupacional": [["Nivel único"]],
+  Sensorial: [["Nivel único"]],
+  "Danza representativa": [["Nivel único"]],
+  "Terapia física": [["Nivel único"]],
+
+  // El formato de Cocina se titula "NIVEL 2" y no existe un nivel 1: la
+  // numeración del papel arranca en 2. Se recorre para que empiece en 1.
+  Cocina: [["Nivel 1", "Antes rotulado \"NIVEL 2\" en el formato en papel"]],
 };
 
 /** Ciclos por temporada del año en curso. */
@@ -84,16 +116,19 @@ async function main() {
       sinPrograma.push(programName);
       continue;
     }
+    const base = ORDEN_INICIAL[programName] ?? 1;
     for (let i = 0; i < niveles.length; i++) {
       const [name, description] = niveles[i];
+      const order = base + i;
       await prisma.programLevel.upsert({
-        where: { programId_order: { programId: program.id, order: i + 1 } },
+        where: { programId_order: { programId: program.id, order } },
         update: { name, description: description ?? null },
-        create: { programId: program.id, order: i + 1, name, description: description ?? null },
+        create: { programId: program.id, order, name, description: description ?? null },
       });
       creados++;
     }
-    console.log(`   • ${programName}: ${niveles.length} niveles`);
+    const rango = base === 1 ? "" : ` (órdenes ${base}–${base + niveles.length - 1})`;
+    console.log(`   • ${programName}: ${niveles.length} niveles${rango}`);
   }
 
   if (sinPrograma.length) {

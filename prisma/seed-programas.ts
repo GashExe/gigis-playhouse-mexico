@@ -10,9 +10,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
  *
  * Uso: npx tsx prisma/seed-programas.ts
  *
- * ⚠️ Borra TODOS los programas actuales (y sus inscripciones de prueba) antes de
- * crear los reales. Los alumnos importados no tienen inscripciones, así que solo
- * afecta datos de ejemplo.
+ * Idempotente: busca por nombre y actualiza, o crea si falta. NO borra nada.
+ * Antes borraba todo y recreaba; dejó de ser viable cuando los programas
+ * pasaron a colgar niveles → bloques → temas → calificaciones de alumnos, que la
+ * cascada se llevaría por delante.
  */
 
 const prisma = new PrismaClient({
@@ -20,6 +21,8 @@ const prisma = new PrismaClient({
     connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
   }),
 });
+
+type EvalFormat = "BLOQUES" | "AREAS" | "PLANO";
 
 type P = {
   name: string;
@@ -30,12 +33,13 @@ type P = {
   studentCapacity?: number;
   description: string;
   color: string;
+  evalFormat: EvalFormat;
 };
 
 const PALETTE = [
   "#E4572E", "#2E86AB", "#8AA624", "#C05299", "#F2A541",
   "#3E7C59", "#6C63FF", "#0EAD9C", "#D7263D", "#B5651D",
-  "#1B9AAA", "#EF476F", "#118AB2", "#9B5DE5",
+  "#1B9AAA", "#EF476F", "#118AB2", "#9B5DE5", "#5C6784",
 ];
 
 const PROGRAMAS: P[] = [
@@ -47,6 +51,7 @@ const PROGRAMAS: P[] = [
     description:
       "Primer programa de terapia física que trabaja la motricidad gruesa para el desarrollo de los más pequeños. Inicia desde los primeros días de nacidos hasta que logran la marcha (5 pasos de manera independiente).",
     color: PALETTE[0],
+    evalFormat: "PLANO",
   },
   {
     name: "Brinco, salto y corro",
@@ -56,6 +61,7 @@ const PROGRAMAS: P[] = [
     description:
       "Segunda etapa de terapia física, después de la marcha. Se busca perfeccionar la marcha hasta lograr pararse en un pie, brincar, caminar en línea recta, etc. A la par se trabaja el seguimiento de instrucciones y la atención. Ingresan una vez que tienen la marcha (aprox. 3 a 6 años).",
     color: PALETTE[1],
+    evalFormat: "PLANO",
   },
   {
     name: "Lenguaje individual o en pareja",
@@ -66,6 +72,7 @@ const PROGRAMAS: P[] = [
     description:
       "Contempla el aspecto de la comunicación, vital para el desempeño de los participantes en su entorno familiar, escolar y social. Toma como base la intención comunicativa, la codificación oral del lenguaje (articulación) y la comprensión del mismo.",
     color: PALETTE[2],
+    evalFormat: "AREAS",
   },
   {
     name: "Lenguaje, música y gestos",
@@ -76,6 +83,7 @@ const PROGRAMAS: P[] = [
     description:
       "Primera etapa de lenguaje con los más pequeños, donde se desarrolla intención comunicativa: contacto visual, responder a su nombre, balbuceo, gestos e inicio de onomatopeyas. Grupal (0–3 años). Se agenda evaluación previa.",
     color: PALETTE[3],
+    evalFormat: "AREAS",
   },
   {
     name: "Terapia orofacial",
@@ -85,6 +93,7 @@ const PROGRAMAS: P[] = [
     description:
       "Fortalece los músculos de la cara para atender dificultades en la alimentación, deglución, protrusión lingual, emisión de lenguaje y otras habilidades de la musculatura facial y orofaríngea. Atiende respiración bucal, dificultad en deglución/masticación, no tolerancia a texturas sólidas, bajo tono muscular de lengua, babeo y objetos constantes a la boca. De bebés (3 meses) hasta adultos.",
     color: PALETTE[4],
+    evalFormat: "AREAS",
   },
   {
     name: "Habilidades sociales",
@@ -96,6 +105,7 @@ const PROGRAMAS: P[] = [
     description:
       "Brinda a los participantes herramientas para una conducta adaptativa que favorece interactuar de forma adecuada con compañeros, familia y sociedad, junto con el reconocimiento de sus emociones y sus derechos. Grupal, de 6 a 10 participantes. De 3 años en adelante.",
     color: PALETTE[5],
+    evalFormat: "PLANO",
   },
   {
     name: "Vida independiente",
@@ -105,6 +115,7 @@ const PROGRAMAS: P[] = [
     description:
       "Desarrolla habilidades de independencia y laborales para jóvenes mayores de 18 años, trabajando aptitudes que les permitirán ejecutar un trabajo con responsabilidad y eficacia. Objetivos: aumentar las habilidades profesionales y organizativas; aumentar la independencia y la autoestima; referencia a posibles campos de empleo. Requiere ciertas habilidades previas; se agenda evaluación.",
     color: PALETTE[6],
+    evalFormat: "AREAS",
   },
   {
     name: "Terapia ocupacional",
@@ -114,6 +125,7 @@ const PROGRAMAS: P[] = [
     description:
       "Diseñado para capacitar a los participantes con síndrome de Down en actividades de la vida diaria, mediante la habilitación o rehabilitación de habilidades motoras, cognitivas y sociales, o la modificación del entorno para reforzar su participación. Deben tener la marcha para ingresar; de 3 años en adelante.",
     color: PALETTE[7],
+    evalFormat: "PLANO",
   },
   {
     name: "Sensorial",
@@ -123,6 +135,7 @@ const PROGRAMAS: P[] = [
     description:
       "Se enfoca en los canales de entrada y procesamiento de la información en la recepción de nuevos estímulos. Trabaja vista, gusto, oído, olfato, tacto, sistema vestibular y propiocepción para facilitar una percepción más real, explorar y manipular materiales y el entorno. Se trabaja en la sala multisensorial: ayuda al tono muscular y destrezas motoras, mejora el uso funcional del lenguaje, la socialización, el seguimiento de instrucciones y la memoria auditiva y visual. De 0 años en adelante, para participantes con necesidades sensoriales; se agenda evaluación.",
     color: PALETTE[8],
+    evalFormat: "PLANO",
   },
   {
     name: "Danza representativa",
@@ -132,6 +145,7 @@ const PROGRAMAS: P[] = [
     description:
       "Trabaja la motricidad gruesa, la coordinación y la expresión corporal a través de la disciplina del baile, reforzando también el seguimiento de instrucciones. De 10 años en adelante.",
     color: PALETTE[9],
+    evalFormat: "PLANO",
   },
   {
     name: "Cocina",
@@ -141,6 +155,7 @@ const PROGRAMAS: P[] = [
     description:
       "Desarrolla habilidades para que los participantes elaboren de forma autónoma sus alimentos y manejen correctamente los utensilios, a través del seguimiento de instrucciones y la repetición de recetas sencillas. De 12 años en adelante.",
     color: PALETTE[10],
+    evalFormat: "BLOQUES",
   },
   {
     name: "Lectura",
@@ -150,6 +165,7 @@ const PROGRAMAS: P[] = [
     description:
       "Guía que apoya a los participantes a adquirir y transmitir sus habilidades lectoras en la escuela, casa y comunidad. Basado en el método Troncoso. De 3 años en adelante.",
     color: PALETTE[11],
+    evalFormat: "BLOQUES",
   },
   {
     name: "Escritura",
@@ -159,6 +175,7 @@ const PROGRAMAS: P[] = [
     description:
       "Trabaja actividades de coordinación fina, trazos, líneas y grafismos, así como escritura de letras, palabras y cartas según el nivel donde se ubican los participantes. De 3 años en adelante.",
     color: PALETTE[12],
+    evalFormat: "PLANO",
   },
   {
     name: "Matemáticas",
@@ -168,33 +185,72 @@ const PROGRAMAS: P[] = [
     description:
       "Guía de apoyo que permite a los participantes transmitir sus habilidades matemáticas en la escuela, casa y comunidad. Dirigido a titulares de derecho de 3 años en adelante.",
     color: PALETTE[13],
+    evalFormat: "BLOQUES",
+  },
+  {
+    // No venía en "Descripción de programas 2026", pero tiene su propio formato de
+    // evaluación ("Evaluación grupo TFisica.xlsx") y no corresponde ni a Gateo ni a
+    // Brinco, que son los otros dos del área. Alta confirmada por la directora.
+    name: "Terapia física",
+    area: "Terapia física / Motricidad",
+    type: "Grupal",
+    ageMin: null,
+    ageMax: null,
+    description:
+      "Valoración y trabajo del tono muscular (de fondo, de sostén y de acción), la lateralidad funcional y la motricidad global. Formato propio de evaluación, distinto al de Gateo y caminata y al de Brinco, salto y corro.",
+    color: PALETTE[14],
+    evalFormat: "PLANO",
   },
 ];
 
 async function main() {
   const antes = await prisma.program.count();
-  console.log(`Programas actuales: ${antes} (se eliminarán)`);
+  console.log(`Programas actuales: ${antes}`);
 
-  // Borrar programas de ejemplo. Cascada elimina inscripciones de prueba.
-  await prisma.program.deleteMany({});
+  let creados = 0;
+  let actualizados = 0;
 
   for (const p of PROGRAMAS) {
-    await prisma.program.create({
-      data: {
-        name: p.name,
-        description: p.description,
-        area: p.area,
-        type: p.type ?? null,
-        color: p.color,
-        ageMin: p.ageMin ?? null,
-        ageMax: p.ageMax ?? null,
-        studentCapacity: p.studentCapacity ?? 7,
-      },
+    // `name` no es único en el esquema, así que no se puede usar upsert.
+    const existente = await prisma.program.findFirst({
+      where: { name: p.name },
+      select: { id: true },
     });
+    if (existente) {
+      // Solo los campos que son del manual. Horario, tipo, maestro y cupos se
+      // editan desde el panel: re-sembrar no debe pisar esas ediciones.
+      await prisma.program.update({
+        where: { id: existente.id },
+        data: {
+          description: p.description,
+          area: p.area,
+          color: p.color,
+          ageMin: p.ageMin ?? null,
+          ageMax: p.ageMax ?? null,
+          evalFormat: p.evalFormat,
+        },
+      });
+      actualizados++;
+    } else {
+      await prisma.program.create({
+        data: {
+          name: p.name,
+          description: p.description,
+          area: p.area,
+          type: p.type ?? null,
+          color: p.color,
+          ageMin: p.ageMin ?? null,
+          ageMax: p.ageMax ?? null,
+          studentCapacity: p.studentCapacity ?? 7,
+          evalFormat: p.evalFormat,
+        },
+      });
+      creados++;
+    }
   }
 
   const total = await prisma.program.count();
-  console.log(`✅ Programas reales creados: ${total}`);
+  console.log(`✅ Programas: ${creados} creados, ${actualizados} actualizados (total ${total})`);
   for (const p of PROGRAMAS) {
     const edad =
       p.ageMin != null && p.ageMax != null
