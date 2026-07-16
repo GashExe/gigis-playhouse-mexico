@@ -1,13 +1,36 @@
-import { verifySession } from "@/lib/dal";
-import { listPrograms, listTeachers } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/dal";
+import { listPrograms, listTeachers, listCycles, getActiveCycle } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgramsManager } from "@/components/programs-manager";
+import { CycleBar } from "@/components/cycle-bar";
+import { CycleOffer } from "@/components/cycle-offer";
 
 export const metadata = { title: "Programas" };
 
-export default async function ProgramsPage() {
-  await verifySession();
-  const [programs, teachers] = await Promise.all([listPrograms(), listTeachers()]);
+export default async function ProgramsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ciclo?: string }>;
+}) {
+  const { ciclo } = await searchParams;
+  const [cycles, activeCycle, me] = await Promise.all([
+    listCycles(),
+    getActiveCycle(),
+    getCurrentUser(),
+  ]);
+
+  // Se ve el ciclo pedido; si no hay o no existe, el activo.
+  const selected =
+    cycles.find((c) => c.id === ciclo) ?? activeCycle ?? cycles[0] ?? null;
+
+  const [programs, teachers, allPrograms] = await Promise.all([
+    selected ? listPrograms(selected.id) : listPrograms(),
+    listTeachers(),
+    // La oferta se arma eligiendo de TODOS los programas, no solo de los del ciclo.
+    listPrograms(),
+  ]);
+
+  const isDirectora = me.role === "DIRECTORA";
 
   return (
     <div>
@@ -15,6 +38,37 @@ export default async function ProgramsPage() {
         title="Programas y actividades"
         subtitle="Cada programa es una actividad con horario, cupo y un maestro a cargo."
       />
+
+      {selected && (
+        <CycleBar
+          cycles={cycles.map((c) => ({
+            id: c.id,
+            label: c.label,
+            active: c.active,
+            programCount: allPrograms.filter((p) =>
+              p.cycles.some((x) => x.id === c.id),
+            ).length,
+          }))}
+          selectedId={selected.id}
+          canActivate={isDirectora}
+        />
+      )}
+
+      {isDirectora && selected && (
+        <CycleOffer
+          cycleId={selected.id}
+          cycleLabel={selected.label}
+          programs={allPrograms.map((p) => ({
+            id: p.id,
+            name: p.name,
+            area: p.area,
+            color: p.color,
+            offered: p.cycles.some((x) => x.id === selected.id),
+            enrollments: p._count.enrollments,
+          }))}
+        />
+      )}
+
       <ProgramsManager programs={programs} teachers={teachers} />
     </div>
   );

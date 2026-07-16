@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { verifySession } from "@/lib/dal";
+import { verifySession, requireRole } from "@/lib/dal";
 import { ProgramSchema } from "@/lib/validators";
+import { getActiveCycle } from "@/lib/queries";
 
 export type ProgramFormState =
   | { errors?: Record<string, string[]>; ok?: boolean }
@@ -60,6 +61,9 @@ export async function createProgram(
   }
   const d = parsed.data;
   const count = await prisma.program.count();
+  // Se oferta en el ciclo activo. Sin esto nacería fuera de todo ciclo y, como la
+  // lista filtra por ciclo, el programa recién creado desaparecería de la pantalla.
+  const cycle = await getActiveCycle();
   await prisma.program.create({
     data: {
       name: d.name,
@@ -67,6 +71,7 @@ export async function createProgram(
       area: d.area || null,
       color: d.color || PALETTE[count % PALETTE.length],
       ...activityData(d),
+      ...(cycle ? { cycles: { connect: { id: cycle.id } } } : {}),
     },
   });
   revalidatePath("/programas");
@@ -105,4 +110,35 @@ export async function toggleProgram(id: string, active: boolean) {
   await prisma.program.update({ where: { id }, data: { active } });
   revalidatePath("/programas");
   revalidatePath("/panel");
+}
+
+/**
+ * Activa un ciclo. Solo uno puede estar activo: es el periodo en el que se inscribe
+ * y se califica, así que dos activos a la vez dejarían "el ciclo actual" ambiguo.
+ * Solo la directora arma el calendario escolar.
+ */
+export async function activateCycle(cycleId: string) {
+  await requireRole("DIRECTORA");
+  await prisma.$transaction([
+    prisma.cycle.updateMany({ where: { active: true }, data: { active: false } }),
+    prisma.cycle.update({ where: { id: cycleId }, data: { active: true } }),
+  ]);
+  revalidatePath("/programas");
+  revalidatePath("/panel");
+}
+
+/** Pone o quita un programa de la oferta de un ciclo. */
+export async function setProgramInCycle(
+  programId: string,
+  cycleId: string,
+  offered: boolean,
+) {
+  await requireRole("DIRECTORA");
+  await prisma.program.update({
+    where: { id: programId },
+    data: {
+      cycles: offered ? { connect: { id: cycleId } } : { disconnect: { id: cycleId } },
+    },
+  });
+  revalidatePath("/programas");
 }

@@ -63,6 +63,22 @@ async function main() {
     }),
   );
 
+  // ---- Ciclo ----
+  // Las inscripciones son por ciclo, así que el demo necesita uno donde colgarlas.
+  const year = new Date().getFullYear();
+  const cycle = await prisma.cycle.upsert({
+    where: { season_year: { season: "ENE_JUN", year } },
+    update: {},
+    create: { season: "ENE_JUN", year, label: `Ene–Jun ${year}`, active: true },
+  });
+  // Y los programas del demo tienen que estar ofertados en él para poder inscribir.
+  for (const p of programs) {
+    await prisma.program.update({
+      where: { id: p.id },
+      data: { cycles: { connect: { id: cycle.id } } },
+    });
+  }
+
   // ---- Estudiantes ----
   const studentsData = [
     { firstName: "Diego", lastName: "Hernández Luna", birthDate: "2016-03-12", gender: "MASCULINO", guardianName: "Laura Luna", guardianPhone: "55 1234 5678" },
@@ -101,7 +117,7 @@ async function main() {
     const chosen = shuffled.slice(0, 2 + Math.floor(Math.random() * 2));
     for (const program of chosen) {
       await prisma.enrollment.create({
-        data: { studentId: student.id, programId: program.id },
+        data: { studentId: student.id, programId: program.id, cycleId: cycle.id },
       });
 
       // 1-3 evaluaciones por programa

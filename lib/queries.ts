@@ -161,14 +161,23 @@ export async function getStudentSpace(studentId: string) {
   });
 }
 
-export async function listPrograms() {
+/**
+ * Programas, opcionalmente solo los ofertados en un ciclo. Los contadores de
+ * inscripciones también se acotan al ciclo: "cuántos alumnos tiene Cocina" solo
+ * significa algo dentro de un periodo.
+ */
+export async function listPrograms(cycleId?: string) {
   return prisma.program.findMany({
+    where: cycleId ? { cycles: { some: { id: cycleId } } } : undefined,
     orderBy: [{ active: "desc" }, { name: "asc" }],
     include: {
       teacher: { select: { id: true, name: true } },
+      cycles: { select: { id: true } },
       _count: {
         select: {
-          enrollments: { where: { status: "ACTIVA" } },
+          enrollments: {
+            where: { status: "ACTIVA", ...(cycleId ? { cycleId } : {}) },
+          },
           evaluations: true,
         },
       },
@@ -185,9 +194,17 @@ export async function listTeachers() {
   });
 }
 
-export async function listActivePrograms() {
+/**
+ * Programas a los que se puede inscribir. Se acota a la oferta de un ciclo: inscribir
+ * a uno fuera de ella lo rechaza addEnrollment, así que ofrecerlo sería un fallo
+ * silencioso (el usuario elige y no pasa nada).
+ */
+export async function listActivePrograms(cycleId?: string) {
   return prisma.program.findMany({
-    where: { active: true },
+    where: {
+      active: true,
+      ...(cycleId ? { cycles: { some: { id: cycleId } } } : {}),
+    },
     orderBy: { name: "asc" },
     select: { id: true, name: true, color: true, area: true },
   });

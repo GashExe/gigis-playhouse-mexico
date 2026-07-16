@@ -55,11 +55,12 @@ export default async function StudentDetailPage({
   const me = await getCurrentUser();
   const { id } = await params;
   const { ciclo } = await searchParams;
-  const [student, programs, cycles, activeCycle, programsWithLevels] = await Promise.all([
+  const activeCycle = await getActiveCycle();
+  const [student, programs, cycles, programsWithLevels] = await Promise.all([
     getStudent(id),
-    listActivePrograms(),
+    // Solo la oferta del ciclo activo: es a lo único que se puede inscribir.
+    listActivePrograms(activeCycle?.id),
     listCycles(),
-    getActiveCycle(),
     listProgramsWithLevels(),
   ]);
   if (!student) notFound();

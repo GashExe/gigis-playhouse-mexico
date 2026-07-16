@@ -148,10 +148,14 @@ model Program {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  enrollments Enrollment[]
-  evaluations Evaluation[]
-  levels      ProgramLevel[] // Niveles propios de este programa (ordenados)
+  enrollments  Enrollment[]
+  evaluations  Evaluation[]
+  levels       ProgramLevel[] // Niveles propios de este programa (ordenados)
   levelRecords LevelRecord[]
+  // En qué ciclos se ofrece. La directora arma la oferta de cada ciclo eligiendo de
+  // los programas que ya existen (ej. que en Sep–Dic solo corran 7). El programa
+  // sigue siendo uno solo: conserva su plantilla, sus niveles y su historial.
+  cycles       Cycle[]        @relation("ProgramasDelCiclo")
 
   @@index([active])
   @@index([teacherId])
@@ -187,8 +191,10 @@ model Cycle {
   label  String // Etiqueta legible (ej. "Ene–Jun 2026")
   active Boolean     @default(false) // Ciclo vigente para registrar
 
-  records    LevelRecord[]
-  itemScores ItemScore[] // Calificaciones por tema registradas en este ciclo
+  records     LevelRecord[]
+  itemScores  ItemScore[] // Calificaciones por tema registradas en este ciclo
+  enrollments Enrollment[] // Inscripciones de este ciclo
+  programs    Program[]    @relation("ProgramasDelCiclo") // Qué programas se ofrecen en este ciclo
 
   createdAt DateTime @default(now())
 
@@ -242,6 +248,10 @@ model Enrollment {
   studentId String
   program   Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
   programId String
+  // El ciclo en el que está inscrito. Sin esto un alumno solo podía inscribirse a un
+  // programa una vez en su vida, y no podía repetirlo en otro ciclo.
+  cycle     Cycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId   String
   startDate DateTime         @default(now())
   endDate   DateTime?
   status    EnrollmentStatus @default(ACTIVA)
@@ -254,8 +264,9 @@ model Enrollment {
 
   createdAt DateTime @default(now())
 
-  @@unique([studentId, programId])
+  @@unique([studentId, programId, cycleId])
   @@index([programId])
+  @@index([cycleId])
 }
 
 enum EnrollmentStatus {
