@@ -9,7 +9,7 @@ import {
   UserGear,
   SignOut,
 } from "@phosphor-icons/react";
-import { cn, initials } from "@/lib/utils";
+import { cn, initials, roleLabel } from "@/lib/utils";
 import { Logo } from "@/components/brand";
 import { logout } from "@/lib/actions/auth";
 import type { Role } from "@/lib/generated/prisma/client";
@@ -84,9 +84,7 @@ function UserCard({ name, role }: { name: string; role: Role }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-ink">{name}</p>
-        <p className="text-xs font-medium text-muted">
-          {role === "DIRECTORA" ? "Directora" : "Maestra"}
-        </p>
+        <p className="text-xs font-medium text-muted">{roleLabel(role)}</p>
       </div>
       <form action={logout}>
         <button

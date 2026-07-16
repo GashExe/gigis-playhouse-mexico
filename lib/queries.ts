@@ -190,6 +190,42 @@ export async function getStudentLevels(studentId: string, cycleId: string) {
   });
 }
 
+/** Plantilla completa de evaluación de un programa: niveles → bloques → temas. */
+export async function getProgramTemplate(programId: string) {
+  return prisma.program.findUnique({
+    where: { id: programId },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      evalFormat: true,
+      passThreshold: true,
+      levels: {
+        orderBy: { order: "asc" },
+        select: {
+          id: true,
+          name: true,
+          order: true,
+          description: true,
+          blocks: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              order: true,
+              items: {
+                orderBy: { order: "asc" },
+                select: { id: true, code: true, text: true, order: true },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 /** Datos básicos de un programa (para la vista de calificación). */
 export async function getProgramBasics(programId: string) {
   return prisma.program.findUnique({
@@ -269,7 +305,7 @@ export async function listUsers() {
   return prisma.user.findMany({
     // Solo cuentas del equipo. Las cuentas de alumno se administran desde
     // el módulo de estudiantes (son cientos y tienen otro flujo).
-    where: { role: { in: ["DIRECTORA", "MAESTRA"] } },
+    where: { role: { in: ["DIRECTORA", "COORDINADOR", "MAESTRA"] } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: {
       id: true,

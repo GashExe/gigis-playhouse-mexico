@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Plus,
   Books,
@@ -11,6 +12,7 @@ import {
   UsersThree,
   Clock,
   ChalkboardTeacher,
+  ListChecks,
 } from "@phosphor-icons/react";
 import {
   createProgram,
@@ -188,6 +190,14 @@ function ProgramCard({
           <span>/ {p.studentCapacity} cupos</span>
         </span>
         <div className="ml-auto flex items-center gap-1">
+          <Link
+            href={`/programas/${p.id}/plantilla`}
+            aria-label="Plantilla de evaluación"
+            title="Plantilla de evaluación"
+            className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <ListChecks className="size-[1.05rem]" />
+          </Link>
           <form action={toggleProgram.bind(null, p.id, !p.active)}>
             <button
               type="submit"

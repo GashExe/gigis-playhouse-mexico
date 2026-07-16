@@ -21,6 +21,29 @@ export function avatarHue(seed: string): number {
   return AVATAR_HUES[h % AVATAR_HUES.length];
 }
 
+/** Etiqueta legible del rol de una cuenta del equipo. */
+export function roleLabel(role: string): string {
+  switch (role) {
+    case "DIRECTORA":
+      return "Directora";
+    case "COORDINADOR":
+      return "Coordinador";
+    case "MAESTRA":
+      return "Maestra";
+    case "ALUMNO":
+      return "Alumno";
+    default:
+      return role;
+  }
+}
+
+/** Tono del Badge para el rol (para <Badge tone={...}>). */
+export function roleTone(role: string): "accent" | "warning" | "primary" {
+  if (role === "DIRECTORA") return "accent";
+  if (role === "COORDINADOR") return "warning";
+  return "primary";
+}
+
 /** Edad en años a partir de fecha de nacimiento. */
 export function ageFrom(date: Date | null | undefined): number | null {
   if (!date) return null;

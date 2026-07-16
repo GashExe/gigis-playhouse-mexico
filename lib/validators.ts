@@ -109,7 +109,7 @@ export const UserSchema = z.object({
     .email({ message: "Correo no válido." })
     .optional()
     .or(z.literal("")),
-  role: z.enum(["DIRECTORA", "MAESTRA"]).default("MAESTRA"),
+  role: z.enum(["DIRECTORA", "COORDINADOR", "MAESTRA"]).default("MAESTRA"),
   password: z
     .string()
     .min(8, { message: "La contraseña debe tener al menos 8 caracteres." })

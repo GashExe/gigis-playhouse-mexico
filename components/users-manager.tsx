@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { fecha } from "@/lib/format";
-import { initials } from "@/lib/utils";
+import { initials, roleLabel, roleTone } from "@/lib/utils";
 import type { Role } from "@/lib/generated/prisma/client";
 
 type UserRow = {
@@ -91,9 +91,7 @@ export function UsersManager({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-bold text-ink">{u.name}</p>
-                    <Badge tone={u.role === "DIRECTORA" ? "accent" : "primary"}>
-                      {u.role === "DIRECTORA" ? "Directora" : "Maestra"}
-                    </Badge>
+                    <Badge tone={roleTone(u.role)}>{roleLabel(u.role)}</Badge>
                     {!u.active && <Badge tone="neutral">Desactivada</Badge>}
                     {u.id === currentUserId && <Badge tone="neutral">Tú</Badge>}
                   </div>
@@ -210,6 +208,7 @@ function UserForm({
           <Field label="Rol" htmlFor="role">
             <Select id="role" name="role" defaultValue={defaults?.role ?? "MAESTRA"}>
               <option value="MAESTRA">Maestra</option>
+              <option value="COORDINADOR">Coordinador (arma plantillas de evaluación)</option>
               <option value="DIRECTORA">Directora</option>
             </Select>
           </Field>
