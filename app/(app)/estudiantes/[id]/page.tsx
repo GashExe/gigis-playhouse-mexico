@@ -203,7 +203,7 @@ export default async function StudentDetailPage({
               </div>
               <dl className="space-y-3">
                 <div>
-                  <dt className="text-xs font-medium text-subtle">Usuario (matrícula)</dt>
+                  <dt className="text-xs font-medium text-subtle">Usuario</dt>
                   <dd className="select-all font-mono text-sm font-semibold text-ink">
                     {student.account.username}
                   </dd>

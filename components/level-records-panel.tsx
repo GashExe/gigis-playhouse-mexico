@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Plus, PencilSimple, Trash, GraduationCap, Stack } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, GraduationCap, Stack, ListChecks } from "@phosphor-icons/react";
 import { setLevelRecord, removeLevelRecord } from "@/lib/actions/level-records";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -177,6 +178,14 @@ function LevelRow({
           </p>
         </div>
         <PlacementBadge placement={r.placement} />
+        <Link
+          href={`/estudiantes/${studentId}/calificar/${r.program.id}?ciclo=${cycleId}`}
+          aria-label="Calificar por bloques"
+          title="Calificar por bloques"
+          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <ListChecks className="size-4" />
+        </Link>
         <button
           onClick={() => setEditing((v) => !v)}
           aria-label="Editar nivel"

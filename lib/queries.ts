@@ -190,6 +190,66 @@ export async function getStudentLevels(studentId: string, cycleId: string) {
   });
 }
 
+/** Datos básicos de un programa (para la vista de calificación). */
+export async function getProgramBasics(programId: string) {
+  return prisma.program.findUnique({
+    where: { id: programId },
+    select: { id: true, name: true, color: true, passThreshold: true, evalFormat: true },
+  });
+}
+
+/**
+ * Datos para calificar por bloques: el nivel en el que está ubicado el alumno en un
+ * programa/ciclo, con sus bloques y temas, y la calificación (1–4) que ya tenga el
+ * alumno en ese ciclo. Devuelve null si no está ubicado en un nivel todavía.
+ */
+export async function getGradingData(studentId: string, programId: string, cycleId: string) {
+  const record = await prisma.levelRecord.findUnique({
+    where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
+    select: { level: { select: { id: true, name: true, order: true, description: true } } },
+  });
+  if (!record) return null;
+
+  const blocks = await prisma.evalBlock.findMany({
+    where: { levelId: record.level.id },
+    orderBy: { order: "asc" },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      order: true,
+      items: {
+        orderBy: { order: "asc" },
+        select: { id: true, code: true, text: true, order: true },
+      },
+    },
+  });
+
+  const itemIds = blocks.flatMap((b) => b.items.map((i) => i.id));
+  const scores = itemIds.length
+    ? await prisma.itemScore.findMany({
+        where: { studentId, cycleId, itemId: { in: itemIds } },
+        select: { itemId: true, score: true },
+      })
+    : [];
+  const scoreByItem = new Map(scores.map((s) => [s.itemId, s.score]));
+
+  return {
+    level: record.level,
+    blocks: blocks.map((b) => ({
+      id: b.id,
+      code: b.code,
+      name: b.name,
+      items: b.items.map((i) => ({
+        id: i.id,
+        code: i.code,
+        text: i.text,
+        score: scoreByItem.get(i.id) ?? null,
+      })),
+    })),
+  };
+}
+
 /** Programas que tienen niveles definidos, con su lista de niveles ordenada. */
 export async function listProgramsWithLevels() {
   return prisma.program.findMany({
