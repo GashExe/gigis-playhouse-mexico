@@ -1,13 +1,20 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { CalendarCheck, Sparkle, Confetti } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import { getStudentSpace } from "@/lib/queries";
+import { needsOnboarding } from "@/lib/legal";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
 export default async function MiEspacioPage() {
   const user = await getCurrentUser();
   const student = user.studentId ? await getStudentSpace(user.studentId) : null;
+
+  // Compuerta: sin datos básicos + salud + aviso/reglamento aceptados, no hay acceso a clases.
+  if (student && needsOnboarding(student)) {
+    redirect("/mi-espacio/bienvenida");
+  }
 
   const firstName = (student?.firstName ?? user.name).split(" ")[0];
   const programs = student?.enrollments ?? [];

@@ -64,13 +64,45 @@ model Student {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  // Onboarding del tutor (primer ingreso). La compuerta a "clases" exige que estén
+  // los tres: datos básicos + cuestionario de salud + aceptación de aviso y reglamento.
+  onboardingCompletedAt DateTime? // Se marca al terminar el formulario de bienvenida
+  privacyAcceptedAt     DateTime? // Cuándo aceptó el aviso de privacidad
+  rulesAcceptedAt       DateTime? // Cuándo aceptó el reglamento
+  consentVersion        String? // Versión de aviso/reglamento aceptada (para re-pedir si cambia)
+
   enrollments  Enrollment[]
   evaluations  Evaluation[]
   levelRecords LevelRecord[] // Ubicación de nivel por programa y ciclo
+  health       HealthProfile? // Cuestionario de salud del participante
   account      User? // Cuenta de acceso del participante (role ALUMNO)
 
   @@index([status])
   @@index([lastName])
+}
+
+/// Cuestionario de salud del participante (1:1 con Student). Datos sensibles:
+/// acceso solo autenticado. Lo llena el tutor en su primer ingreso.
+model HealthProfile {
+  id        String  @id @default(cuid())
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String  @unique
+
+  bloodType           String? // Tipo de sangre
+  allergies           String? // Alergias (o "Ninguna")
+  medications         String? // Medicamentos actuales
+  medicalConditions   String? // Condiciones médicas / diagnóstico
+  therapies           String? // Terapias externas
+  dietaryRestrictions String? // Restricciones alimentarias
+  doctorName          String? // Médico de cabecera
+  doctorPhone         String? // Teléfono del médico
+  emergencyName       String? // Contacto de emergencia: nombre
+  emergencyPhone      String? // Contacto de emergencia: teléfono
+  emergencyRelation   String? // Parentesco del contacto de emergencia
+  notes               String? // Observaciones de salud
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum Gender {

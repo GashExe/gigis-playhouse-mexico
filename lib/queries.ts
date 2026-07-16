@@ -86,6 +86,29 @@ export async function getStudent(id: string) {
   });
 }
 
+/** Datos para el formulario de primer ingreso del tutor (prefill + estado de onboarding). */
+export async function getOnboardingData(studentId: string) {
+  return prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      birthDate: true,
+      gender: true,
+      guardianName: true,
+      guardianPhone: true,
+      guardianEmail: true,
+      address: true,
+      onboardingCompletedAt: true,
+      privacyAcceptedAt: true,
+      rulesAcceptedAt: true,
+      consentVersion: true,
+      health: true,
+    },
+  });
+}
+
 /** Datos propios del alumno para su espacio (solo su expediente y programas activos). */
 export async function getStudentSpace(studentId: string) {
   return prisma.student.findUnique({
@@ -94,6 +117,8 @@ export async function getStudentSpace(studentId: string) {
       firstName: true,
       lastName: true,
       matricula: true,
+      onboardingCompletedAt: true,
+      consentVersion: true,
       enrollments: {
         where: { status: "ACTIVA" },
         orderBy: { startDate: "desc" },

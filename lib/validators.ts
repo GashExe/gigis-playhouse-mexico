@@ -56,6 +56,50 @@ export const EnrollmentSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
+/** Formulario de primer ingreso del tutor: datos básicos + salud + consentimientos. */
+export const OnboardingSchema = z.object({
+  // Datos básicos del participante
+  birthDate: z
+    .string()
+    .trim()
+    .min(1, { message: "La fecha de nacimiento es obligatoria." }),
+  gender: z.enum(["FEMENINO", "MASCULINO", "OTRO"], {
+    message: "Selecciona el sexo del participante.",
+  }),
+  // Tutor / contacto
+  guardianName: z.string().trim().min(1, { message: "El nombre del tutor es obligatorio." }),
+  guardianPhone: z.string().trim().min(1, { message: "El teléfono del tutor es obligatorio." }),
+  guardianEmail: z
+    .string()
+    .trim()
+    .email({ message: "Correo del tutor no válido." })
+    .optional()
+    .or(z.literal("")),
+  address: z.string().trim().optional(),
+  // Cuestionario de salud
+  bloodType: z.string().trim().optional(),
+  allergies: z.string().trim().min(1, { message: "Indica las alergias (o escribe “Ninguna”)." }),
+  medications: z.string().trim().optional(),
+  medicalConditions: z.string().trim().optional(),
+  therapies: z.string().trim().optional(),
+  dietaryRestrictions: z.string().trim().optional(),
+  doctorName: z.string().trim().optional(),
+  doctorPhone: z.string().trim().optional(),
+  emergencyName: z
+    .string()
+    .trim()
+    .min(1, { message: "El contacto de emergencia es obligatorio." }),
+  emergencyPhone: z
+    .string()
+    .trim()
+    .min(1, { message: "El teléfono de emergencia es obligatorio." }),
+  emergencyRelation: z.string().trim().optional(),
+  healthNotes: z.string().trim().optional(),
+  // Consentimientos (checkbox: "on" cuando está marcado)
+  acceptPrivacy: z.string().optional(),
+  acceptRules: z.string().optional(),
+});
+
 export const UserSchema = z.object({
   name: z.string().trim().min(1, { message: "El nombre es obligatorio." }),
   username: usernameField,
