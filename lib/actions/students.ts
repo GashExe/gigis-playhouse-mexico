@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
-import { StudentSchema } from "@/lib/validators";
+import { StudentSchema, StudentStatusSchema, HealthSchema } from "@/lib/validators";
 import { ensureAlumnoAccount } from "@/lib/accounts";
+import type { StudentStatus } from "@/lib/generated/prisma/client";
 
 export type FormState =
   | { errors?: Record<string, string[]>; message?: string }
@@ -97,10 +98,77 @@ export async function updateStudent(
   redirect(`/estudiantes/${id}`);
 }
 
+/**
+ * Cambia solo el estado del participante. Existe aparte de updateStudent para poder
+ * hacerlo de un clic desde su expediente o la lista, sin abrir el formulario entero.
+ */
+export async function setStudentStatus(id: string, status: StudentStatus) {
+  await verifySession();
+  const parsed = StudentStatusSchema.safeParse(status);
+  if (!parsed.success) return;
+  await prisma.student.update({ where: { id }, data: { status: parsed.data } });
+  revalidatePath(`/estudiantes/${id}`);
+  revalidatePath("/estudiantes");
+  revalidatePath("/panel");
+}
+
 export async function deleteStudent(id: string) {
   await verifySession();
   await prisma.student.delete({ where: { id } });
   revalidatePath("/estudiantes");
   revalidatePath("/panel");
   redirect("/estudiantes");
+}
+
+/**
+ * Guarda el cuestionario de salud de un participante. Existe porque el historial solo
+ * se llenaba en el onboarding del tutor, y los 470 alumnos vienen del padrón, no de
+ * tutores registrándose: sin esto su expediente médico se queda vacío para siempre.
+ * Usa el MISMO HealthSchema que el onboarding, así que exige lo mismo.
+ */
+export async function saveHealth(
+  studentId: string,
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  await verifySession();
+  const parsed = HealthSchema.safeParse({
+    bloodType: formData.get("bloodType") ?? "",
+    allergies: formData.get("allergies") ?? "",
+    medications: formData.get("medications") ?? "",
+    medicalConditions: formData.get("medicalConditions") ?? "",
+    therapies: formData.get("therapies") ?? "",
+    dietaryRestrictions: formData.get("dietaryRestrictions") ?? "",
+    doctorName: formData.get("doctorName") ?? "",
+    doctorPhone: formData.get("doctorPhone") ?? "",
+    emergencyName: formData.get("emergencyName") ?? "",
+    emergencyPhone: formData.get("emergencyPhone") ?? "",
+    emergencyRelation: formData.get("emergencyRelation") ?? "",
+    healthNotes: formData.get("healthNotes") ?? "",
+  });
+  if (!parsed.success) {
+    return { errors: parsed.error.flatten().fieldErrors };
+  }
+  const d = parsed.data;
+  const data = {
+    bloodType: d.bloodType || null,
+    allergies: d.allergies || null,
+    medications: d.medications || null,
+    medicalConditions: d.medicalConditions || null,
+    therapies: d.therapies || null,
+    dietaryRestrictions: d.dietaryRestrictions || null,
+    doctorName: d.doctorName || null,
+    doctorPhone: d.doctorPhone || null,
+    emergencyName: d.emergencyName || null,
+    emergencyPhone: d.emergencyPhone || null,
+    emergencyRelation: d.emergencyRelation || null,
+    notes: d.healthNotes || null,
+  };
+  await prisma.healthProfile.upsert({
+    where: { studentId },
+    create: { studentId, ...data },
+    update: data,
+  });
+  revalidatePath(`/estudiantes/${studentId}`);
+  redirect(`/estudiantes/${studentId}`);
 }

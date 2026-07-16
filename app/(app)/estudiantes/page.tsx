@@ -5,8 +5,9 @@ import {
   CaretRight,
   DownloadSimple,
 } from "@phosphor-icons/react/dist/ssr";
-import { listStudents } from "@/lib/queries";
+import { listStudents, countStudentsByStatus } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/dal";
+import { StudentStatusSchema } from "@/lib/validators";
 import { ageFrom } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -15,16 +16,27 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchInput } from "@/components/search-input";
 import { StudentStatusBadge } from "@/components/status";
+import { StudentFilters } from "@/components/student-filters";
 
 export const metadata = { title: "Participantes" };
 
 export default async function StudentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; estado?: string }>;
 }) {
-  const { q } = await searchParams;
-  const [students, me] = await Promise.all([listStudents(q), getCurrentUser()]);
+  const { q, estado } = await searchParams;
+  const status = StudentStatusSchema.safeParse(estado);
+  const [students, counts, me] = await Promise.all([
+    listStudents(q, status.success ? status.data : undefined),
+    countStudentsByStatus(q),
+    getCurrentUser(),
+  ]);
+  // "Sin resultados" solo si hay búsqueda o filtro: si no, el padrón está vacío de verdad.
+  const filtrando = Boolean(q) || status.success;
+  const estadoLabel = status.success
+    ? { ACTIVO: "activos", INACTIVO: "inactivos", EGRESADO: "egresados" }[status.data]
+    : "";
   const isDirectora = me.role === "DIRECTORA";
 
   return (
@@ -52,21 +64,24 @@ export default async function StudentsPage({
         }
       />
 
-      <div className="mb-5">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput placeholder="Buscar por nombre o tutor…" />
+        <StudentFilters counts={counts} />
       </div>
 
       {students.length === 0 ? (
         <EmptyState
           icon={<UsersThree weight="fill" className="size-6" />}
-          title={q ? "Sin resultados" : "Aún no hay participantes"}
+          title={filtrando ? "Sin resultados" : "Aún no hay participantes"}
           description={
-            q
-              ? `No encontramos participantes que coincidan con “${q}”.`
+            filtrando
+              ? `No hay participantes${estadoLabel ? ` ${estadoLabel}` : ""}${
+                  q ? ` que coincidan con “${q}”` : ""
+                }.`
               : "Registra al primer participante para empezar a llevar su historial."
           }
           action={
-            !q && (
+            !filtrando && (
               <Button href="/estudiantes/nuevo">
                 <UserPlus weight="bold" className="size-4" />
                 Nuevo participante

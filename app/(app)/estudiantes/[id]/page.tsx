@@ -23,7 +23,8 @@ import { ageFrom } from "@/lib/utils";
 import { fechaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
-import { StudentStatusBadge } from "@/components/status";
+import { StudentStatusControl } from "@/components/student-status-control";
+import { HealthPanel } from "@/components/health-panel";
 import { StudentActions } from "@/components/student-actions";
 import { EnrollmentsPanel } from "@/components/enrollments-panel";
 import { LevelRecordsPanel } from "@/components/level-records-panel";
@@ -99,7 +100,7 @@ export default async function StudentDetailPage({
               <h1 className="text-2xl font-extrabold tracking-tight text-ink text-balance">
                 {student.firstName} {student.lastName}
               </h1>
-              <StudentStatusBadge status={student.status} />
+              <StudentStatusControl studentId={student.id} status={student.status} />
             </div>
             <p className="mt-1 text-sm text-muted">
               {age != null ? `${age} años` : "Edad no registrada"}
@@ -220,6 +221,8 @@ export default async function StudentDetailPage({
               </p>
             </Card>
           )}
+
+          <HealthPanel studentId={student.id} health={student.health} />
 
           {student.notes && (
             <Card className="p-5">

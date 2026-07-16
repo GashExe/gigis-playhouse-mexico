@@ -16,6 +16,29 @@ const usernameField = z
     message: "Usa solo letras, números y . _ - (sin espacios).",
   });
 
+/**
+ * Cuestionario de salud. Lo comparten el onboarding del tutor y la captura de la
+ * directora: las mismas reglas para los dos, para que capturar por la directora no
+ * sea una puerta trasera más laxa que la del tutor.
+ */
+export const HealthSchema = z.object({
+  bloodType: z.string().trim().optional(),
+  allergies: z.string().trim().min(1, { message: "Indica las alergias (o escribe “Ninguna”)." }),
+  medications: z.string().trim().optional(),
+  medicalConditions: z.string().trim().optional(),
+  therapies: z.string().trim().optional(),
+  dietaryRestrictions: z.string().trim().optional(),
+  doctorName: z.string().trim().optional(),
+  doctorPhone: z.string().trim().optional(),
+  emergencyName: z.string().trim().min(1, { message: "El contacto de emergencia es obligatorio." }),
+  emergencyPhone: z.string().trim().min(1, { message: "El teléfono de emergencia es obligatorio." }),
+  emergencyRelation: z.string().trim().optional(),
+  healthNotes: z.string().trim().optional(),
+});
+
+/** Estados del participante. Debe coincidir con el enum StudentStatus del esquema. */
+export const StudentStatusSchema = z.enum(["ACTIVO", "INACTIVO", "EGRESADO"]);
+
 export const StudentSchema = z.object({
   firstName: z.string().trim().min(1, { message: "El nombre es obligatorio." }),
   lastName: z.string().trim().min(1, { message: "El apellido es obligatorio." }),
@@ -31,7 +54,7 @@ export const StudentSchema = z.object({
     .or(z.literal("")),
   address: z.string().trim().optional(),
   notes: z.string().trim().optional(),
-  status: z.enum(["ACTIVO", "INACTIVO", "EGRESADO"]).default("ACTIVO"),
+  status: StudentStatusSchema.default("ACTIVO"),
 });
 
 export const ProgramSchema = z.object({

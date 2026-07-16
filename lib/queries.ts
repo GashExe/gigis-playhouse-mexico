@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import type { StudentStatus } from "@/lib/generated/prisma/client";
 
 export async function getDashboardStats() {
   const [
@@ -53,19 +54,22 @@ export async function getDashboardStats() {
   };
 }
 
-export async function listStudents(query?: string) {
+export async function listStudents(query?: string, status?: StudentStatus) {
   const q = query?.trim();
   return prisma.student.findMany({
-    where: q
-      ? {
-          // insensitive: que buscar en minúsculas o mayúsculas dé lo mismo.
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { guardianName: { contains: q, mode: "insensitive" } },
-          ],
-        }
-      : undefined,
+    where: {
+      ...(status ? { status } : {}),
+      ...(q
+        ? {
+            // insensitive: que buscar en minúsculas o mayúsculas dé lo mismo.
+            OR: [
+              { firstName: { contains: q, mode: "insensitive" } },
+              { lastName: { contains: q, mode: "insensitive" } },
+              { guardianName: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ status: "asc" }, { firstName: "asc" }],
     include: {
       _count: { select: { enrollments: { where: { status: "ACTIVA" } }, evaluations: true } },
@@ -73,11 +77,37 @@ export async function listStudents(query?: string) {
   });
 }
 
+/**
+ * Cuántos participantes hay por estado, respetando la búsqueda activa. Alimenta los
+ * contadores de los filtros: el conteo debe ser el de lo que el filtro mostraría, no
+ * el total del padrón.
+ */
+export async function countStudentsByStatus(query?: string) {
+  const q = query?.trim();
+  const rows = await prisma.student.groupBy({
+    by: ["status"],
+    _count: { _all: true },
+    where: q
+      ? {
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { guardianName: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : undefined,
+  });
+  const counts = { ACTIVO: 0, INACTIVO: 0, EGRESADO: 0 } as Record<StudentStatus, number>;
+  for (const r of rows) counts[r.status] = r._count._all;
+  return { ...counts, TOTAL: counts.ACTIVO + counts.INACTIVO + counts.EGRESADO };
+}
+
 export async function getStudent(id: string) {
   return prisma.student.findUnique({
     where: { id },
     include: {
       account: { select: { username: true, initialPassword: true, active: true } },
+      health: true,
       enrollments: {
         include: { program: true },
         orderBy: { startDate: "desc" },
