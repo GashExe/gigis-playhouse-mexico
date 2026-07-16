@@ -36,10 +36,17 @@ export const getCurrentUser = cache(async () => {
   return user;
 });
 
-/** Exige que el usuario tenga uno de los roles indicados; si no, lo manda al panel. */
+/**
+ * Exige que el usuario tenga uno de los roles indicados; si no, lo manda al panel.
+ *
+ * La DIRECTORA pasa siempre: es el rol maestro y puede hacer absolutamente todo.
+ * Va aquí y no en cada lista de roles a propósito — si dependiera de que quien
+ * escribe la compuerta se acuerde de nombrarla, tarde o temprano una se le olvida
+ * y la directora se queda fuera de su propia plataforma.
+ */
 export async function requireRole(...roles: Role[]) {
   const user = await getCurrentUser();
-  if (!roles.includes(user.role)) {
+  if (user.role !== "DIRECTORA" && !roles.includes(user.role)) {
     redirect("/panel");
   }
   return user;
