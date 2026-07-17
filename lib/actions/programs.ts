@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { verifySession, requireRole } from "@/lib/dal";
 import { ProgramSchema } from "@/lib/validators";
 import { getActiveCycle } from "@/lib/queries";
+import { readStructure, writeStructure, StructureSchema } from "@/lib/templates";
 
 export type ProgramFormState =
   | { errors?: Record<string, string[]>; ok?: boolean }
@@ -64,7 +65,7 @@ export async function createProgram(
   // Se oferta en el ciclo activo. Sin esto nacería fuera de todo ciclo y, como la
   // lista filtra por ciclo, el programa recién creado desaparecería de la pantalla.
   const cycle = await getActiveCycle();
-  await prisma.program.create({
+  const program = await prisma.program.create({
     data: {
       name: d.name,
       description: d.description || null,
@@ -74,9 +75,69 @@ export async function createProgram(
       ...(cycle ? { cycles: { connect: { id: cycle.id } } } : {}),
     },
   });
+
+  // De dónde sale su evaluación: en blanco, copiada de otro programa, o de una
+  // plantilla base. Si algo falla, el programa igual queda creado y su plantilla se
+  // arma a mano desde el editor: no vale perder el programa por esto.
+  const source = String(formData.get("templateSource") ?? "");
+  try {
+    if (source.startsWith("copy:")) {
+      const from = source.slice(5);
+      await writeStructure(program.id, await readStructure(from));
+    } else if (source.startsWith("preset:")) {
+      const preset = await prisma.templatePreset.findUnique({
+        where: { id: source.slice(7) },
+        select: { structure: true, evalFormat: true },
+      });
+      if (preset) {
+        const parsed = StructureSchema.safeParse(preset.structure);
+        if (parsed.success) await writeStructure(program.id, parsed.data);
+        await prisma.program.update({
+          where: { id: program.id },
+          data: { evalFormat: preset.evalFormat },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("No se pudo copiar la plantilla al programa nuevo:", e);
+  }
+
   revalidatePath("/programas");
   revalidatePath("/panel");
   return { ok: true };
+}
+
+/**
+ * Guarda la plantilla de un programa en la biblioteca, para reutilizarla al crear
+ * otros. Sin esto la biblioteca nace vacía y no hay forma de llenarla.
+ */
+export async function saveAsPreset(programId: string, formData: FormData) {
+  await requireRole("DIRECTORA", "COORDINADOR");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    select: { evalFormat: true },
+  });
+  if (!program) return;
+  const structure = await readStructure(programId);
+  if (structure.length === 0) return;
+
+  await prisma.templatePreset.create({
+    data: {
+      name,
+      description: String(formData.get("description") ?? "").trim() || null,
+      evalFormat: program.evalFormat,
+      structure,
+    },
+  });
+  revalidatePath("/programas");
+}
+
+export async function deletePreset(id: string) {
+  await requireRole("DIRECTORA", "COORDINADOR");
+  await prisma.templatePreset.delete({ where: { id } });
+  revalidatePath("/programas");
 }
 
 export async function updateProgram(

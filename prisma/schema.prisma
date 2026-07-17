@@ -342,6 +342,26 @@ model EvalItem {
   @@index([blockId])
 }
 
+/// Plantilla base reutilizable: la estructura de una evaluación (niveles → bloques →
+/// temas) guardada aparte de cualquier programa, para partir de ella al crear uno.
+///
+/// La estructura va en Json y no en tablas espejo porque es un molde, no datos: nadie
+/// califica contra una plantilla base ni la referencia por id. Replicar ProgramLevel /
+/// EvalBlock / EvalItem solo para esto duplicaría tres modelos sin ganar nada.
+model TemplatePreset {
+  id          String     @id @default(cuid())
+  name        String // Cómo se llama la plantilla (ej. "Formato plano de terapia")
+  description String?
+  evalFormat  EvalFormat @default(BLOQUES)
+
+  /// Niveles → bloques → temas. Forma:
+  /// [{ name, description?, blocks: [{ name, items: [texto] }] }]
+  structure Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// Calificación de un alumno en un tema, por ciclo. Escala 1–4 (4 = máximo, dominado).
 /// Es la capa de DATOS del alumno; los porcentajes por bloque y nivel se calculan de aquí.
 model ItemScore {

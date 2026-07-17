@@ -1,9 +1,16 @@
 import { getCurrentUser } from "@/lib/dal";
-import { listPrograms, listTeachers, listCycles, getActiveCycle } from "@/lib/queries";
+import {
+  listPrograms,
+  listTeachers,
+  listCycles,
+  getActiveCycle,
+  listTemplateSources,
+} from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgramsManager } from "@/components/programs-manager";
 import { CycleBar } from "@/components/cycle-bar";
 import { CycleOffer } from "@/components/cycle-offer";
+import { listPresets } from "@/lib/templates";
 
 export const metadata = { title: "Programas" };
 
@@ -23,11 +30,13 @@ export default async function ProgramsPage({
   const selected =
     cycles.find((c) => c.id === ciclo) ?? activeCycle ?? cycles[0] ?? null;
 
-  const [programs, teachers, allPrograms] = await Promise.all([
+  const [programs, teachers, allPrograms, presets, copySources] = await Promise.all([
     selected ? listPrograms(selected.id) : listPrograms(),
     listTeachers(),
     // La oferta se arma eligiendo de TODOS los programas, no solo de los del ciclo.
     listPrograms(),
+    listPresets(),
+    listTemplateSources(),
   ]);
 
   const isDirectora = me.role === "DIRECTORA";
@@ -69,7 +78,12 @@ export default async function ProgramsPage({
         />
       )}
 
-      <ProgramsManager programs={programs} teachers={teachers} />
+      <ProgramsManager
+        programs={programs}
+        teachers={teachers}
+        presets={presets}
+        copySources={copySources}
+      />
     </div>
   );
 }

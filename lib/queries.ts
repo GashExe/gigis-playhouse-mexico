@@ -237,6 +237,30 @@ export async function getStudentLevels(studentId: string, cycleId: string) {
   });
 }
 
+/**
+ * Programas que YA tienen plantilla, con sus totales. Son los únicos de los que tiene
+ * sentido copiar al crear un programa nuevo.
+ */
+export async function listTemplateSources() {
+  const programs = await prisma.program.findMany({
+    where: { levels: { some: { blocks: { some: {} } } } },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      levels: {
+        select: { _count: { select: { blocks: true } }, blocks: { select: { _count: { select: { items: true } } } } },
+      },
+    },
+  });
+  return programs.map((p) => ({
+    id: p.id,
+    name: p.name,
+    levels: p.levels.length,
+    items: p.levels.reduce((a, l) => a + l.blocks.reduce((b, x) => b + x._count.items, 0), 0),
+  }));
+}
+
 /** Plantilla completa de evaluación de un programa: niveles → bloques → temas. */
 export async function getProgramTemplate(programId: string) {
   return prisma.program.findUnique({

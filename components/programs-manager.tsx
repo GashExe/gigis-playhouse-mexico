@@ -14,6 +14,7 @@ import {
   ChalkboardTeacher,
   ListChecks,
 } from "@phosphor-icons/react";
+import { TemplateSource, type CopySource, type PresetSource } from "@/components/template-source";
 import {
   createProgram,
   updateProgram,
@@ -62,9 +63,13 @@ const SWATCHES = [
 export function ProgramsManager({
   programs,
   teachers,
+  copySources = [],
+  presets = [],
 }: {
   programs: Program[];
   teachers: Teacher[];
+  copySources?: CopySource[];
+  presets?: PresetSource[];
 }) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -86,6 +91,8 @@ export function ProgramsManager({
           onClose={() => setCreating(false)}
           title="Nuevo programa"
           teachers={teachers}
+          copySources={copySources}
+          presets={presets}
         />
       )}
 
@@ -226,12 +233,17 @@ function ProgramForm({
   title,
   defaults,
   teachers,
+  copySources,
+  presets,
 }: {
   action: (prev: ProgramFormState, fd: FormData) => Promise<ProgramFormState>;
   onClose: () => void;
   title: string;
   defaults?: Partial<Program>;
   teachers: Teacher[];
+  /** Solo al crear: de dónde sacar la evaluación. Al editar no aplica. */
+  copySources?: CopySource[];
+  presets?: PresetSource[];
 }) {
   const [state, formAction, pending] = useActionState<ProgramFormState, FormData>(
     action,
@@ -259,6 +271,10 @@ function ProgramForm({
             <X className="size-4" />
           </button>
         </div>
+
+        {copySources && presets && (
+          <TemplateSource programs={copySources} presets={presets} />
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Nombre" htmlFor="name" required error={err.name?.[0]}>

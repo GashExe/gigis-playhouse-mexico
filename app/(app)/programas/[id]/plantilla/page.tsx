@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/dal";
 import { getProgramTemplate } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { TemplateEditor } from "@/components/template-editor";
+import { SavePreset } from "@/components/save-preset";
 
 export async function generateMetadata({
   params,
@@ -40,6 +41,13 @@ export default async function TemplatePage({
         title={`Plantilla · ${program.name}`}
         subtitle="Arma la evaluación: niveles, bloques y temas. La maestra solo califica; esto es la estructura."
       />
+      <div className="mb-5">
+        <SavePreset
+          programId={program.id}
+          programName={program.name}
+          empty={!program.levels.some((l) => l.blocks.length > 0)}
+        />
+      </div>
       <TemplateEditor program={program} />
     </div>
   );
