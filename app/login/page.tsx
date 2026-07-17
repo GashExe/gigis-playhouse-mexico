@@ -20,7 +20,7 @@ export default function LoginPage() {
           }}
         />
         <div className="relative">
-          <LogoLockup tone="white" className="w-52 xl:w-60" />
+          <LogoLockup className="w-52 xl:w-60" />
         </div>
 
         <div className="relative max-w-md space-y-6">
@@ -85,7 +85,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-bg px-6 pb-[calc(env(safe-area-inset-bottom)+3rem)] pt-[calc(env(safe-area-inset-top)+3rem)] sm:px-10 lg:py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <Logo tone="rainbow" className="h-8" />
+            <Logo className="h-8" />
           </div>
           <div className="mb-7 space-y-1.5">
             <h2 className="text-2xl font-extrabold tracking-tight text-ink">

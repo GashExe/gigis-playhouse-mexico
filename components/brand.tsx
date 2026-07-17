@@ -3,30 +3,15 @@ import { cn } from "@/lib/utils";
 /**
  * Marca oficial de GiGi's Playhouse.
  *
- * Los assets (`/brand/*.png`) son la versión knockout (blanca) del logo
- * oficial. Se usan como MÁSCARA CSS: la silueta oficial se rellena con el
- * color/degradado que se indique, así el mismo asset sirve en claro, oscuro
- * o a todo color sin perder fidelidad al logo real.
+ * El logo se muestra TAL CUAL es: letras multicolor + "playhouse." en negro
+ * (`/brand/*-color.png`, extraído del membrete oficial). En modo oscuro y sobre
+ * fondos de color se usa la versión knockout (blanca) oficial (`/brand/*-white.png`)
+ * como máscara CSS, que es el uso invertido estándar de la marca.
  */
 
-const WORDMARK_SRC = "/brand/gigis-wordmark-white.png"; // 627 x 317
-const LOCKUP_SRC = "/brand/gigis-lockup-white.png"; //   698 x 585
-
-type Tone = "rainbow" | "brand" | "ink" | "white";
-
-function toneBackground(tone: Tone): string {
-  switch (tone) {
-    case "rainbow":
-      return "var(--brand-rainbow)";
-    case "brand":
-      return "var(--primary)";
-    case "white":
-      return "#ffffff";
-    case "ink":
-    default:
-      return "var(--ink)";
-  }
-}
+const WORDMARK_COLOR_SRC = "/brand/gigis-wordmark-color.png"; // 655 x 313
+const WORDMARK_WHITE_SRC = "/brand/gigis-wordmark-white.png"; // 627 x 317
+const LOCKUP_WHITE_SRC = "/brand/gigis-lockup-white.png"; //    698 x 585
 
 function maskStyle(src: string): React.CSSProperties {
   return {
@@ -41,36 +26,38 @@ function maskStyle(src: string): React.CSSProperties {
   };
 }
 
-/** Wordmark oficial "GiGi's Playhouse™" (compacto, para barras y encabezados). */
-export function Logo({
-  className,
-  tone = "rainbow",
-}: {
-  className?: string;
-  tone?: Tone;
-}) {
+/**
+ * Wordmark oficial "GiGi's Playhouse™" (compacto, para barras y encabezados).
+ * A todo color sobre fondos claros; knockout blanco en modo oscuro.
+ */
+export function Logo({ className }: { className?: string }) {
   return (
     <span
       role="img"
       aria-label="GiGi's Playhouse México"
       className={cn("block h-9", className)}
-      style={{
-        aspectRatio: "627 / 317",
-        background: toneBackground(tone),
-        ...maskStyle(WORDMARK_SRC),
-      }}
-    />
+      style={{ aspectRatio: "655 / 313" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={WORDMARK_COLOR_SRC}
+        alt=""
+        className="block h-full w-full object-contain dark:hidden"
+      />
+      <span
+        aria-hidden
+        className="hidden h-full w-full dark:block"
+        style={{ background: "#ffffff", ...maskStyle(WORDMARK_WHITE_SRC) }}
+      />
+    </span>
   );
 }
 
-/** Lockup completo (wordmark + lema + "Quéretaro, México"), para el login. */
-export function LogoLockup({
-  className,
-  tone = "white",
-}: {
-  className?: string;
-  tone?: Tone;
-}) {
+/**
+ * Lockup completo (wordmark + lema + "Querétaro, México"). Knockout blanco:
+ * se usa sobre el panel de color del login, donde va la versión invertida.
+ */
+export function LogoLockup({ className }: { className?: string }) {
   return (
     <span
       role="img"
@@ -78,8 +65,8 @@ export function LogoLockup({
       className={cn("block w-56", className)}
       style={{
         aspectRatio: "698 / 585",
-        background: toneBackground(tone),
-        ...maskStyle(LOCKUP_SRC),
+        background: "#ffffff",
+        ...maskStyle(LOCKUP_WHITE_SRC),
       }}
     />
   );
@@ -87,5 +74,5 @@ export function LogoLockup({
 
 /** Marca compacta = wordmark en tamaño reducido (para el encabezado móvil). */
 export function LogoMark({ className }: { className?: string }) {
-  return <Logo className={cn("h-7", className)} tone="rainbow" />;
+  return <Logo className={cn("h-7", className)} />;
 }
