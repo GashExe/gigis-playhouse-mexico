@@ -211,39 +211,6 @@ const PREESCRITURA: Bloque[] = [
   ]},
 ];
 
-/**
- * Gateo y caminata: el formato es una lista corrida de 15 hitos, pero el programa
- * tiene 6 niveles y los hitos SON esa progresión. Van repartidos, un bloque único
- * por nivel, respetando la redacción exacta del Excel.
- *
- * ⚠️ El reparto es una PROPUESTA, pendiente de que lo confirme el terapeuta que
- * firma el formato: el Excel lista los hitos en un orden que no calza con el de los
- * niveles, así que la asignación es criterio clínico, no una lectura del archivo.
- */
-const GATEO: Record<number, Bloque> = {
-  1: { name: "Control cefálico total", items: ["Control cefálico"] },
-  2: { name: "Cambio de decúbito", items: ["Patrón de arrastre"] },
-  3: { name: "Sentado por sí solo sin caer", items: ["Sentado sin apoyo"] },
-  4: { name: "Gateo", items: [
-    "Cambio de posición, 4 puntos a hincado",
-    "Patrón de gateo independiente",
-    "Gateo en diferentes niveles (escaleras, colchón, etc.)",
-    "Sube escaleras gateando",
-  ]},
-  5: { name: "Bipedestación", items: [
-    "Transición gateo a bipedestación",
-    "Se pone de pie momentaneamente sin apoyarse en nada",
-  ]},
-  6: { name: "Marcha", items: [
-    "Comienza el patrón de marcha",
-    "Sube escaleras apoyándose en ambas manos",
-    "Camina solo (cae frecuentemente)",
-    "Camina solo (cae rara vez)",
-    "Camina hacia atrás",
-    "Corre (con rigidez)",
-  ]},
-};
-
 const SOURCES: Source[] = [
   // ---- BLOQUES: Progress tracker (código en col A, texto en col B) ----
   { program: "Matemáticas", file: "Progress_Mate.xlsx", sheet: "N1", levelOrder: 1, format: "progress" },
@@ -318,15 +285,7 @@ const SOURCES: Source[] = [
   { program: "Sensorial", file: "Evaluación sensorial final.xlsx", sheet: "Hoja1", levelOrder: 1, format: "planos", blockName: "Objetivos" },
   { program: "Danza representativa", file: "Formato de Evaluación Danza.xlsx", sheet: "Hoja1", levelOrder: 1, format: "planos", blockName: "Objetivos / Aspecto" },
   { program: "Brinco, salto y corro", file: "Formato de evaluación Brinco, salto y corro.xlsx", sheet: "Hoja1", levelOrder: 1, format: "planos", blockName: "Hitos de crecimiento" },
-
-  // ---- Gateo: hitos repartidos entre sus 6 niveles (ver GATEO) ----
-  ...Object.entries(GATEO).map(([order, bloque]): Source => ({
-    program: "Gateo y caminata",
-    levelOrder: Number(order),
-    format: "literal",
-    literal: [bloque],
-    note: "Hitos de 'Formato de evaluación Gateo y caminata.xlsx'. ⚠️ El reparto por nivel es propuesta: falta que lo confirme el terapeuta.",
-  })),
+  { program: "Gateo y caminata", file: "Formato de evaluación Gateo y caminata.xlsx", sheet: "Hoja1", levelOrder: 1, format: "planos", blockName: "Hitos de crecimiento" },
 
   // ---- LITERAL: transcritos de .docx ----
   { program: "Terapia orofacial", levelOrder: 1, format: "literal", literal: OROFACIAL, note: "Transcrito de 'Evaluación Programa orofacial.docx'." },

@@ -70,20 +70,16 @@ const NIVELES_POR_PROGRAMA: Record<string, Nivel[]> = {
     ["Avanzado 1", "13 años en adelante"],
     ["Avanzado 2", "13 años en adelante"],
   ],
-  "Gateo y caminata": [
-    ["Nivel 1", "Control cefálico total"],
-    ["Nivel 2", "Cambio de decúbito"],
-    ["Nivel 3", "Sentado por sí solo sin caer"],
-    ["Nivel 4", "Gateo"],
-    ["Nivel 5", "Bipedestación"],
-    ["Nivel 6", "Marcha"],
-  ],
 
   // --- Programas de formato PLANO: un solo nivel ---
   // Su formato de evaluación es una lista única de objetivos, sin progresión por
   // niveles. El nivel existe solo porque los bloques cuelgan de uno (EvalItem
   // exige bloque, y el bloque exige nivel).
   "Brinco, salto y corro": [["Nivel único"]],
+  // El manual describe 6 etapas (control cefálico → marcha), pero su formato de
+  // evaluación es UNA lista de 15 hitos, no seis evaluaciones. Las etapas son la
+  // progresión que describen los hitos, no niveles en los que se ubica al alumno.
+  "Gateo y caminata": [["Nivel único"]],
   "Terapia orofacial": [["Nivel único"]],
   "Vida independiente": [["Nivel único"]],
   "Terapia ocupacional": [["Nivel único"]],
