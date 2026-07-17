@@ -7,6 +7,7 @@ import {
   UsersThree,
   Books,
   UserGear,
+  BookOpenText,
   SignOut,
 } from "@phosphor-icons/react";
 import { cn, initials, roleLabel } from "@/lib/utils";
@@ -26,6 +27,7 @@ const NAV: NavItem[] = [
   { href: "/estudiantes", label: "Participantes", icon: UsersThree },
   { href: "/programas", label: "Programas", icon: Books },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
+  { href: "/manual", label: "Manual", icon: BookOpenText },
 ];
 
 function useVisibleNav(role: Role) {
