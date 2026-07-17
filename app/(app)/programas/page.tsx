@@ -81,6 +81,7 @@ export default async function ProgramsPage({
       <ProgramsManager
         programs={programs}
         teachers={teachers}
+        cycleLabel={selected?.label}
         presets={presets}
         copySources={copySources}
       />

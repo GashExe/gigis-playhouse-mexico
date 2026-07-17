@@ -65,11 +65,15 @@ export function ProgramsManager({
   teachers,
   copySources = [],
   presets = [],
+  cycleLabel,
 }: {
   programs: Program[];
   teachers: Teacher[];
   copySources?: CopySource[];
   presets?: PresetSource[];
+  /** Ciclo que se está viendo. Si la lista sale vacía es por su oferta, no porque
+   *  no existan programas: sin este matiz el vacío invita a crear un duplicado. */
+  cycleLabel?: string;
 }) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,8 +103,12 @@ export function ProgramsManager({
       {programs.length === 0 && !creating ? (
         <EmptyState
           icon={<Books weight="fill" className="size-6" />}
-          title="Aún no hay programas"
-          description="Crea el primer programa para poder inscribir participantes."
+          title={cycleLabel ? `Ningún programa corre en ${cycleLabel}` : "Aún no hay programas"}
+          description={
+            cycleLabel
+              ? "Los programas ya existen: elige cuáles corren en este ciclo desde la oferta de arriba. Crea uno nuevo solo si de verdad no existe."
+              : "Crea el primer programa para poder inscribir participantes."
+          }
           action={
             <Button onClick={() => setCreating(true)}>
               <Plus weight="bold" className="size-4" />
