@@ -66,11 +66,14 @@ export function ProgramsManager({
   copySources = [],
   presets = [],
   cycleLabel,
+  canEditTemplate = false,
 }: {
   programs: Program[];
   teachers: Teacher[];
   copySources?: CopySource[];
   presets?: PresetSource[];
+  /** Quién puede abrir el editor de plantillas (directora o coordinador). */
+  canEditTemplate?: boolean;
   /** Ciclo que se está viendo. Si la lista sale vacía es por su oferta, no porque
    *  no existan programas: sin este matiz el vacío invita a crear un duplicado. */
   cycleLabel?: string;
@@ -130,7 +133,12 @@ export function ProgramsManager({
                 />
               </div>
             ) : (
-              <ProgramCard key={p.id} program={p} onEdit={() => setEditingId(p.id)} />
+              <ProgramCard
+                key={p.id}
+                program={p}
+                onEdit={() => setEditingId(p.id)}
+                canEditTemplate={canEditTemplate}
+              />
             ),
           )}
         </div>
@@ -142,9 +150,11 @@ export function ProgramsManager({
 function ProgramCard({
   program: p,
   onEdit,
+  canEditTemplate,
 }: {
   program: Program;
   onEdit: () => void;
+  canEditTemplate: boolean;
 }) {
   const color = p.color ?? "var(--primary)";
   return (
@@ -205,14 +215,18 @@ function ProgramCard({
           <span>/ {p.studentCapacity} cupos</span>
         </span>
         <div className="ml-auto flex items-center gap-1">
-          <Link
-            href={`/programas/${p.id}/plantilla`}
-            aria-label="Plantilla de evaluación"
-            title="Plantilla de evaluación"
-            className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <ListChecks className="size-[1.05rem]" />
-          </Link>
+          {/* Con texto y no solo el icono: era la ÚNICA puerta a las plantillas y
+              nadie la encontraba (no hay entrada en el menú). Oculta a quien la
+              compuerta rebotaría al panel: un enlace que no lleva a ningún lado. */}
+          {canEditTemplate && (
+            <Link
+              href={`/programas/${p.id}/plantilla`}
+              className="flex h-8 items-center gap-1.5 rounded-[var(--radius-input)] px-2 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <ListChecks className="size-[1.05rem]" />
+              Plantilla
+            </Link>
+          )}
           <form action={toggleProgram.bind(null, p.id, !p.active)}>
             <button
               type="submit"

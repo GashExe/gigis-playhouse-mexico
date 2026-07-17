@@ -82,6 +82,7 @@ export default async function ProgramsPage({
         programs={programs}
         teachers={teachers}
         cycleLabel={selected?.label}
+        canEditTemplate={isDirectora || me.role === "COORDINADOR"}
         presets={presets}
         copySources={copySources}
       />
