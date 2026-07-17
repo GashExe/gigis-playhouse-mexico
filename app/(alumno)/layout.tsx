@@ -4,6 +4,7 @@ import { BookOpenText, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import { logout } from "@/lib/actions/auth";
 import { Logo } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function AlumnoLayout({
   children,
@@ -21,6 +22,7 @@ export default async function AlumnoLayout({
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 sm:px-6">
           <Logo className="h-7" />
           <div className="flex items-center gap-1">
+            <ThemeToggle className="size-9" />
             <Link
               href="/mi-espacio/manual"
               className="inline-flex items-center gap-2 rounded-[var(--radius-control)] px-3 py-2 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"

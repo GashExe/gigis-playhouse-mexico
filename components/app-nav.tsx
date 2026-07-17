@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { cn, initials, roleLabel } from "@/lib/utils";
 import { Logo } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { logout } from "@/lib/actions/auth";
 import type { Role } from "@/lib/generated/prisma/client";
 
@@ -88,6 +89,7 @@ function UserCard({ name, role }: { name: string; role: Role }) {
         <p className="truncate text-sm font-bold text-ink">{name}</p>
         <p className="text-xs font-medium text-muted">{roleLabel(role)}</p>
       </div>
+      <ThemeToggle />
       <form action={logout}>
         <button
           type="submit"
@@ -179,6 +181,7 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
         <div className="flex h-14 items-center justify-between px-4">
           <Logo className="h-7" />
           <div className="flex items-center gap-2.5">
+            <ThemeToggle className="size-9" />
             <span
               aria-hidden
               className="flex size-8 items-center justify-center rounded-full bg-primary-weak text-xs font-bold text-primary-strong"

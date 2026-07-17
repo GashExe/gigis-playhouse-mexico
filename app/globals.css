@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* El tema lo decide `data-theme` en <html>: lo estampa un script en el layout
+   raíz (elección guardada en localStorage "tema", o la preferencia del sistema
+   si no hay elección). La variante `dark:` de Tailwind cuelga de ese atributo. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* =========================================================================
    Plataforma Gigi's Playhouse México — Sistema de diseño
    Mood: salón soleado, cálido y ordenado. Estrategia: Restrained.
@@ -8,6 +13,8 @@
    ========================================================================= */
 
 :root {
+  color-scheme: light;
+
   /* Superficies / neutros */
   --bg: oklch(0.985 0.006 195);          /* lienzo de la app (near-white teal-tint) */
   --surface: oklch(1 0 0);               /* tarjetas / contenido */
@@ -92,8 +99,9 @@
   --radius-pill: 9999px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
     --bg: oklch(0.205 0.014 235);
     --surface: oklch(0.245 0.015 235);
     --surface-2: oklch(0.285 0.016 235);
@@ -149,7 +157,6 @@
     --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3), 0 1px 3px oklch(0 0 0 / 0.25);
     --shadow-md: 0 2px 4px oklch(0 0 0 / 0.3), 0 6px 16px oklch(0 0 0 / 0.4);
     --shadow-lg: 0 4px 8px oklch(0 0 0 / 0.35), 0 16px 40px oklch(0 0 0 / 0.5);
-  }
 }
 
 @theme inline {
@@ -246,12 +253,10 @@ body {
     inset 0 -1px 1px oklch(1 0 0 / 0.06);
 }
 
-@media (prefers-color-scheme: dark) {
-  .liquid-glass {
-    background: color-mix(in oklab, var(--surface) 62%, transparent);
-    border-color: color-mix(in oklab, oklch(1 0 0) 14%, transparent);
-    box-shadow: var(--shadow-lg), inset 0 1px 0 oklch(1 0 0 / 0.12);
-  }
+[data-theme="dark"] .liquid-glass {
+  background: color-mix(in oklab, var(--surface) 62%, transparent);
+  border-color: color-mix(in oklab, oklch(1 0 0) 14%, transparent);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 oklch(1 0 0 / 0.12);
 }
 
 /* Respaldo: si el navegador no soporta desenfoque, usamos superficie sólida. */
