@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Stack } from "@phosphor-icons/react/dist/ssr";
-import { verifySession } from "@/lib/dal";
+import { requireGraderForProgram } from "@/lib/dal";
 import {
   getStudent,
   getProgramBasics,
@@ -30,8 +30,9 @@ export default async function GradePage({
   params: Promise<{ id: string; programId: string }>;
   searchParams: Promise<{ ciclo?: string }>;
 }) {
-  await verifySession();
   const { id, programId } = await params;
+  // La maestra solo entra a calificar los programas a su cargo.
+  await requireGraderForProgram(programId);
   const { ciclo } = await searchParams;
 
   const [student, program, cycles, activeCycle] = await Promise.all([

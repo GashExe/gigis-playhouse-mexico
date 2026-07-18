@@ -38,6 +38,7 @@ export default async function StudentsPage({
     ? { ACTIVO: "activos", INACTIVO: "inactivos", EGRESADO: "egresados" }[status.data]
     : "";
   const isDirectora = me.role === "DIRECTORA";
+  const canManage = me.role !== "MAESTRA"; // la maestra solo consulta el padrón
 
   return (
     <div>
@@ -56,10 +57,12 @@ export default async function StudentsPage({
                 Descargar credenciales
               </a>
             )}
-            <Button href="/estudiantes/nuevo">
-              <UserPlus weight="bold" className="size-4" />
-              Nuevo participante
-            </Button>
+            {canManage && (
+              <Button href="/estudiantes/nuevo">
+                <UserPlus weight="bold" className="size-4" />
+                Nuevo participante
+              </Button>
+            )}
           </div>
         }
       />
@@ -81,7 +84,7 @@ export default async function StudentsPage({
               : "Registra al primer participante para empezar a llevar su historial."
           }
           action={
-            !filtrando && (
+            !filtrando && canManage && (
               <Button href="/estudiantes/nuevo">
                 <UserPlus weight="bold" className="size-4" />
                 Nuevo participante

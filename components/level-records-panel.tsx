@@ -48,19 +48,25 @@ export function LevelRecordsPanel({
   programs,
   cycles,
   selectedCycleId,
+  gradableProgramIds,
 }: {
   studentId: string;
   records: RecordItem[];
   programs: ProgramWithLevels[];
   cycles: Cycle[];
   selectedCycleId: string;
+  /** Programas donde quien mira puede ubicar/calificar (la maestra: solo los suyos). */
+  gradableProgramIds: string[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [adding, setAdding] = useState(false);
 
+  const gradable = new Set(gradableProgramIds);
   const usedProgramIds = new Set(records.map((r) => r.program.id));
-  const available = programs.filter((p) => !usedProgramIds.has(p.id));
+  const available = programs.filter(
+    (p) => !usedProgramIds.has(p.id) && gradable.has(p.id),
+  );
 
   function changeCycle(cycleId: string) {
     const qs = new URLSearchParams({ ciclo: cycleId });
@@ -108,7 +114,11 @@ export function LevelRecordsPanel({
           <EmptyState
             icon={<Stack weight="fill" className="size-6" />}
             title="Sin nivel registrado en este ciclo"
-            description="Ubica a este participante en un nivel de sus programas."
+            description={
+              available.length > 0
+                ? "Ubica a este participante en un nivel de sus programas."
+                : "Quien tenga el programa a su cargo lo ubicará en un nivel."
+            }
             action={
               available.length > 0 ? (
                 <Button size="sm" onClick={() => setAdding(true)}>
@@ -130,6 +140,7 @@ export function LevelRecordsPanel({
                 studentId={studentId}
                 cycleId={selectedCycleId}
                 levels={program?.levels ?? [r.level]}
+                canGrade={gradable.has(r.program.id)}
               />
             );
           })}
@@ -153,11 +164,13 @@ function LevelRow({
   studentId,
   cycleId,
   levels,
+  canGrade,
 }: {
   record: RecordItem;
   studentId: string;
   cycleId: string;
   levels: LevelOption[];
+  canGrade: boolean;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -178,6 +191,7 @@ function LevelRow({
           </p>
         </div>
         <PlacementBadge placement={r.placement} />
+        {canGrade && (
         <Link
           href={`/estudiantes/${studentId}/calificar/${r.program.id}?ciclo=${cycleId}`}
           aria-label="Calificar por bloques"
@@ -186,6 +200,8 @@ function LevelRow({
         >
           <ListChecks className="size-4" />
         </Link>
+        )}
+        {canGrade && (
         <button
           onClick={() => setEditing((v) => !v)}
           aria-label="Editar nivel"
@@ -193,6 +209,7 @@ function LevelRow({
         >
           <PencilSimple className="size-4" />
         </button>
+        )}
       </div>
 
       {editing && (

@@ -24,6 +24,7 @@ import { fechaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { StudentStatusControl } from "@/components/student-status-control";
+import { StudentStatusBadge } from "@/components/status";
 import { HealthPanel } from "@/components/health-panel";
 import { StudentActions } from "@/components/student-actions";
 import { EnrollmentsPanel } from "@/components/enrollments-panel";
@@ -66,6 +67,12 @@ export default async function StudentDetailPage({
   if (!student) notFound();
 
   const isDirectora = me.role === "DIRECTORA";
+  // La maestra solo consulta: sin editar expediente, estado, salud ni inscripciones.
+  const canManage = me.role !== "MAESTRA";
+  // Y solo califica (ubicar nivel / temas) en los programas a su cargo.
+  const gradableProgramIds = canManage
+    ? programsWithLevels.map((p) => p.id)
+    : programsWithLevels.filter((p) => p.teacherId === me.id).map((p) => p.id);
 
   // Ciclo seleccionado: el de la URL si es válido, si no el activo.
   const validCiclo = ciclo && cycles.some((c) => c.id === ciclo) ? ciclo : null;
@@ -101,7 +108,11 @@ export default async function StudentDetailPage({
               <h1 className="text-2xl font-extrabold tracking-tight text-ink text-balance">
                 {student.firstName} {student.lastName}
               </h1>
-              <StudentStatusControl studentId={student.id} status={student.status} />
+              {canManage ? (
+                <StudentStatusControl studentId={student.id} status={student.status} />
+              ) : (
+                <StudentStatusBadge status={student.status} />
+              )}
             </div>
             <p className="mt-1 text-sm text-muted">
               {age != null ? `${age} años` : "Edad no registrada"}
@@ -110,10 +121,12 @@ export default async function StudentDetailPage({
             </p>
           </div>
         </div>
-        <StudentActions
-          studentId={student.id}
-          studentName={`${student.firstName} ${student.lastName}`}
-        />
+        {canManage && (
+          <StudentActions
+            studentId={student.id}
+            studentName={`${student.firstName} ${student.lastName}`}
+          />
+        )}
       </div>
 
       {/* Resumen de progreso */}
@@ -147,6 +160,7 @@ export default async function StudentDetailPage({
               },
             }))}
             allPrograms={programs.map((p) => ({ id: p.id, name: p.name }))}
+            canManage={canManage}
           />
           {cycles.length > 0 && (
             <LevelRecordsPanel
@@ -162,6 +176,7 @@ export default async function StudentDetailPage({
               programs={programsWithLevels}
               cycles={cycles.map((c) => ({ id: c.id, label: c.label, active: c.active }))}
               selectedCycleId={selectedCycleId}
+              gradableProgramIds={gradableProgramIds}
             />
           )}
         </div>
@@ -223,7 +238,7 @@ export default async function StudentDetailPage({
             </Card>
           )}
 
-          <HealthPanel studentId={student.id} health={student.health} />
+          <HealthPanel studentId={student.id} health={student.health} canEdit={canManage} />
 
           {student.notes && (
             <Card className="p-5">

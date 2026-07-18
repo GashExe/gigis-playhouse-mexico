@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { verifySession } from "@/lib/dal";
+import { requireGraderForProgram } from "@/lib/dal";
 
 const PLACEMENTS = ["REGULAR", "PROBATORIO", "POSIBLE_GRADUADO"] as const;
 type Placement = (typeof PLACEMENTS)[number];
@@ -13,8 +13,10 @@ type Placement = (typeof PLACEMENTS)[number];
  * pertenecer al programa. Único por (alumno, programa, ciclo).
  */
 export async function setLevelRecord(studentId: string, formData: FormData) {
-  await verifySession();
   const programId = String(formData.get("programId") ?? "");
+  if (!programId) return;
+  // La maestra solo puede ubicar/calificar en los programas a su cargo.
+  await requireGraderForProgram(programId);
   const cycleId = String(formData.get("cycleId") ?? "");
   const programLevelId = String(formData.get("programLevelId") ?? "");
   const rawPlacement = String(formData.get("placement") ?? "REGULAR");
@@ -42,7 +44,12 @@ export async function setLevelRecord(studentId: string, formData: FormData) {
 
 /** Quita la ubicación de nivel de un alumno en ese programa/ciclo. */
 export async function removeLevelRecord(recordId: string, studentId: string) {
-  await verifySession();
+  const record = await prisma.levelRecord.findUnique({
+    where: { id: recordId },
+    select: { programId: true },
+  });
+  if (!record) return;
+  await requireGraderForProgram(record.programId);
   await prisma.levelRecord.delete({ where: { id: recordId } });
   revalidatePath(`/estudiantes/${studentId}`);
 }

@@ -19,17 +19,17 @@ export default async function ManualPage() {
   const veDireccion = me.role === "DIRECTORA";
 
   const subtitle = veDireccion
-    ? "Guía completa de la plataforma: trabajo docente, plantillas y dirección."
+    ? "Guía completa de la plataforma: consulta, calificaciones, gestión y dirección."
     : veCoordinacion
-      ? "Guía del trabajo docente y de las plantillas de evaluación."
-      : "Guía del trabajo docente en la plataforma.";
+      ? "Guía de calificaciones, gestión del padrón, actividades y plantillas."
+      : "Guía del trabajo docente: consultar expedientes y calificar a tu grupo.";
 
   return (
     <div className="mx-auto max-w-3xl">
       <PageHeader title="Manual de la plataforma" subtitle={subtitle} />
       <div className="space-y-8">
         <ManualEntrar />
-        <ManualMaestro />
+        <ManualMaestro soloAsignados={!veCoordinacion} />
         {veCoordinacion && <ManualCoordinacion />}
         {veDireccion && <ManualDireccion />}
       </div>

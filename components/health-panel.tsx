@@ -34,9 +34,12 @@ type Health = {
 export function HealthPanel({
   studentId,
   health,
+  canEdit = true,
 }: {
   studentId: string;
   health: Health | null;
+  /** La maestra consulta la salud pero no la captura ni la edita. */
+  canEdit?: boolean;
 }) {
   const href = `/estudiantes/${studentId}/salud`;
 
@@ -50,8 +53,11 @@ export function HealthPanel({
           <h2 className="text-sm font-bold text-ink">Historial médico</h2>
         </div>
         <p className="text-sm leading-relaxed text-muted">
-          Sin registrar. Lo llena el tutor en su primer ingreso, o puedes capturarlo tú.
+          {canEdit
+            ? "Sin registrar. Lo llena el tutor en su primer ingreso, o puedes capturarlo tú."
+            : "Sin registrar. Lo llena el tutor en su primer ingreso."}
         </p>
+        {canEdit && (
         <Link
           href={href}
           className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
@@ -59,6 +65,7 @@ export function HealthPanel({
           <PencilSimple weight="bold" className="size-4" />
           Capturar historial
         </Link>
+        )}
       </Card>
     );
   }
@@ -91,14 +98,16 @@ export function HealthPanel({
           <Heartbeat weight="fill" className="size-[1.05rem]" />
         </span>
         <h2 className="text-sm font-bold text-ink">Historial médico</h2>
-        <Link
-          href={href}
-          aria-label="Editar historial médico"
-          title="Editar historial médico"
-          className="ml-auto flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-        >
-          <PencilSimple className="size-[1.05rem]" />
-        </Link>
+        {canEdit && (
+          <Link
+            href={href}
+            aria-label="Editar historial médico"
+            title="Editar historial médico"
+            className="ml-auto flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <PencilSimple className="size-[1.05rem]" />
+          </Link>
+        )}
       </div>
 
       {/* Alergias primero y destacadas: es el dato que hay que ver de un vistazo. */}

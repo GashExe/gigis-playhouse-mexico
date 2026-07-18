@@ -63,3 +63,20 @@ export async function requireStaff() {
   }
   return user;
 }
+
+/**
+ * Quién puede calificar en un programa (ubicar en nivel y registrar temas):
+ * dirección y coordinación en cualquiera; la maestra SOLO en los programas a su
+ * cargo (teacherId). Es la única escritura que conserva el rol maestra.
+ */
+export async function requireGraderForProgram(programId: string) {
+  const user = await getCurrentUser();
+  if (user.role === "ALUMNO") redirect("/mi-espacio");
+  if (user.role !== "MAESTRA") return user; // DIRECTORA y COORDINADOR pasan
+  const own = await prisma.program.findFirst({
+    where: { id: programId, teacherId: user.id },
+    select: { id: true },
+  });
+  if (!own) redirect("/panel");
+  return user;
+}

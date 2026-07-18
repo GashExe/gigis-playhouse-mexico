@@ -40,12 +40,21 @@ export default async function ProgramsPage({
   ]);
 
   const isDirectora = me.role === "DIRECTORA";
+  const canManage = me.role !== "MAESTRA";
+  // La maestra solo ve los programas a su cargo; gestión ve la oferta completa.
+  const visiblePrograms = canManage
+    ? programs
+    : programs.filter((prog) => prog.teacherId === me.id);
 
   return (
     <div>
       <PageHeader
         title="Programas y actividades"
-        subtitle="Cada programa es una actividad con horario, cupo y un maestro a cargo."
+        subtitle={
+          canManage
+            ? "Cada programa es una actividad con horario, cupo y un maestro a cargo."
+            : "Los programas a tu cargo en este ciclo. Desde aquí se califica a tu grupo."
+        }
       />
 
       {selected && (
@@ -79,10 +88,11 @@ export default async function ProgramsPage({
       )}
 
       <ProgramsManager
-        programs={programs}
+        programs={visiblePrograms}
         teachers={teachers}
         cycleLabel={selected?.label}
         canEditTemplate={isDirectora || me.role === "COORDINADOR"}
+        canManage={canManage}
         presets={presets}
         copySources={copySources}
       />

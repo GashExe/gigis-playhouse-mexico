@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { verifySession } from "@/lib/dal";
+import { requireRole } from "@/lib/dal";
 import { StudentSchema, StudentStatusSchema, HealthSchema } from "@/lib/validators";
 import { ensureAlumnoAccount } from "@/lib/accounts";
 import type { StudentStatus } from "@/lib/generated/prisma/client";
@@ -37,7 +37,7 @@ export async function createStudent(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = parseStudent(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -72,7 +72,7 @@ export async function updateStudent(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = parseStudent(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -103,7 +103,7 @@ export async function updateStudent(
  * hacerlo de un clic desde su expediente o la lista, sin abrir el formulario entero.
  */
 export async function setStudentStatus(id: string, status: StudentStatus) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = StudentStatusSchema.safeParse(status);
   if (!parsed.success) return;
   await prisma.student.update({ where: { id }, data: { status: parsed.data } });
@@ -113,7 +113,7 @@ export async function setStudentStatus(id: string, status: StudentStatus) {
 }
 
 export async function deleteStudent(id: string) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   await prisma.student.delete({ where: { id } });
   revalidatePath("/estudiantes");
   revalidatePath("/panel");
@@ -131,7 +131,7 @@ export async function saveHealth(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = HealthSchema.safeParse({
     bloodType: formData.get("bloodType") ?? "",
     allergies: formData.get("allergies") ?? "",

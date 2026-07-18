@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { verifySession } from "@/lib/dal";
+import { requireRole } from "@/lib/dal";
 import { getActiveCycle } from "@/lib/queries";
 
 /**
@@ -11,7 +11,7 @@ import { getActiveCycle } from "@/lib/queries";
  * cada uno con su propio historial.
  */
 export async function addEnrollment(studentId: string, formData: FormData) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const programId = String(formData.get("programId") ?? "");
   if (!programId) return;
 
@@ -53,7 +53,7 @@ export async function setEnrollmentStatus(
   studentId: string,
   status: "ACTIVA" | "PAUSADA" | "FINALIZADA",
 ) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   await prisma.enrollment.update({
     where: { id: enrollmentId },
     data: {
@@ -66,7 +66,7 @@ export async function setEnrollmentStatus(
 }
 
 export async function removeEnrollment(enrollmentId: string, studentId: string) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   await prisma.enrollment.delete({ where: { id: enrollmentId } });
   revalidatePath(`/estudiantes/${studentId}`);
   revalidatePath("/panel");

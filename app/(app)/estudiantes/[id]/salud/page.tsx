@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
-import { verifySession } from "@/lib/dal";
+import { requireRole } from "@/lib/dal";
 import { getStudent } from "@/lib/queries";
 import { saveHealth } from "@/lib/actions/students";
 import { PageHeader } from "@/components/ui/page-header";
@@ -14,7 +14,7 @@ export default async function HealthPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const { id } = await params;
   const student = await getStudent(id);
   if (!student) notFound();

@@ -29,10 +29,13 @@ export function EnrollmentsPanel({
   studentId,
   enrollments,
   allPrograms,
+  canManage = true,
 }: {
   studentId: string;
   enrollments: EnrollmentItem[];
   allPrograms: ProgramOption[];
+  /** Dirección/coordinación inscriben y modifican; la maestra solo consulta. */
+  canManage?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   const enrolledIds = new Set(enrollments.map((e) => e.program.id));
@@ -42,7 +45,7 @@ export function EnrollmentsPanel({
     <Card>
       <CardHeader>
         <CardTitle>Programas inscritos</CardTitle>
-        {available.length > 0 && !adding && (
+        {canManage && available.length > 0 && !adding && (
           <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
             <Plus weight="bold" className="size-4" />
             Inscribir
@@ -89,9 +92,13 @@ export function EnrollmentsPanel({
           <EmptyState
             icon={<Books weight="fill" className="size-6" />}
             title="Sin programas todavía"
-            description="Inscribe a este participante en uno o más programas."
+            description={
+              canManage
+                ? "Inscribe a este participante en uno o más programas."
+                : "Coordinación o dirección lo inscribirán a sus programas."
+            }
             action={
-              available.length > 0 && !adding ? (
+              canManage && available.length > 0 && !adding ? (
                 <Button size="sm" onClick={() => setAdding(true)}>
                   <Plus weight="bold" className="size-4" />
                   Inscribir en un programa
@@ -103,7 +110,7 @@ export function EnrollmentsPanel({
       ) : (
         <ul className="divide-y divide-border">
           {enrollments.map((e) => (
-            <EnrollmentRow key={e.id} enrollment={e} studentId={studentId} />
+            <EnrollmentRow key={e.id} enrollment={e} studentId={studentId} canManage={canManage} />
           ))}
         </ul>
       )}
@@ -114,9 +121,11 @@ export function EnrollmentsPanel({
 function EnrollmentRow({
   enrollment: e,
   studentId,
+  canManage,
 }: {
   enrollment: EnrollmentItem;
   studentId: string;
+  canManage: boolean;
 }) {
   return (
     <li className="px-5 py-3.5">
@@ -139,7 +148,9 @@ function EnrollmentRow({
           </p>
         </div>
         <EnrollmentStatusBadge status={e.status} />
-        <EnrollmentMenu enrollmentId={e.id} studentId={studentId} status={e.status} />
+        {canManage && (
+          <EnrollmentMenu enrollmentId={e.id} studentId={studentId} status={e.status} />
+        )}
       </div>
     </li>
   );

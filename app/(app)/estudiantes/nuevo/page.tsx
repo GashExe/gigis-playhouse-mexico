@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
-import { verifySession } from "@/lib/dal";
+import { requireRole } from "@/lib/dal";
 import { createStudent } from "@/lib/actions/students";
 import { PageHeader } from "@/components/ui/page-header";
 import { StudentForm } from "@/components/student-form";
@@ -8,7 +8,7 @@ import { StudentForm } from "@/components/student-form";
 export const metadata = { title: "Nuevo participante" };
 
 export default async function NewStudentPage() {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
 
   return (
     <div className="mx-auto max-w-3xl">
