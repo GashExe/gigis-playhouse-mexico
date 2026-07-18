@@ -8,6 +8,7 @@ import {
   CaretRight,
   ChalkboardTeacher,
   Clock,
+  ClockCounterClockwise,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import { requireGraderForProgram, getCurrentUser } from "@/lib/dal";
@@ -20,7 +21,7 @@ import {
   toDateKey,
   type Slot,
 } from "@/lib/schedule";
-import { ClassPanel } from "@/components/class-panel";
+import { ClassPanel, CancelClassControl } from "@/components/class-panel";
 
 export const metadata = { title: "Panel de clase" };
 
@@ -67,12 +68,17 @@ export default async function ClassPanelPage({
   // Evaluación de cada alumno del grupo, para calificar sin salir del panel.
   // El grupo es chico (cupo ~7), así que traerla completa no pesa.
   type Grading = NonNullable<Awaited<ReturnType<typeof getGradingData>>>;
-  const grading: Record<string, { levelName: string; blocks: Grading["blocks"] } | null> = {};
+  const grading: Record<
+    string,
+    { levelName: string; nextLevelName: string | null; blocks: Grading["blocks"] } | null
+  > = {};
   if (cycle) {
     await Promise.all(
       students.map(async (s) => {
         const data = await getGradingData(s.id, programId, cycle.id);
-        grading[s.id] = data ? { levelName: data.level.name, blocks: data.blocks } : null;
+        grading[s.id] = data
+          ? { levelName: data.level.name, nextLevelName: data.nextLevelName, blocks: data.blocks }
+          : null;
       }),
     );
   }
@@ -152,7 +158,31 @@ export default async function ClassPanelPage({
             Este día no hay clase según el horario
           </span>
         )}
+        <Link
+          href={`/calendario/${program.id}/bitacoras`}
+          className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <ClockCounterClockwise className="size-4" />
+          Historial de bitácoras
+        </Link>
+        {!session?.canceled && (
+          <CancelClassControl
+            programId={program.id}
+            dateKey={dateKey}
+            canceled={false}
+            reason={null}
+          />
+        )}
       </div>
+
+      {session?.canceled && (
+        <CancelClassControl
+          programId={program.id}
+          dateKey={dateKey}
+          canceled
+          reason={session.cancelReason}
+        />
+      )}
 
       <ClassPanel
         programId={program.id}

@@ -128,10 +128,12 @@ export default async function GradePage({
         </Card>
       ) : (
         <GradingPanel
+          key={data.level.id}
           studentId={id}
           programId={programId}
           cycleId={selectedCycleId}
           levelName={data.level.name}
+          nextLevelName={data.nextLevelName}
           passThreshold={program.passThreshold}
           blocks={data.blocks}
         />

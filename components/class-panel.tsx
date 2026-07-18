@@ -15,6 +15,7 @@ import {
   UsersThree,
   EyeSlash,
   Users,
+  CalendarX,
 } from "@phosphor-icons/react";
 import {
   addStudentNote,
@@ -22,6 +23,7 @@ import {
   saveClassNotes,
   setAttendance,
   setAttendanceNote,
+  setClassCanceled,
 } from "@/lib/actions/classes";
 import { fecha as fechaLabel } from "@/lib/format";
 import { initials } from "@/lib/utils";
@@ -44,7 +46,11 @@ type Note = {
 };
 type GradingItem = { id: string; code: string | null; text: string; score: number | null };
 type GradingBlock = { id: string; code: string | null; name: string; items: GradingItem[] };
-type StudentGrading = { levelName: string; blocks: GradingBlock[] } | null;
+type StudentGrading = {
+  levelName: string;
+  nextLevelName: string | null;
+  blocks: GradingBlock[];
+} | null;
 
 const STATUS_META: Record<
   string,
@@ -99,6 +105,88 @@ export function ClassPanel({
         <NotesFeed color={color} notes={notes} />
       </div>
     </div>
+  );
+}
+
+/* ---------- Suspender / reactivar la clase del día ---------- */
+
+/**
+ * Control de suspensión de la clase de una fecha. Suspendida, la familia lo ve
+ * en Mi espacio y el calendario la tacha; reactivarla borra el motivo.
+ */
+export function CancelClassControl({
+  programId,
+  dateKey,
+  canceled,
+  reason,
+}: {
+  programId: string;
+  dateKey: string;
+  canceled: boolean;
+  reason: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  if (canceled) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-card)] border border-warning bg-warning-weak/50 px-4 py-3">
+        <CalendarX weight="fill" className="size-5 shrink-0 text-warning-strong" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-extrabold text-warning-strong">Clase suspendida</p>
+          {reason && <p className="text-xs text-muted">{reason}</p>}
+        </div>
+        <form
+          action={(fd) =>
+            startTransition(async () => {
+              await setClassCanceled(programId, dateKey, false, fd);
+            })
+          }
+        >
+          <Button type="submit" size="sm" variant="secondary" loading={pending}>
+            Reactivar clase
+          </Button>
+        </form>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-warning-weak hover:text-warning-strong"
+      >
+        <CalendarX className="size-4" />
+        Suspender esta clase
+      </button>
+    );
+  }
+
+  return (
+    <form
+      action={(fd) =>
+        startTransition(async () => {
+          await setClassCanceled(programId, dateKey, true, fd);
+          setOpen(false);
+        })
+      }
+      className="flex w-full flex-wrap items-center gap-2 rounded-[var(--radius-control)] border border-warning bg-warning-weak/40 p-2.5"
+    >
+      <Input
+        name="reason"
+        autoFocus
+        placeholder="Motivo que verá la familia (ej. “vacaciones”, “evento”)"
+        className="h-9 flex-1 bg-surface text-xs"
+      />
+      <Button type="submit" size="sm" loading={pending}>
+        Suspender
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+        Cancelar
+      </Button>
+    </form>
   );
 }
 
@@ -433,10 +521,12 @@ function StudentDrawer({
             </p>
           ) : (
             <GradingPanel
+              key={grading.levelName}
               studentId={s.id}
               programId={programId}
               cycleId={cycleId}
               levelName={grading.levelName}
+              nextLevelName={grading.nextLevelName}
               passThreshold={passThreshold}
               blocks={grading.blocks}
             />

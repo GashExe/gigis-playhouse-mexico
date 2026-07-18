@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Flag, Check } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import { Flag, Check, LockSimpleOpen, ArrowFatLinesUp } from "@phosphor-icons/react";
 import { setItemScore } from "@/lib/actions/item-scores";
+import { promoteToNextLevel } from "@/lib/actions/level-records";
 
 type Item = { id: string; code: string | null; text: string; score: number | null };
 type Block = { id: string; code: string | null; name: string; items: Item[] };
@@ -29,6 +31,7 @@ export function GradingPanel({
   programId,
   cycleId,
   levelName,
+  nextLevelName = null,
   passThreshold,
   blocks: initialBlocks,
 }: {
@@ -36,16 +39,33 @@ export function GradingPanel({
   programId: string;
   cycleId: string;
   levelName: string;
+  /** Nombre del nivel que sigue (null = este es el último del programa). */
+  nextLevelName?: string | null;
   passThreshold: number;
   blocks: Block[];
 }) {
+  const router = useRouter();
   const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
   const [saving, startSaving] = useTransition();
+  const [promoting, startPromoting] = useTransition();
 
   const allItems = useMemo(() => blocks.flatMap((b) => b.items), [blocks]);
   const levelPct = pctOf(allItems);
   const levelTone = tone(levelPct);
   const passed = levelPct >= passThreshold;
+
+  // Regla de bloques: uno se DESBLOQUEA al llegar al umbral del programa; el
+  // nivel se supera cuando todos sus bloques están desbloqueados.
+  const unlockedCount = blocks.filter((b) => pctOf(b.items) >= passThreshold).length;
+  const allUnlocked = blocks.length > 0 && unlockedCount === blocks.length;
+
+  function promote() {
+    startPromoting(async () => {
+      await promoteToNextLevel(studentId, programId, cycleId);
+      // El nivel cambió en el servidor: recargar trae los bloques del nuevo nivel.
+      router.refresh();
+    });
+  }
 
   function grade(itemId: string, score: number) {
     setBlocks((prev) =>
@@ -96,12 +116,51 @@ export function GradingPanel({
           )}
           {saving && <span className="ml-auto text-subtle">Guardando…</span>}
         </p>
+        {blocks.length > 0 && (
+          <p className="mt-1.5 text-xs text-muted">
+            <LockSimpleOpen weight="bold" className="mr-1 inline size-3.5 align-[-2px] text-subtle" />
+            <span className="tnum font-semibold text-ink">
+              {unlockedCount}/{blocks.length}
+            </span>{" "}
+            bloques desbloqueados (cada uno se desbloquea al {passThreshold}%).
+          </p>
+        )}
       </div>
+
+      {/* Todos los bloques desbloqueados: la plataforma ofrece el paso de nivel */}
+      {allUnlocked && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-success bg-success-weak/50 p-4">
+          <div>
+            <p className="flex items-center gap-1.5 text-sm font-extrabold text-success-strong">
+              <ArrowFatLinesUp weight="fill" className="size-4" />
+              ¡Todos los bloques desbloqueados!
+            </p>
+            <p className="mt-0.5 text-xs text-muted">
+              {nextLevelName
+                ? `Superó «${levelName}»; el siguiente nivel es «${nextLevelName}».`
+                : `«${levelName}» es el último nivel del programa.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={promote}
+            disabled={promoting}
+            className="rounded-[var(--radius-control)] bg-success-strong px-4 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-55"
+          >
+            {promoting
+              ? "Guardando…"
+              : nextLevelName
+                ? `Subir a «${nextLevelName}»`
+                : "Marcar posible graduado"}
+          </button>
+        </div>
+      )}
 
       {/* Bloques */}
       {blocks.map((block) => {
         const bPct = pctOf(block.items);
         const bTone = tone(bPct);
+        const unlocked = bPct >= passThreshold;
         return (
           <div
             key={block.id}
@@ -112,8 +171,16 @@ export function GradingPanel({
                 <p className="font-semibold text-ink">
                   {block.code && <span className="text-subtle">{block.code}</span>} {block.name}
                 </p>
-                <span className={`tnum text-sm font-semibold ${bTone.text}`}>
-                  {bPct === 0 ? "Sin empezar" : `${bPct}%`}
+                <span className="flex shrink-0 items-center gap-2">
+                  {unlocked && (
+                    <span className="flex items-center gap-1 rounded-full bg-success-weak px-2 py-0.5 text-[0.7rem] font-bold text-success-strong">
+                      <LockSimpleOpen weight="bold" className="size-3" />
+                      Desbloqueado
+                    </span>
+                  )}
+                  <span className={`tnum text-sm font-semibold ${bTone.text}`}>
+                    {bPct === 0 ? "Sin empezar" : `${bPct}%`}
+                  </span>
                 </span>
               </div>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">

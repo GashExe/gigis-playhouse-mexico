@@ -10,7 +10,11 @@ import {
   Info,
 } from "@phosphor-icons/react/dist/ssr";
 import { requireStaff } from "@/lib/dal";
-import { getActiveCycle, listCalendarPrograms } from "@/lib/queries";
+import {
+  getActiveCycle,
+  listCalendarPrograms,
+  listCanceledSessions,
+} from "@/lib/queries";
 import {
   WEEKDAYS,
   addDays,
@@ -47,6 +51,15 @@ export default async function CalendarioPage({
   // Semana de lunes a sábado; el domingo solo aparece si algún programa lo usa.
   const hasSunday = programs.some((p) => p.scheduleSlots.some((s) => s.weekday === 0));
   const days = Array.from({ length: hasSunday ? 7 : 6 }, (_, i) => addDays(monday, i));
+
+  // Clases suspendidas de la semana, para tacharlas en su tarjeta.
+  const canceledSessions = await listCanceledSessions(
+    toDateKey(monday),
+    toDateKey(addDays(monday, days.length - 1)),
+  );
+  const canceledSet = new Set(
+    canceledSessions.map((s) => `${s.programId}:${s.date.toISOString().slice(0, 10)}`),
+  );
 
   const withSlots = programs.filter((p) => p.scheduleSlots.length > 0);
   const withoutSlots = programs.filter((p) => p.scheduleSlots.length === 0);
@@ -147,14 +160,28 @@ export default async function CalendarioPage({
                   <ul className="space-y-2">
                     {classes.map(({ program: p, slot }, i) => {
                       const color = p.color ?? "var(--primary)";
+                      const isCanceled = canceledSet.has(`${p.id}:${key}`);
                       return (
                         <li key={`${p.id}-${i}`}>
                           <Link
                             href={`/calendario/${p.id}?fecha=${key}`}
-                            className="block rounded-[var(--radius-control)] border border-border bg-surface-2 p-2.5 transition-colors hover:border-border-strong hover:bg-surface"
+                            className={`block rounded-[var(--radius-control)] border border-border bg-surface-2 p-2.5 transition-colors hover:border-border-strong hover:bg-surface ${
+                              isCanceled ? "opacity-60" : ""
+                            }`}
                             style={{ borderLeft: `4px solid ${color}` }}
                           >
-                            <p className="truncate text-sm font-bold text-ink">{p.name}</p>
+                            <p
+                              className={`truncate text-sm font-bold text-ink ${
+                                isCanceled ? "line-through" : ""
+                              }`}
+                            >
+                              {p.name}
+                            </p>
+                            {isCanceled && (
+                              <span className="mt-0.5 inline-block rounded-full bg-warning-weak px-2 py-0.5 text-[0.65rem] font-bold text-warning-strong">
+                                Suspendida
+                              </span>
+                            )}
                             <p className="tnum mt-0.5 text-xs font-semibold" style={{ color }}>
                               {slot.startTime}–{slot.endTime}
                             </p>

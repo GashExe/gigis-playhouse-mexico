@@ -211,10 +211,18 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
             La <strong>asistencia reciente</strong> a sus clases, tal como la registró la
             maestra al pasar lista.
           </li>
+          <li>
+            Los <strong>avisos de Gigi&apos;s</strong> (anuncios de la dirección) y las{" "}
+            <strong>clases suspendidas</strong> próximas, para estar siempre al tanto.
+          </li>
         </ul>
-        <Callout tone="amber" icon={<CalendarCheck weight="fill" className="size-4" />}>
-          <strong>Apartar actividades</strong> — muy pronto. La sección para reservar
-          actividades aparecerá en este mismo espacio cuando esté lista.
+        <Callout tone="teal" icon={<CalendarCheck weight="fill" className="size-4" />}>
+          <strong>Apartar actividades:</strong> en tu espacio ves la oferta del ciclo con
+          horario y lugares disponibles. Pide lugar con un toque; el equipo de Gigi&apos;s
+          confirma tu solicitud y ahí queda la inscripción. Mientras esté pendiente puedes
+          cancelarla. Solo se pueden apartar las actividades cuyos{" "}
+          <strong>requisitos cumple el participante</strong> (por ejemplo, el rango de
+          edad): las demás aparecen con su requisito a la vista.
         </Callout>
       </ManualCard>
     </section>
@@ -278,7 +286,10 @@ export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolea
         />
         <Callout tone="teal" icon={<CalendarCheck weight="fill" className="size-4" />}>
           Con las flechas junto a la fecha te mueves entre días de clase, por si necesitas
-          completar la lista de una sesión pasada.
+          completar la lista de una sesión pasada. Desde el mismo panel puedes{" "}
+          <strong>suspender la clase</strong> de un día (la familia lo ve en su espacio y
+          el calendario la tacha) y abrir el <strong>historial de bitácoras</strong> del
+          grupo, sesión por sesión.
         </Callout>
       </ManualCard>
 
@@ -409,10 +420,12 @@ export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolea
         </Callout>
         <p>
           Con las calificaciones, la plataforma calcula solo el <strong>porcentaje de avance</strong>{" "}
-          de cada bloque y del nivel completo. Cuando el nivel alcanza el porcentaje que define
-          el programa (normalmente <strong>80%</strong>), el participante está listo para pasar
-          al siguiente nivel. Con las pestañas de ciclo puedes revisar ciclos anteriores sin
-          alterar el actual.
+          de cada bloque y del nivel completo. Un bloque se <strong>desbloquea</strong> al
+          llegar al porcentaje que define el programa (normalmente <strong>80%</strong>);
+          cuando el participante desbloquea <strong>todos los bloques del nivel</strong>, la
+          plataforma te ofrece el botón para <strong>subirlo al siguiente nivel</strong> (o
+          marcarlo como posible graduado si ya era el último). Con las pestañas de ciclo
+          puedes revisar ciclos anteriores sin alterar el actual.
         </p>
       </ManualCard>
 
@@ -587,6 +600,25 @@ export function ManualDireccion() {
           para entregárselos a la familia, y en <Chip>Participantes</Chip> puedes{" "}
           <Chip>Descargar credenciales</Chip> con la lista completa. Es información
           confidencial: solo tú puedes verla.
+        </p>
+      </ManualCard>
+
+      <ManualCard where="Avisos" title="Anuncios a las familias">
+        <p>
+          En <Chip>Avisos</Chip> publicas anuncios que aparecen en el espacio de las
+          familias: a <strong>todos los participantes activos</strong> o solo a los que
+          elijas (con buscador). Sirven para eventos, recordatorios o cualquier cosa que
+          las familias deban saber.
+        </p>
+      </ManualCard>
+
+      <ManualCard where="Panel" title="Reservas de las familias">
+        <p>
+          Cuando una familia <strong>aparta lugar</strong> en una actividad desde su
+          espacio, la solicitud aparece en tu <Chip>Panel</Chip> con el cupo a la vista.
+          Al <Chip>Aprobar</Chip> se crea la inscripción del ciclo; al{" "}
+          <Chip>Rechazar</Chip>, la familia lo ve en su espacio y puede volver a pedir
+          más adelante.
         </p>
       </ManualCard>
     </section>

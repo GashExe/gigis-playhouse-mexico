@@ -357,6 +357,13 @@ export async function getGradingData(studentId: string, programId: string, cycle
   });
   if (!record) return null;
 
+  // El nivel que sigue, para ofrecer "subir de nivel" al desbloquear los bloques.
+  const nextLevel = await prisma.programLevel.findFirst({
+    where: { programId, order: { gt: record.level.order } },
+    orderBy: { order: "asc" },
+    select: { name: true },
+  });
+
   const blocks = await prisma.evalBlock.findMany({
     where: { levelId: record.level.id },
     orderBy: { order: "asc" },
@@ -383,6 +390,7 @@ export async function getGradingData(studentId: string, programId: string, cycle
 
   return {
     level: record.level,
+    nextLevelName: nextLevel?.name ?? null,
     blocks: blocks.map((b) => ({
       id: b.id,
       code: b.code,
@@ -479,6 +487,8 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
       where: { programId_date: { programId, date } },
       select: {
         notes: true,
+        canceled: true,
+        cancelReason: true,
         attendance: {
           select: { studentId: true, status: true, note: true },
         },
@@ -500,6 +510,259 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
     }),
   ]);
   return { program, students: enrollments.map((e) => e.student), session, notes };
+}
+
+/**
+ * Oferta del ciclo tal como la ve una familia: actividades con horario, cupo
+ * ocupado y las reservas/inscripciones que ese alumno ya tiene, para saber qué
+ * puede apartar todavía.
+ */
+export async function getFamilyOffer(studentId: string, cycleId: string) {
+  const [student, programs, reservations, enrollments] = await Promise.all([
+    prisma.student.findUnique({
+      where: { id: studentId },
+      select: { birthDate: true },
+    }),
+    prisma.program.findMany({
+      where: { active: true, cycles: { some: { id: cycleId } } },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        area: true,
+        ageMin: true,
+        ageMax: true,
+        studentCapacity: true,
+        teacher: { select: { name: true } },
+        scheduleSlots: {
+          orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+          select: { weekday: true, startTime: true, endTime: true },
+        },
+        _count: {
+          select: { enrollments: { where: { status: "ACTIVA", cycleId } } },
+        },
+      },
+    }),
+    prisma.reservation.findMany({
+      where: { studentId, cycleId },
+      select: { id: true, programId: true, status: true, createdAt: true },
+    }),
+    prisma.enrollment.findMany({
+      where: { studentId, cycleId, status: "ACTIVA" },
+      select: { programId: true },
+    }),
+  ]);
+  return {
+    birthDate: student?.birthDate ?? null,
+    programs,
+    reservations,
+    enrolledProgramIds: new Set(enrollments.map((e) => e.programId)),
+  };
+}
+
+/**
+ * ¿El participante cumple el requisito de edad de un programa? Si el programa no
+ * pide edad, o no conocemos la fecha de nacimiento, no se bloquea (el requisito
+ * lo termina de revisar dirección al aprobar).
+ */
+export function meetsAgeRequirement(
+  age: number | null,
+  ageMin: number | null,
+  ageMax: number | null,
+): boolean {
+  if (age == null) return true;
+  if (ageMin != null && age < ageMin) return false;
+  if (ageMax != null && age > ageMax) return false;
+  return true;
+}
+
+/** Reservas pendientes por resolver (para la tarjeta del panel de dirección). */
+export async function listPendingReservations() {
+  const pending = await prisma.reservation.findMany({
+    where: { status: "PENDIENTE" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      message: true,
+      createdAt: true,
+      cycleId: true,
+      student: { select: { id: true, firstName: true, lastName: true, birthDate: true } },
+      program: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          studentCapacity: true,
+          ageMin: true,
+          ageMax: true,
+        },
+      },
+    },
+  });
+  // Cupo ocupado por programa+ciclo, para decidir con el dato a la vista.
+  const seats = await Promise.all(
+    pending.map((r) =>
+      prisma.enrollment.count({
+        where: { programId: r.program.id, cycleId: r.cycleId, status: "ACTIVA" },
+      }),
+    ),
+  );
+  return pending.map((r, i) => ({ ...r, occupied: seats[i] }));
+}
+
+/**
+ * Alumnos con AUSENCIAS SEGUIDAS (3+) en un programa, mirando las últimas
+ * sesiones registradas. Las sesiones donde no se les marcó nada no rompen la
+ * racha (una lista sin pasar no es una asistencia). Si se da teacherId, se
+ * acota a los programas de esa maestra.
+ */
+export async function getAbsenceAlerts(teacherId?: string) {
+  const since = new Date();
+  since.setDate(since.getDate() - 60);
+  const sessions = await prisma.classSession.findMany({
+    where: {
+      date: { gte: since },
+      canceled: false,
+      ...(teacherId ? { program: { teacherId } } : {}),
+    },
+    orderBy: { date: "desc" },
+    select: {
+      date: true,
+      program: { select: { id: true, name: true, color: true } },
+      attendance: {
+        select: {
+          status: true,
+          student: { select: { id: true, firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+
+  // Recorre por alumno+programa de la sesión más reciente hacia atrás.
+  type Alert = {
+    student: { id: string; firstName: string; lastName: string };
+    program: { id: string; name: string; color: string | null };
+    streak: number;
+  };
+  const streaks = new Map<string, Alert & { broken: boolean }>();
+  for (const session of sessions) {
+    for (const a of session.attendance) {
+      const key = `${a.student.id}:${session.program.id}`;
+      let entry = streaks.get(key);
+      if (!entry) {
+        entry = { student: a.student, program: session.program, streak: 0, broken: false };
+        streaks.set(key, entry);
+      }
+      if (entry.broken) continue;
+      if (a.status === "AUSENTE") entry.streak += 1;
+      else entry.broken = true; // asistió (o justificó): la racha termina aquí
+    }
+  }
+  return [...streaks.values()]
+    .filter((e) => e.streak >= 3)
+    .sort((a, b) => b.streak - a.streak)
+    .map(({ student, program, streak }) => ({ student, program, streak }));
+}
+
+/** Sesiones de un programa (bitácoras) con resumen de asistencia, recientes primero. */
+export async function listProgramSessions(programId: string) {
+  return prisma.classSession.findMany({
+    where: { programId },
+    orderBy: { date: "desc" },
+    take: 60,
+    select: {
+      id: true,
+      date: true,
+      notes: true,
+      canceled: true,
+      cancelReason: true,
+      attendance: { select: { status: true } },
+    },
+  });
+}
+
+/** Anuncios que le tocan a un alumno: los generales (si está activo) y los dirigidos a él. */
+export async function listAnnouncementsFor(studentId: string) {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { status: true },
+  });
+  return prisma.announcement.findMany({
+    where: {
+      OR: [
+        ...(student?.status === "ACTIVO" ? [{ toAllActive: true }] : []),
+        { recipients: { some: { studentId } } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+  });
+}
+
+/** Próximas clases suspendidas de los programas donde el alumno está inscrito. */
+export async function listUpcomingSuspensionsFor(studentId: string) {
+  const today = new Date();
+  const todayUTC = new Date(
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+  return prisma.classSession.findMany({
+    where: {
+      canceled: true,
+      date: { gte: todayUTC },
+      program: {
+        enrollments: { some: { studentId, status: "ACTIVA" } },
+      },
+    },
+    orderBy: { date: "asc" },
+    take: 6,
+    select: {
+      id: true,
+      date: true,
+      cancelReason: true,
+      program: { select: { name: true, color: true } },
+    },
+  });
+}
+
+/** Todos los anuncios publicados, para administrarlos en /avisos. */
+export async function listAnnouncements() {
+  return prisma.announcement.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      title: true,
+      body: true,
+      toAllActive: true,
+      createdAt: true,
+      author: { select: { name: true } },
+      recipients: {
+        select: { student: { select: { id: true, firstName: true, lastName: true } } },
+      },
+    },
+  });
+}
+
+/** Sesiones suspendidas en un rango de fechas (para tachar clases en el calendario). */
+export async function listCanceledSessions(fromKey: string, toKey: string) {
+  return prisma.classSession.findMany({
+    where: {
+      canceled: true,
+      date: {
+        gte: new Date(`${fromKey}T00:00:00.000Z`),
+        lte: new Date(`${toKey}T00:00:00.000Z`),
+      },
+    },
+    select: { programId: true, date: true, cancelReason: true },
+  });
 }
 
 export async function listUsers() {

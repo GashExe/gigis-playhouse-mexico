@@ -7,12 +7,26 @@ import {
   Clock,
   ChatCircleText,
   ListChecks,
+  Megaphone,
+  CalendarX,
+  UsersThree,
+  HourglassMedium,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
-import { getStudentSpace } from "@/lib/queries";
+import {
+  getStudentSpace,
+  getActiveCycle,
+  getFamilyOffer,
+  listAnnouncementsFor,
+  listUpcomingSuspensionsFor,
+} from "@/lib/queries";
+import { requestReservation, cancelReservation } from "@/lib/actions/reservations";
+import { meetsAgeRequirement } from "@/lib/queries";
 import { needsOnboarding } from "@/lib/legal";
 import { slotsLabel } from "@/lib/schedule";
 import { fecha, fechaDia } from "@/lib/format";
+import { ageFrom } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -24,6 +38,17 @@ export default async function MiEspacioPage() {
   if (student && needsOnboarding(student)) {
     redirect("/mi-espacio/bienvenida");
   }
+
+  const cycle = await getActiveCycle();
+  const [offer, announcements, suspensions] = user.studentId
+    ? await Promise.all([
+        cycle
+          ? getFamilyOffer(user.studentId, cycle.id)
+          : Promise.resolve(null),
+        listAnnouncementsFor(user.studentId),
+        listUpcomingSuspensionsFor(user.studentId),
+      ])
+    : [null, [], []];
 
   const firstName = (student?.firstName ?? user.name).split(" ")[0];
   const programs = student?.enrollments ?? [];
@@ -53,34 +78,198 @@ export default async function MiEspacioPage() {
         )}
       </section>
 
-      {/* Aviso de reservaciones (próximamente) */}
-      <section
-        className="relative overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface p-6 shadow-[var(--shadow-sm)] sm:p-8"
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-8 -top-8 size-40 rounded-full opacity-20"
-          style={{ background: "var(--brand-rainbow)" }}
-        />
-        <div className="relative flex items-start gap-4">
-          <span
-            className="flex size-12 shrink-0 items-center justify-center rounded-full text-white shadow-[var(--shadow-sm)]"
-            style={{ backgroundColor: "var(--brand-pink)" }}
-          >
-            <CalendarCheck weight="fill" className="size-6" />
-          </span>
-          <div className="space-y-1.5">
-            <h2 className="text-lg font-extrabold tracking-tight text-ink">
-              Apartar actividades — muy pronto
+      {/* Anuncios de la dirección */}
+      {announcements.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Megaphone weight="fill" className="size-5 text-primary" />
+            <h2 className="text-base font-extrabold tracking-tight text-ink">
+              Avisos de Gigi&apos;s
             </h2>
-            <p className="max-w-xl text-pretty text-sm leading-relaxed text-muted">
-              Estamos preparando el espacio para que puedas reservar las
-              actividades de {firstName}. En cuanto esté listo, aparecerá aquí.
-              ¡Gracias por ser parte de Gigi&apos;s Playhouse!
-            </p>
           </div>
-        </div>
-      </section>
+          <ul className="space-y-3">
+            {announcements.map((a) => (
+              <li
+                key={a.id}
+                className="rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-bold text-ink">{a.title}</h3>
+                  <span className="text-xs text-subtle">{fecha(a.createdAt)}</span>
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-muted">
+                  {a.body}
+                </p>
+                {a.author && (
+                  <p className="mt-1.5 text-xs text-subtle">— {a.author.name}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Clases suspendidas próximas */}
+      {suspensions.length > 0 && (
+        <section className="rounded-[var(--radius-card)] border border-warning bg-warning-weak/40 p-4">
+          <h2 className="flex items-center gap-2 text-sm font-extrabold text-warning-strong">
+            <CalendarX weight="fill" className="size-4" />
+            Clases suspendidas
+          </h2>
+          <ul className="mt-2 space-y-1.5">
+            {suspensions.map((s) => (
+              <li key={s.id} className="text-sm text-ink">
+                <span className="font-semibold">{s.program.name}</span> — no habrá clase
+                el <span className="font-semibold">{fechaDia(s.date)}</span>
+                {s.cancelReason ? (
+                  <span className="text-muted"> · {s.cancelReason}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Apartar actividades del ciclo */}
+      {offer && (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="flex items-center gap-2">
+              <CalendarCheck weight="fill" className="size-5 text-primary" />
+              <h2 className="text-base font-extrabold tracking-tight text-ink">
+                Apartar actividades
+              </h2>
+            </span>
+            {cycle && (
+              <span className="text-xs font-semibold text-subtle">
+                Ciclo {cycle.label}
+              </span>
+            )}
+          </div>
+          <p className="-mt-2 text-sm text-muted">
+            Pide lugar en una actividad para {firstName}; el equipo de Gigi&apos;s
+            confirma tu solicitud.
+          </p>
+          {(() => {
+            const available = offer.programs.filter(
+              (p) => !offer.enrolledProgramIds.has(p.id),
+            );
+            if (available.length === 0) {
+              return (
+                <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-sm text-muted">
+                  {firstName} ya está en todas las actividades del ciclo. 🎉
+                </p>
+              );
+            }
+            const byProgram = new Map(offer.reservations.map((r) => [r.programId, r]));
+            const age = ageFrom(offer.birthDate);
+            return (
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {available.map((p) => {
+                  const color = p.color ?? "var(--brand-teal)";
+                  const horario = slotsLabel(p.scheduleSlots);
+                  const left = Math.max(0, p.studentCapacity - p._count.enrollments);
+                  const reservation = byProgram.get(p.id);
+                  const pendingRes = reservation?.status === "PENDIENTE";
+                  const rejected = reservation?.status === "RECHAZADA";
+                  // Requisitos de la actividad: si no se cumplen, no se puede apartar.
+                  const ageOk = meetsAgeRequirement(age, p.ageMin, p.ageMax);
+                  return (
+                    <li
+                      key={p.id}
+                      className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            aria-hidden
+                            className="size-3 shrink-0 rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                          <p className="truncate font-semibold text-ink">{p.name}</p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${
+                            left === 0
+                              ? "bg-danger-weak text-danger-strong"
+                              : "bg-success-weak text-success-strong"
+                          }`}
+                        >
+                          {left === 0 ? "Cupo lleno" : `${left} lugares`}
+                        </span>
+                      </div>
+                      <div className="space-y-0.5 text-xs text-muted">
+                        {horario && (
+                          <p className="flex items-center gap-1.5">
+                            <Clock className="size-3.5 shrink-0 text-subtle" />
+                            {horario}
+                          </p>
+                        )}
+                        {(p.ageMin != null || p.ageMax != null) && (
+                          <p className="flex items-center gap-1.5">
+                            <UsersThree className="size-3.5 shrink-0 text-subtle" />
+                            {p.ageMin != null && p.ageMax != null
+                              ? `${p.ageMin}–${p.ageMax} años`
+                              : p.ageMin != null
+                                ? `Desde ${p.ageMin} años`
+                                : `Hasta ${p.ageMax} años`}
+                          </p>
+                        )}
+                        {p.teacher && <p>Con {p.teacher.name}</p>}
+                      </div>
+                      <div className="mt-auto pt-1">
+                        {!ageOk ? (
+                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
+                            Esta actividad es para{" "}
+                            {p.ageMin != null && p.ageMax != null
+                              ? `${p.ageMin}–${p.ageMax} años`
+                              : p.ageMin != null
+                                ? `${p.ageMin} años en adelante`
+                                : `hasta ${p.ageMax} años`}
+                            .
+                          </p>
+                        ) : pendingRes ? (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-1.5 text-xs font-bold text-warning-strong">
+                              <HourglassMedium weight="fill" className="size-3.5" />
+                              Solicitud enviada
+                            </span>
+                            <form action={cancelReservation.bind(null, reservation!.id)}>
+                              <button
+                                type="submit"
+                                className="flex items-center gap-1 rounded-[var(--radius-input)] px-2 py-1 text-xs font-semibold text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                              >
+                                <X className="size-3.5" />
+                                Cancelar
+                              </button>
+                            </form>
+                          </div>
+                        ) : (
+                          <form action={requestReservation}>
+                            <input type="hidden" name="programId" value={p.id} />
+                            <button
+                              type="submit"
+                              disabled={left === 0}
+                              className="w-full rounded-[var(--radius-control)] bg-primary px-3 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              {rejected ? "Volver a pedir lugar" : "Apartar lugar"}
+                            </button>
+                            {rejected && (
+                              <p className="mt-1 text-center text-[0.7rem] text-muted">
+                                La solicitud anterior no se pudo aceptar.
+                              </p>
+                            )}
+                          </form>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
+        </section>
+      )}
 
       {/* Programas en los que está inscrito */}
       <section className="space-y-4">

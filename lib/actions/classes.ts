@@ -77,6 +77,31 @@ export async function setAttendanceNote(
   revalidatePath(`/calendario/${programId}`);
 }
 
+/**
+ * Suspende (o reactiva) la clase de una fecha, con el motivo que verá la
+ * familia. La sesión suspendida sigue existiendo: guarda el motivo y la fecha.
+ */
+export async function setClassCanceled(
+  programId: string,
+  dateKey: string,
+  canceled: boolean,
+  formData: FormData,
+) {
+  if (!isDateKey(dateKey)) return;
+  await requireGraderForProgram(programId);
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+
+  const date = sessionDate(dateKey);
+  await prisma.classSession.upsert({
+    where: { programId_date: { programId, date } },
+    update: { canceled, cancelReason: canceled ? reason : null },
+    create: { programId, date, canceled, cancelReason: canceled ? reason : null },
+  });
+  revalidatePath(`/calendario/${programId}`);
+  revalidatePath("/calendario");
+  revalidatePath("/mi-espacio");
+}
+
 /** Guarda la bitácora de la clase (qué se trabajó, acuerdos, pendientes). */
 export async function saveClassNotes(
   programId: string,

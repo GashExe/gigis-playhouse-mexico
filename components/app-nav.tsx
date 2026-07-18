@@ -8,6 +8,7 @@ import {
   UsersThree,
   Books,
   UserGear,
+  Megaphone,
   BookOpenText,
   SignOut,
 } from "@phosphor-icons/react";
@@ -30,6 +31,7 @@ const NAV: NavItem[] = [
   { href: "/estudiantes", label: "Participantes", icon: UsersThree },
   { href: "/programas", label: "Programas", icon: Books },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
+  { href: "/avisos", label: "Avisos", icon: Megaphone, roles: ["DIRECTORA"] },
   { href: "/manual", label: "Manual", icon: BookOpenText },
 ];
 
