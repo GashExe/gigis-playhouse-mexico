@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { verifySession, requireRole } from "@/lib/dal";
-import { ProgramSchema } from "@/lib/validators";
+import { requireRole } from "@/lib/dal";
+import { ProgramSchema, ScheduleSlotsSchema } from "@/lib/validators";
 import { getActiveCycle } from "@/lib/queries";
 import { readStructure, writeStructure, StructureSchema } from "@/lib/templates";
 
@@ -38,6 +38,22 @@ function parseProgramForm(formData: FormData) {
   });
 }
 
+/**
+ * Lee el horario estructurado del formulario (campo oculto "slots" en JSON).
+ * Si el JSON viene mal formado se ignora y no se toca el horario guardado:
+ * mejor conservar lo que había que borrarlo por un fallo del cliente.
+ */
+function parseSlots(formData: FormData) {
+  const raw = String(formData.get("slots") ?? "");
+  if (!raw) return null;
+  try {
+    const parsed = ScheduleSlotsSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Campos de actividad comunes a crear/editar. */
 function activityData(d: ReturnType<typeof ProgramSchema.parse>) {
   return {
@@ -55,7 +71,7 @@ export async function createProgram(
   _prev: ProgramFormState,
   formData: FormData,
 ): Promise<ProgramFormState> {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = parseProgramForm(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -75,6 +91,13 @@ export async function createProgram(
       ...(cycle ? { cycles: { connect: { id: cycle.id } } } : {}),
     },
   });
+
+  const slots = parseSlots(formData);
+  if (slots && slots.length > 0) {
+    await prisma.scheduleSlot.createMany({
+      data: slots.map((s) => ({ programId: program.id, ...s })),
+    });
+  }
 
   // De dónde sale su evaluación: en blanco, copiada de otro programa, o de una
   // plantilla base. Si algo falla, el programa igual queda creado y su plantilla se
@@ -145,7 +168,7 @@ export async function updateProgram(
   _prev: ProgramFormState,
   formData: FormData,
 ): Promise<ProgramFormState> {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = parseProgramForm(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -161,13 +184,27 @@ export async function updateProgram(
       ...activityData(d),
     },
   });
+
+  // El horario estructurado se reemplaza completo: lo que quedó en el editor es
+  // la verdad. null = el campo no vino o vino roto; en ese caso no se toca.
+  const slots = parseSlots(formData);
+  if (slots) {
+    await prisma.$transaction([
+      prisma.scheduleSlot.deleteMany({ where: { programId: id } }),
+      ...(slots.length > 0
+        ? [prisma.scheduleSlot.createMany({ data: slots.map((s) => ({ programId: id, ...s })) })]
+        : []),
+    ]);
+  }
+
   revalidatePath("/programas");
   revalidatePath("/panel");
+  revalidatePath("/calendario");
   return { ok: true };
 }
 
 export async function toggleProgram(id: string, active: boolean) {
-  await verifySession();
+  await requireRole("DIRECTORA", "COORDINADOR");
   await prisma.program.update({ where: { id }, data: { active } });
   revalidatePath("/programas");
   revalidatePath("/panel");

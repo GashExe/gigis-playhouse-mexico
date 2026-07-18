@@ -72,6 +72,18 @@ export const ProgramSchema = z.object({
   teacherId: z.string().trim().optional().or(z.literal("")),
 });
 
+/**
+ * Horario estructurado del programa: llega del formulario como JSON en un campo
+ * oculto (lo arma el editor de días/horas). Día como Date.getDay(): 0=dom … 6=sáb.
+ */
+export const ScheduleSlotsSchema = z.array(
+  z.object({
+    weekday: z.number().int().min(0).max(6),
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  }),
+);
+
 export const EnrollmentSchema = z.object({
   studentId: z.string().min(1),
   programId: z.string().min(1, { message: "Selecciona un programa." }),

@@ -26,8 +26,11 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { WEEKDAYS, WEEK_ORDER, slotsLabel, type Slot } from "@/lib/schedule";
 
 type Teacher = { id: string; name: string };
+
+type ScheduleSlot = Slot & { id?: string };
 
 type Program = {
   id: string;
@@ -37,6 +40,7 @@ type Program = {
   color: string | null;
   active: boolean;
   schedule: string | null;
+  scheduleSlots: ScheduleSlot[];
   type: string | null;
   ageMin: number | null;
   ageMax: number | null;
@@ -67,6 +71,7 @@ export function ProgramsManager({
   presets = [],
   cycleLabel,
   canEditTemplate = false,
+  canManage = true,
 }: {
   programs: Program[];
   teachers: Teacher[];
@@ -74,6 +79,8 @@ export function ProgramsManager({
   presets?: PresetSource[];
   /** Quién puede abrir el editor de plantillas (directora o coordinador). */
   canEditTemplate?: boolean;
+  /** Quién crea/edita/activa programas (dirección y coordinación); la maestra solo mira. */
+  canManage?: boolean;
   /** Ciclo que se está viendo. Si la lista sale vacía es por su oferta, no porque
    *  no existan programas: sin este matiz el vacío invita a crear un duplicado. */
   cycleLabel?: string;
@@ -83,7 +90,7 @@ export function ProgramsManager({
 
   return (
     <div className="space-y-5">
-      {!creating && !editingId && (
+      {canManage && !creating && !editingId && (
         <div className="flex justify-end">
           <Button onClick={() => setCreating(true)}>
             <Plus weight="bold" className="size-4" />
@@ -106,17 +113,27 @@ export function ProgramsManager({
       {programs.length === 0 && !creating ? (
         <EmptyState
           icon={<Books weight="fill" className="size-6" />}
-          title={cycleLabel ? `Ningún programa corre en ${cycleLabel}` : "Aún no hay programas"}
+          title={
+            !canManage
+              ? "Sin programas a tu cargo"
+              : cycleLabel
+                ? `Ningún programa corre en ${cycleLabel}`
+                : "Aún no hay programas"
+          }
           description={
-            cycleLabel
-              ? "Los programas ya existen: elige cuáles corren en este ciclo desde la oferta de arriba. Crea uno nuevo solo si de verdad no existe."
-              : "Crea el primer programa para poder inscribir participantes."
+            !canManage
+              ? "Cuando dirección te asigne un programa en este ciclo, aparecerá aquí."
+              : cycleLabel
+                ? "Los programas ya existen: elige cuáles corren en este ciclo desde la oferta de arriba. Crea uno nuevo solo si de verdad no existe."
+                : "Crea el primer programa para poder inscribir participantes."
           }
           action={
-            <Button onClick={() => setCreating(true)}>
-              <Plus weight="bold" className="size-4" />
-              Nuevo programa
-            </Button>
+            canManage ? (
+              <Button onClick={() => setCreating(true)}>
+                <Plus weight="bold" className="size-4" />
+                Nuevo programa
+              </Button>
+            ) : undefined
           }
         />
       ) : (
@@ -138,6 +155,7 @@ export function ProgramsManager({
                 program={p}
                 onEdit={() => setEditingId(p.id)}
                 canEditTemplate={canEditTemplate}
+                canManage={canManage}
               />
             ),
           )}
@@ -151,10 +169,12 @@ function ProgramCard({
   program: p,
   onEdit,
   canEditTemplate,
+  canManage,
 }: {
   program: Program;
   onEdit: () => void;
   canEditTemplate: boolean;
+  canManage: boolean;
 }) {
   const color = p.color ?? "var(--primary)";
   return (
@@ -182,12 +202,14 @@ function ProgramCard({
         </p>
       )}
 
-      {/* Datos de la actividad */}
+      {/* Datos de la actividad. El horario estructurado manda sobre el texto libre. */}
       <dl className="mt-3 space-y-1.5 text-sm text-muted">
-        {p.schedule && (
+        {(p.scheduleSlots.length > 0 || p.schedule) && (
           <div className="flex items-center gap-2">
             <Clock className="size-4 shrink-0 text-subtle" />
-            <span>{p.schedule}</span>
+            <span>
+              {p.scheduleSlots.length > 0 ? slotsLabel(p.scheduleSlots) : p.schedule}
+            </span>
           </div>
         )}
         {ageRangeLabel(p.ageMin, p.ageMax) && (
@@ -227,25 +249,114 @@ function ProgramCard({
               Plantilla
             </Link>
           )}
-          <form action={toggleProgram.bind(null, p.id, !p.active)}>
-            <button
-              type="submit"
-              aria-label={p.active ? "Desactivar programa" : "Activar programa"}
-              className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-            >
-              {p.active ? <EyeSlash className="size-[1.05rem]" /> : <Eye className="size-[1.05rem]" />}
-            </button>
-          </form>
-          <button
-            onClick={onEdit}
-            aria-label="Editar programa"
-            className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <PencilSimple className="size-[1.05rem]" />
-          </button>
+          {canManage && (
+            <>
+              <form action={toggleProgram.bind(null, p.id, !p.active)}>
+                <button
+                  type="submit"
+                  aria-label={p.active ? "Desactivar programa" : "Activar programa"}
+                  className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  {p.active ? <EyeSlash className="size-[1.05rem]" /> : <Eye className="size-[1.05rem]" />}
+                </button>
+              </form>
+              <button
+                onClick={onEdit}
+                aria-label="Editar programa"
+                className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+              >
+                <PencilSimple className="size-[1.05rem]" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </Card>
+  );
+}
+
+/**
+ * Editor de días y horas de clase. Mantiene las filas en estado local y las envía
+ * como JSON en un campo oculto "slots"; el servidor reemplaza el horario completo.
+ */
+function SlotsEditor({ initial }: { initial: ScheduleSlot[] }) {
+  const [slots, setSlots] = useState<Slot[]>(
+    initial.map(({ weekday, startTime, endTime }) => ({ weekday, startTime, endTime })),
+  );
+
+  const update = (i: number, patch: Partial<Slot>) =>
+    setSlots((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+
+  return (
+    <div>
+      <span className="mb-1.5 block text-sm font-semibold text-ink">Días de clase</span>
+      <input type="hidden" name="slots" value={JSON.stringify(slots)} />
+      <div className="space-y-2">
+        {slots.map((s, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-2">
+            <Select
+              aria-label="Día de la semana"
+              value={s.weekday}
+              onChange={(e) => update(i, { weekday: Number(e.target.value) })}
+              className="w-40"
+            >
+              {WEEK_ORDER.map((d) => (
+                <option key={d} value={d}>
+                  {WEEKDAYS[d]}
+                </option>
+              ))}
+            </Select>
+            <Input
+              aria-label="Hora de inicio"
+              type="time"
+              value={s.startTime}
+              onChange={(e) => update(i, { startTime: e.target.value })}
+              className="w-28"
+              required
+            />
+            <span className="text-sm text-subtle">a</span>
+            <Input
+              aria-label="Hora de fin"
+              type="time"
+              value={s.endTime}
+              onChange={(e) => update(i, { endTime: e.target.value })}
+              className="w-28"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setSlots((prev) => prev.filter((_, j) => j !== i))}
+              aria-label="Quitar día"
+              className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        className="mt-2"
+        onClick={() =>
+          setSlots((prev) => {
+            // La fila nueva hereda la hora de la anterior: casi siempre es la misma.
+            const last = prev[prev.length - 1];
+            return [
+              ...prev,
+              {
+                weekday: last ? (last.weekday % 6) + 1 : 1,
+                startTime: last?.startTime ?? "10:00",
+                endTime: last?.endTime ?? "11:00",
+              },
+            ];
+          })
+        }
+      >
+        <Plus weight="bold" className="size-4" />
+        Agregar día
+      </Button>
+    </div>
   );
 }
 
@@ -311,9 +422,16 @@ function ProgramForm({
           <Textarea id="description" name="description" rows={2} defaultValue={defaults?.description ?? ""} />
         </Field>
 
+        {/* Días y horas de clase: es lo que pinta el calendario del equipo. */}
+        <SlotsEditor initial={defaults?.scheduleSlots ?? []} />
+
         {/* Datos de la actividad */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Horario" htmlFor="schedule" hint="Ej. Lun y mié 10:00–11:00.">
+          <Field
+            label="Nota de horario (opcional)"
+            htmlFor="schedule"
+            hint="Texto libre, ej. “Se suspende en vacaciones”."
+          >
             <Input id="schedule" name="schedule" defaultValue={defaults?.schedule ?? ""} />
           </Field>
           <Field label="Tipo de actividad" htmlFor="type">

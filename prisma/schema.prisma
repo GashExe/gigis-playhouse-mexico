@@ -33,6 +33,7 @@ model User {
 
   evaluations Evaluation[] @relation("EvaluadorEvaluaciones")
   programs    Program[]    @relation("MaestroPrograma") // Programas/actividades a su cargo
+  studentNotes StudentNote[] @relation("AutorAnotaciones") // Anotaciones que ha escrito
 
   @@index([role])
 }
@@ -78,6 +79,8 @@ model Student {
   itemScores   ItemScore[] // Calificaciones por tema de la plantilla (1–4) por ciclo
   health       HealthProfile? // Cuestionario de salud del participante
   account      User? // Cuenta de acceso del participante (role ALUMNO)
+  attendance   AttendanceRecord[] // Asistencia por clase
+  studentNotes StudentNote[] // Anotaciones del equipo sobre el participante
 
   @@index([status])
   @@index([lastName])
@@ -152,6 +155,9 @@ model Program {
   evaluations  Evaluation[]
   levels       ProgramLevel[] // Niveles propios de este programa (ordenados)
   levelRecords LevelRecord[]
+  scheduleSlots ScheduleSlot[] // Horario estructurado (día + horas); alimenta el calendario
+  classSessions ClassSession[] // Bitácora y asistencia por fecha de clase
+  studentNotes  StudentNote[] // Anotaciones ligadas a este programa
   // En qué ciclos se ofrece. La directora arma la oferta de cada ciclo eligiendo de
   // los programas que ya existen (ej. que en Sep–Dic solo corran 7). El programa
   // sigue siendo uno solo: conserva su plantilla, sus niveles y su historial.
@@ -381,4 +387,84 @@ model ItemScore {
   @@unique([studentId, itemId, cycleId])
   @@index([itemId, cycleId])
   @@index([cycleId])
+}
+
+/// Horario estructurado de un programa: en qué día y de qué hora a qué hora hay
+/// clase. Un programa puede tener varios (ej. lunes y miércoles). Es lo que pinta
+/// el calendario; el campo de texto `schedule` queda como descripción libre.
+model ScheduleSlot {
+  id        String  @id @default(cuid())
+  program   Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId String
+  weekday   Int // Día de la semana como Date.getDay(): 0=domingo … 6=sábado
+  startTime String // "HH:MM" en 24h (ej. "10:00")
+  endTime   String // "HH:MM" en 24h (ej. "11:00")
+
+  createdAt DateTime @default(now())
+
+  @@index([programId])
+}
+
+/// Una clase concreta de un programa en una fecha: el "panel de control" del día.
+/// Nace cuando la maestra pasa lista o escribe la bitácora; guarda las anotaciones
+/// de esa sesión y cuelga de ella la asistencia.
+model ClassSession {
+  id        String   @id @default(cuid())
+  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId String
+  date      DateTime @db.Date // Día de la clase (sin hora)
+  notes     String? // Bitácora de la clase (qué se trabajó, acuerdos, pendientes)
+
+  attendance AttendanceRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([programId, date])
+  @@index([date])
+}
+
+/// Asistencia de un alumno en una clase concreta.
+model AttendanceRecord {
+  id        String           @id @default(cuid())
+  session   ClassSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  status    AttendanceStatus
+  note      String? // Detalle breve (ej. "llegó 20 min tarde", "aviso de la mamá")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+}
+
+enum AttendanceStatus {
+  PRESENTE
+  AUSENTE
+  JUSTIFICADO
+  RETARDO
+}
+
+/// Anotación del equipo sobre un participante. Si `visibleToFamily` está activa,
+/// la familia la ve en Mi espacio: es el canal para que los padres estén enterados
+/// (avances, avisos, recordatorios). Si no, es una nota interna del equipo.
+model StudentNote {
+  id        String   @id @default(cuid())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  program   Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+  programId String?
+  author    User?    @relation("AutorAnotaciones", fields: [authorId], references: [id], onDelete: SetNull)
+  authorId  String?
+  body      String
+  visibleToFamily Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, visibleToFamily])
+  @@index([programId])
 }

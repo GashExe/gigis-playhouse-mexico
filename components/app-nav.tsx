@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   House,
+  CalendarDots,
   UsersThree,
   Books,
   UserGear,
@@ -25,6 +26,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/panel", label: "Panel", icon: House },
+  { href: "/calendario", label: "Calendario", icon: CalendarDots },
   { href: "/estudiantes", label: "Participantes", icon: UsersThree },
   { href: "/programas", label: "Programas", icon: Books },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },

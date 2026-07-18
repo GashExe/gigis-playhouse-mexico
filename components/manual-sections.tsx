@@ -199,8 +199,17 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
             La <strong>matrícula</strong> de {quien}, como referencia.
           </li>
           <li>
-            Los <strong>programas</strong> en los que está inscrito, con su área y color. Las
-            inscripciones las registra el equipo de Gigi&apos;s.
+            Los <strong>programas</strong> en los que está inscrito, con su área, color,{" "}
+            <strong>horario</strong> y quién imparte la clase. Las inscripciones las registra
+            el equipo de Gigi&apos;s.
+          </li>
+          <li>
+            Las <strong>anotaciones del equipo</strong>: avances y avisos que las maestras
+            comparten con la familia sobre {quien}.
+          </li>
+          <li>
+            La <strong>asistencia reciente</strong> a sus clases, tal como la registró la
+            maestra al pasar lista.
           </li>
         </ul>
         <Callout tone="amber" icon={<CalendarCheck weight="fill" className="size-4" />}>
@@ -214,14 +223,16 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
 
 /* ---------- Maestras y maestros ---------- */
 
-export function ManualMaestro() {
+export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolean }) {
+  // Con rol maestra la sección habla de "tus programas" (los únicos que ve y
+  // califica); coordinación y dirección leen el flujo sin esa restricción.
   return (
     <section className="space-y-3">
       <ManualSectionHeader
         icon={<ChalkboardTeacher weight="fill" className="size-5" />}
         color="var(--brand-blue)"
         title="Trabajo docente"
-        subtitle="Panel · Participantes · Programas"
+        subtitle="Consultar expedientes y calificar a tu grupo"
       />
 
       <ManualCard where="Panel" title="El resumen del día">
@@ -232,54 +243,90 @@ export function ManualMaestro() {
         </p>
       </ManualCard>
 
-      <ManualCard where="Participantes" title="Registrar un participante nuevo">
+      <ManualCard where="Calendario" title="Tus clases de la semana">
+        <p>
+          En <Chip>Calendario</Chip> ves las clases de la semana según los días y horas de
+          cada programa{soloAsignados ? " a tu cargo" : ""}. Al tocar una clase se abre su{" "}
+          <strong>panel del día</strong>:
+        </p>
         <Steps
           steps={[
             <>
-              Ve a <Chip>Participantes</Chip> y pulsa <Chip>Nuevo participante</Chip>.
+              <strong>Pasa lista</strong>: marca a cada alumno como presente, retardo,
+              justificado o ausente. Se guarda al instante y puedes agregar un detalle
+              («aviso de la mamá»).
             </>,
             <>
-              Captura nombre, apellidos y los datos que tengas a la mano. La familia completará
-              el resto en su primer ingreso.
+              Escribe la <strong>bitácora de la clase</strong>: qué se trabajó, acuerdos y
+              pendientes para la próxima sesión.
             </>,
             <>
-              Al guardar, la plataforma <strong>crea automáticamente la cuenta de la familia</strong>.
-              La dirección le entrega el usuario y la contraseña.
+              <strong>Toca a un alumno de la lista</strong> para abrir su panel ahí mismo,
+              con dos pestañas: <Chip>Anotación</Chip> y <Chip>Evaluación</Chip>.
+            </>,
+            <>
+              En <Chip>Anotación</Chip> le dejas una nota. Si la marcas{" "}
+              <Chip>Visible para la familia</Chip>, aparece en el espacio del participante
+              para que en casa estén enterados; si no, queda interna del equipo.
+            </>,
+            <>
+              En <Chip>Evaluación</Chip> calificas los temas de su nivel (escala 1 a 4, se
+              guarda al instante) sin salir del calendario. Es la misma evaluación que se ve
+              en el expediente.
             </>,
           ]}
         />
+        <Callout tone="teal" icon={<CalendarCheck weight="fill" className="size-4" />}>
+          Con las flechas junto a la fecha te mueves entre días de clase, por si necesitas
+          completar la lista de una sesión pasada.
+        </Callout>
+      </ManualCard>
+
+      <ManualCard where="Participantes" title="Consultar expedientes">
         <p>
-          En la lista puedes <strong>buscar</strong> por nombre o tutor y{" "}
-          <strong>filtrar</strong> por estado: activos, inactivos o egresados. El estado se
-          cambia desde el expediente de cada participante.
+          En <Chip>Participantes</Chip> puedes <strong>buscar</strong> por nombre o tutor,{" "}
+          <strong>filtrar</strong> por estado (activos, inactivos, egresados) y abrir el
+          expediente de cualquier participante: contacto, salud, programas y niveles.
+        </p>
+        <p>
+          El expediente es <strong>de consulta</strong>: registrar participantes, editar sus
+          datos, cambiar su estado e inscribirlos a programas lo hace coordinación o dirección.
         </p>
       </ManualCard>
 
-      <ManualCard where="Expediente" title="Inscribir a programas">
-        <Steps
-          steps={[
-            <>
-              Abre el expediente del participante desde <Chip>Participantes</Chip>.
-            </>,
-            <>
-              En el panel de programas, elige a cuál inscribirlo. Solo aparecen los programas{" "}
-              <strong>ofertados en el ciclo actual</strong>.
-            </>,
-            <>Desde ahí mismo puedes pausar, finalizar o quitar una inscripción.</>,
-          ]}
-        />
+      <ManualCard
+        where="Programas"
+        title={soloAsignados ? "Tus programas asignados" : "Programas del ciclo"}
+      >
+        {soloAsignados ? (
+          <p>
+            En <Chip>Programas</Chip> ves <strong>solo los programas a tu cargo</strong> en el
+            ciclo, con su horario, cupo y alumnos inscritos.
+          </p>
+        ) : (
+          <p>
+            En <Chip>Programas</Chip> se ve la oferta del ciclo seleccionado, con horario, cupo
+            y alumnos inscritos de cada actividad.
+          </p>
+        )}
         <p>
           Los ciclos del año son tres: <strong>Ene–Jun</strong>, <strong>Jul–Ago</strong>{" "}
-          (verano) y <strong>Sep–Dic</strong>. Un participante puede repetir un programa en
-          ciclos distintos; cada ciclo guarda su propio historial.
+          (verano) y <strong>Sep–Dic</strong>; cada ciclo guarda su propio historial de
+          calificaciones.
         </p>
       </ManualCard>
 
       <ManualCard where="Expediente · Niveles" title="Ubicar en un nivel">
         <p>
           Cada programa tiene sus propios niveles (por ejemplo, en Lectura: Prerrequisitos,
-          Inicial, Intermedio, Avanzado). Antes de calificar hay que ubicar al participante:
+          Inicial, Intermedio, Avanzado).
         </p>
+        {soloAsignados && (
+          <p>
+            Solo puedes ubicar y calificar a los alumnos de <strong>tus programas</strong>.
+          </p>
+        )}
+        <p>Antes de calificar hay que ubicar al participante:</p>
         <Steps
           steps={[
             <>
@@ -369,15 +416,6 @@ export function ManualMaestro() {
         </p>
       </ManualCard>
 
-      <ManualCard where="Programas" title="Ver y editar actividades">
-        <p>
-          En <Chip>Programas</Chip> se ve la oferta del ciclo seleccionado. Cada programa es una
-          actividad con <strong>horario, cupo, rango de edad, color</strong> y un{" "}
-          <strong>maestro a cargo</strong>. Puedes crear programas y editar esos datos; la{" "}
-          <strong>plantilla de evaluación</strong> (niveles, bloques y temas) la maneja la
-          coordinación.
-        </p>
-      </ManualCard>
     </section>
   );
 }
@@ -391,8 +429,63 @@ export function ManualCoordinacion() {
         icon={<PencilRuler weight="fill" className="size-5" />}
         color="var(--brand-purple)"
         title="Coordinación educativa"
-        subtitle="Las plantillas de evaluación contra las que se califica"
+        subtitle="Participantes, inscripciones, actividades y plantillas"
       />
+
+      <ManualCard where="Participantes" title="Registrar y editar participantes">
+        <Steps
+          steps={[
+            <>
+              Ve a <Chip>Participantes</Chip> y pulsa <Chip>Nuevo participante</Chip>.
+            </>,
+            <>
+              Captura nombre, apellidos y los datos que tengas a la mano. La familia completará
+              el resto en su primer ingreso.
+            </>,
+            <>
+              Al guardar, la plataforma <strong>crea automáticamente la cuenta de la familia</strong>.
+              La dirección le entrega el usuario y la contraseña.
+            </>,
+          ]}
+        />
+        <p>
+          Desde el expediente también puedes <strong>editar los datos</strong>, cambiar el{" "}
+          <strong>estado</strong> (activo, inactivo, egresado) y capturar o corregir el{" "}
+          <strong>historial médico</strong>. El rol maestra solo consulta.
+        </p>
+      </ManualCard>
+
+      <ManualCard where="Expediente" title="Inscribir a programas">
+        <Steps
+          steps={[
+            <>
+              Abre el expediente del participante desde <Chip>Participantes</Chip>.
+            </>,
+            <>
+              En el panel de programas, elige a cuál inscribirlo. Solo aparecen los programas{" "}
+              <strong>ofertados en el ciclo actual</strong>.
+            </>,
+            <>Desde ahí mismo puedes pausar, finalizar o quitar una inscripción.</>,
+          ]}
+        />
+        <p>
+          Un participante puede repetir un programa en ciclos distintos; cada ciclo guarda su
+          propio historial.
+        </p>
+      </ManualCard>
+
+      <ManualCard where="Programas" title="Crear y editar actividades">
+        <p>
+          Cada programa es una actividad con <strong>horario, cupo, rango de edad, color</strong>{" "}
+          y un <strong>maestro a cargo</strong>. Asignar al maestro importa: define{" "}
+          <strong>qué grupo puede ver y calificar</strong> cada maestra.
+        </p>
+        <p>
+          Los <strong>días de clase</strong> (día de la semana y hora de inicio y fin) se
+          capturan al editar el programa. Son los que arman el <Chip>Calendario</Chip> del
+          equipo: un programa sin días capturados no aparece en él.
+        </p>
+      </ManualCard>
 
       <ManualCard where="Programas · Plantilla" title="Editar la plantilla de un programa">
         <Steps

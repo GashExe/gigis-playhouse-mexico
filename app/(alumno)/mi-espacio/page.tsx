@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { CalendarCheck, Sparkle, Confetti } from "@phosphor-icons/react/dist/ssr";
+import {
+  CalendarCheck,
+  Sparkle,
+  Confetti,
+  Clock,
+  ChatCircleText,
+  ListChecks,
+} from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import { getStudentSpace } from "@/lib/queries";
 import { needsOnboarding } from "@/lib/legal";
+import { slotsLabel } from "@/lib/schedule";
+import { fecha, fechaDia } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -18,6 +27,15 @@ export default async function MiEspacioPage() {
 
   const firstName = (student?.firstName ?? user.name).split(" ")[0];
   const programs = student?.enrollments ?? [];
+  const teamNotes = student?.studentNotes ?? [];
+  const attendance = student?.attendance ?? [];
+
+  const ATTENDANCE_LABEL: Record<string, { text: string; cls: string }> = {
+    PRESENTE: { text: "Presente", cls: "bg-success-weak text-success-strong" },
+    RETARDO: { text: "Retardo", cls: "bg-warning-weak text-warning-strong" },
+    JUSTIFICADO: { text: "Justificado", cls: "bg-info-weak text-info" },
+    AUSENTE: { text: "Ausente", cls: "bg-danger-weak text-danger-strong" },
+  };
 
   return (
     <div className="space-y-8">
@@ -85,14 +103,15 @@ export default async function MiEspacioPage() {
           <ul className="grid gap-3 sm:grid-cols-2">
             {programs.map((e) => {
               const color = e.program.color ?? "var(--brand-teal)";
+              const horario = slotsLabel(e.program.scheduleSlots);
               return (
                 <li
                   key={e.id}
-                  className="flex items-center gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+                  className="flex items-start gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
                 >
                   <span
                     aria-hidden
-                    className="size-3 shrink-0 rounded-full"
+                    className="mt-1 size-3 shrink-0 rounded-full"
                     style={{ backgroundColor: color }}
                   />
                   <div className="min-w-0">
@@ -104,6 +123,17 @@ export default async function MiEspacioPage() {
                         {e.program.area}
                       </p>
                     )}
+                    {horario && (
+                      <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-muted">
+                        <Clock className="size-3.5 shrink-0 text-subtle" />
+                        {horario}
+                      </p>
+                    )}
+                    {e.program.teacher && (
+                      <p className="mt-0.5 truncate text-xs text-subtle">
+                        Con {e.program.teacher.name}
+                      </p>
+                    )}
                   </div>
                 </li>
               );
@@ -111,6 +141,93 @@ export default async function MiEspacioPage() {
           </ul>
         )}
       </section>
+
+      {/* Anotaciones del equipo para la familia */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <ChatCircleText weight="fill" className="size-5 text-primary" />
+          <h2 className="text-base font-extrabold tracking-tight text-ink">
+            Anotaciones del equipo
+          </h2>
+        </div>
+        {teamNotes.length === 0 ? (
+          <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-sm text-muted">
+            Aquí verás los avisos y avances que el equipo comparta sobre {firstName}.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {teamNotes.map((n) => (
+              <li
+                key={n.id}
+                className="rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  {n.program && (
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white"
+                      style={{ backgroundColor: n.program.color ?? "var(--brand-teal)" }}
+                    >
+                      {n.program.name}
+                    </span>
+                  )}
+                  <span className="text-xs text-subtle">{fecha(n.createdAt)}</span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+                  {n.body}
+                </p>
+                {n.author && (
+                  <p className="mt-1.5 text-xs text-subtle">— {n.author.name}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Asistencia reciente */}
+      {attendance.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <ListChecks weight="fill" className="size-5 text-primary" />
+            <h2 className="text-base font-extrabold tracking-tight text-ink">
+              Asistencia reciente
+            </h2>
+          </div>
+          <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-sm)]">
+            {attendance.map((a) => {
+              const meta = ATTENDANCE_LABEL[a.status] ?? {
+                text: a.status,
+                cls: "bg-surface-2 text-muted",
+              };
+              return (
+                <li key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span
+                    aria-hidden
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: a.session.program.color ?? "var(--brand-teal)",
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {a.session.program.name}
+                    </p>
+                    <p className="text-xs text-subtle">
+                      {fechaDia(a.session.date)}
+                      {a.note ? ` · ${a.note}` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${meta.cls}`}
+                  >
+                    {meta.text}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

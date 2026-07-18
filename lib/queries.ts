@@ -154,7 +154,43 @@ export async function getStudentSpace(studentId: string) {
         orderBy: { startDate: "desc" },
         select: {
           id: true,
-          program: { select: { name: true, color: true, area: true } },
+          program: {
+            select: {
+              name: true,
+              color: true,
+              area: true,
+              teacher: { select: { name: true } },
+              scheduleSlots: {
+                orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+                select: { weekday: true, startTime: true, endTime: true },
+              },
+            },
+          },
+        },
+      },
+      // Lo que el equipo quiere que la familia sepa: solo lo marcado visible.
+      studentNotes: {
+        where: { visibleToFamily: true },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          author: { select: { name: true } },
+          program: { select: { name: true, color: true } },
+        },
+      },
+      attendance: {
+        orderBy: { session: { date: "desc" } },
+        take: 12,
+        select: {
+          id: true,
+          status: true,
+          note: true,
+          session: {
+            select: { date: true, program: { select: { name: true, color: true } } },
+          },
         },
       },
     },
@@ -173,6 +209,10 @@ export async function listPrograms(cycleId?: string) {
     include: {
       teacher: { select: { id: true, name: true } },
       cycles: { select: { id: true } },
+      scheduleSlots: {
+        orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+        select: { id: true, weekday: true, startTime: true, endTime: true },
+      },
       _count: {
         select: {
           enrollments: {
@@ -367,9 +407,99 @@ export async function listProgramsWithLevels() {
       name: true,
       color: true,
       area: true,
+      teacherId: true, // para acotar a la maestra a los programas a su cargo
       levels: { orderBy: { order: "asc" }, select: { id: true, name: true, order: true, description: true } },
     },
   });
+}
+
+/**
+ * Programas para el calendario del equipo: activos, de la oferta del ciclo y con
+ * su horario estructurado. Si se pasa teacherId se acota a los de esa maestra.
+ */
+export async function listCalendarPrograms(cycleId?: string, teacherId?: string) {
+  return prisma.program.findMany({
+    where: {
+      active: true,
+      ...(cycleId ? { cycles: { some: { id: cycleId } } } : {}),
+      ...(teacherId ? { teacherId } : {}),
+    },
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      area: true,
+      teacher: { select: { id: true, name: true } },
+      scheduleSlots: {
+        orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+        select: { weekday: true, startTime: true, endTime: true },
+      },
+      _count: {
+        select: {
+          enrollments: { where: { status: "ACTIVA", ...(cycleId ? { cycleId } : {}) } },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Todo lo que necesita el panel de una clase en una fecha: el programa, su grupo
+ * del ciclo, la sesión de ese día (bitácora + asistencia) y las anotaciones
+ * recientes sobre alumnos de este programa.
+ */
+export async function getClassPanel(programId: string, dateKey: string, cycleId?: string) {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  const [program, enrollments, session, notes] = await Promise.all([
+    prisma.program.findUnique({
+      where: { id: programId },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        area: true,
+        schedule: true,
+        passThreshold: true,
+        teacher: { select: { name: true } },
+        scheduleSlots: {
+          orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+          select: { weekday: true, startTime: true, endTime: true },
+        },
+      },
+    }),
+    prisma.enrollment.findMany({
+      where: { programId, status: "ACTIVA", ...(cycleId ? { cycleId } : {}) },
+      orderBy: { student: { firstName: "asc" } },
+      select: {
+        student: { select: { id: true, firstName: true, lastName: true, matricula: true } },
+      },
+    }),
+    prisma.classSession.findUnique({
+      where: { programId_date: { programId, date } },
+      select: {
+        notes: true,
+        attendance: {
+          select: { studentId: true, status: true, note: true },
+        },
+      },
+    }),
+    prisma.studentNote.findMany({
+      where: { programId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        body: true,
+        visibleToFamily: true,
+        createdAt: true,
+        authorId: true,
+        student: { select: { id: true, firstName: true, lastName: true } },
+        author: { select: { name: true } },
+      },
+    }),
+  ]);
+  return { program, students: enrollments.map((e) => e.student), session, notes };
 }
 
 export async function listUsers() {

@@ -6,6 +6,17 @@ export function fecha(date: Date | string | null | undefined): string {
   return format(new Date(date), "d 'de' MMM, yyyy", { locale: es });
 }
 
+/**
+ * Fecha de un campo SOLO-FECHA (@db.Date, guardado a medianoche UTC). Se lee con
+ * las partes UTC: formatearlo como `fecha()` lo corre un día hacia atrás en México.
+ */
+export function fechaDia(date: Date | string | null | undefined): string {
+  if (!date) return "—";
+  const d = new Date(date);
+  const local = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12);
+  return format(local, "d 'de' MMM, yyyy", { locale: es });
+}
+
 export function fechaLarga(date: Date | string | null | undefined): string {
   if (!date) return "—";
   return format(new Date(date), "d 'de' MMMM 'de' yyyy", { locale: es });
