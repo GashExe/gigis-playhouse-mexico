@@ -6,7 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { StudentSchema, StudentStatusSchema, HealthSchema } from "@/lib/validators";
 import { ensureAlumnoAccount } from "@/lib/accounts";
+import { logAudit } from "@/lib/audit";
 import type { StudentStatus } from "@/lib/generated/prisma/client";
+
+const STUDENT_STATUS_LABEL: Record<string, string> = {
+  ACTIVO: "activo",
+  INACTIVO: "inactivo",
+  EGRESADO: "egresado",
+};
 
 export type FormState =
   | { errors?: Record<string, string[]>; message?: string }
@@ -62,6 +69,14 @@ export async function createStudent(
   // La contraseña inicial queda visible para la directora en el expediente.
   await ensureAlumnoAccount(student);
 
+  await logAudit({
+    action: "alumno.alta",
+    summary: `Registró a ${student.firstName} ${student.lastName}`,
+    entityType: "Student",
+    entityId: student.id,
+    studentId: student.id,
+  });
+
   revalidatePath("/estudiantes");
   revalidatePath("/panel");
   redirect(`/estudiantes/${student.id}`);
@@ -93,6 +108,13 @@ export async function updateStudent(
       status: d.status,
     },
   });
+  await logAudit({
+    action: "alumno.editar",
+    summary: `Editó los datos de ${d.firstName} ${d.lastName}`,
+    entityType: "Student",
+    entityId: id,
+    studentId: id,
+  });
   revalidatePath(`/estudiantes/${id}`);
   revalidatePath("/estudiantes");
   redirect(`/estudiantes/${id}`);
@@ -106,7 +128,18 @@ export async function setStudentStatus(id: string, status: StudentStatus) {
   await requireRole("DIRECTORA", "COORDINADOR");
   const parsed = StudentStatusSchema.safeParse(status);
   if (!parsed.success) return;
-  await prisma.student.update({ where: { id }, data: { status: parsed.data } });
+  const student = await prisma.student.update({
+    where: { id },
+    data: { status: parsed.data },
+    select: { firstName: true, lastName: true },
+  });
+  await logAudit({
+    action: "alumno.estado",
+    summary: `Cambió el estado de ${student.firstName} ${student.lastName} a ${STUDENT_STATUS_LABEL[parsed.data] ?? parsed.data.toLowerCase()}`,
+    entityType: "Student",
+    entityId: id,
+    studentId: id,
+  });
   revalidatePath(`/estudiantes/${id}`);
   revalidatePath("/estudiantes");
   revalidatePath("/panel");
@@ -114,7 +147,19 @@ export async function setStudentStatus(id: string, status: StudentStatus) {
 
 export async function deleteStudent(id: string) {
   await requireRole("DIRECTORA", "COORDINADOR");
+  const student = await prisma.student.findUnique({
+    where: { id },
+    select: { firstName: true, lastName: true },
+  });
   await prisma.student.delete({ where: { id } });
+  // Sin studentId: el participante ya no existe (la FK lo pondría en null de todos
+  // modos). El nombre queda en el resumen para que el movimiento no se pierda.
+  await logAudit({
+    action: "alumno.baja",
+    summary: `Eliminó a ${student?.firstName ?? ""} ${student?.lastName ?? ""}`.trim(),
+    entityType: "Student",
+    entityId: id,
+  });
   revalidatePath("/estudiantes");
   revalidatePath("/panel");
   redirect("/estudiantes");

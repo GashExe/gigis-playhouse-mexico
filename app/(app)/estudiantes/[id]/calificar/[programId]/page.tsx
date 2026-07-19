@@ -51,6 +51,14 @@ export default async function GradePage({
 
   const backHref = `/estudiantes/${id}${selectedCycleId ? `?ciclo=${selectedCycleId}` : ""}`;
 
+  // El subtítulo se adapta al formato de la plantilla del programa.
+  const formatSubtitle =
+    program.evalFormat === "AREAS"
+      ? "Calificación por áreas"
+      : program.evalFormat === "PLANO"
+        ? "Calificación por secciones"
+        : "Calificación por bloques";
+
   return (
     <div className="mx-auto max-w-3xl">
       <Link
@@ -74,7 +82,7 @@ export default async function GradePage({
           </span>
           <div>
             <h1 className="text-xl font-extrabold tracking-tight text-ink">{program.name}</h1>
-            <p className="text-sm text-muted">Calificación por bloques</p>
+            <p className="text-sm text-muted">{formatSubtitle}</p>
           </div>
         </div>
 
@@ -122,8 +130,8 @@ export default async function GradePage({
         <Card className="p-4">
           <EmptyState
             icon={<Stack weight="fill" className="size-6" />}
-            title="Este nivel aún no tiene bloques"
-            description={`El nivel "${data.level.name}" de ${program.name} no tiene una plantilla de bloques cargada todavía.`}
+            title="Este nivel aún no tiene plantilla"
+            description={`El nivel "${data.level.name}" de ${program.name} no tiene una plantilla de evaluación cargada todavía.`}
           />
         </Card>
       ) : (
@@ -132,6 +140,7 @@ export default async function GradePage({
           studentId={id}
           programId={programId}
           cycleId={selectedCycleId}
+          format={program.evalFormat}
           levelName={data.level.name}
           nextLevelName={data.nextLevelName}
           passThreshold={program.passThreshold}

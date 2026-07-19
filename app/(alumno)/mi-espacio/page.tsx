@@ -27,6 +27,7 @@ import { needsOnboarding } from "@/lib/legal";
 import { slotsLabel } from "@/lib/schedule";
 import { fecha, fechaDia } from "@/lib/format";
 import { ageFrom } from "@/lib/utils";
+import { ChangePasswordForm } from "@/components/change-password-form";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -417,6 +418,9 @@ export default async function MiEspacioPage() {
           </ul>
         </section>
       )}
+
+      {/* Mi cuenta: la familia cambia su propia contraseña */}
+      <ChangePasswordForm />
     </div>
   );
 }

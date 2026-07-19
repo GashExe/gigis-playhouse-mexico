@@ -36,6 +36,7 @@ model User {
   studentNotes StudentNote[] @relation("AutorAnotaciones") // Anotaciones que ha escrito
   announcements Announcement[] @relation("AutorAnuncios") // Anuncios que ha publicado
   reservationsDecided Reservation[] @relation("DecideReservas") // Reservas que resolvió
+  auditLogs   AuditLog[]    @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
 
   @@index([role])
 }
@@ -85,6 +86,7 @@ model Student {
   studentNotes StudentNote[] // Anotaciones del equipo sobre el participante
   reservations Reservation[] // Reservas de actividades pedidas por la familia
   announcementsFor AnnouncementRecipient[] // Anuncios dirigidos específicamente a él
+  auditLogs    AuditLog[] // Movimientos registrados sobre este participante
 
   @@index([status])
   @@index([lastName])
@@ -536,4 +538,33 @@ model StudentNote {
 
   @@index([studentId, visibleToFamily])
   @@index([programId])
+}
+
+/// Bitácora de cambios (auditoría). Registra quién movió qué: calificaciones,
+/// inscripciones, ubicaciones de nivel y datos del participante. La ve SOLO la
+/// dirección; da trazabilidad cuando hay varias manos en la plataforma.
+///
+/// Guarda un `actorName` como copia del nombre para que el registro sobreviva
+/// aunque después se borre la cuenta que hizo el cambio (actorId se pone en null).
+model AuditLog {
+  id         String  @id @default(cuid())
+  actor      User?   @relation("ActorAuditoria", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    String?
+  actorName  String // Copia del nombre de quien hizo el cambio (sobrevive al borrado)
+  actorRole  String? // Rol en el momento del cambio (DIRECTORA, MAESTRA…)
+
+  action  String // Clave de la acción, ej. "calificacion.tema", "inscripcion.alta"
+  summary String // Descripción legible del movimiento
+
+  // A qué apunta el cambio (para agrupar/filtrar). El participante, si aplica, se
+  // liga aparte para poder ver la bitácora dentro de su expediente.
+  entityType String? // "Student", "Enrollment", "ItemScore", "LevelRecord"…
+  entityId   String?
+  student    Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  studentId  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([studentId, createdAt])
 }

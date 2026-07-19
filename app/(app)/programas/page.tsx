@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowsClockwise, ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import {
   listPrograms,
@@ -85,6 +87,25 @@ export default async function ProgramsPage({
             enrollments: p._count.enrollments,
           }))}
         />
+      )}
+
+      {isDirectora && (
+        <Link
+          href="/programas/continuidad"
+          className="mb-5 flex items-center gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-2"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-input)] bg-accent-weak text-accent-strong">
+            <ArrowsClockwise weight="bold" className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-ink">Cambio de ciclo asistido</span>
+            <span className="block text-xs text-muted">
+              Trae a los participantes del ciclo anterior: copia sus inscripciones y el
+              nivel donde quedaron, sin recapturar.
+            </span>
+          </span>
+          <ArrowRight weight="bold" className="size-4 shrink-0 text-subtle" />
+        </Link>
       )}
 
       <ProgramsManager

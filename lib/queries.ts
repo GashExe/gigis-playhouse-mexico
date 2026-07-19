@@ -250,6 +250,124 @@ export async function listActivePrograms(cycleId?: string) {
   });
 }
 
+/**
+ * Cuánta actividad tiene cada ciclo (inscripciones + ubicaciones de nivel). Sirve para
+ * elegir un origen útil por defecto en el asistente de cambio de ciclo: proponer un
+ * ciclo vacío como origen deja la pantalla sin nada que palomear.
+ */
+export async function getCycleActivity(): Promise<Map<string, number>> {
+  const [enrolls, records] = await Promise.all([
+    prisma.enrollment.groupBy({ by: ["cycleId"], _count: { _all: true } }),
+    prisma.levelRecord.groupBy({ by: ["cycleId"], _count: { _all: true } }),
+  ]);
+  const counts = new Map<string, number>();
+  for (const e of enrolls) counts.set(e.cycleId, (counts.get(e.cycleId) ?? 0) + e._count._all);
+  for (const r of records) counts.set(r.cycleId, (counts.get(r.cycleId) ?? 0) + r._count._all);
+  return counts;
+}
+
+/**
+ * Datos para el asistente de cambio de ciclo: quiénes participaron en el ciclo origen
+ * (por inscripción o por ubicación de nivel), con sus programas y el nivel donde
+ * quedaron, y si sus programas están en la oferta del ciclo destino (a esos se copia).
+ * Marca a quién ya se le copió (ya tiene inscripción en el destino).
+ */
+export async function getCycleContinuity(fromCycleId: string, toCycleId: string) {
+  const [enrolls, records, targetPrograms, targetEnrolls] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { cycleId: fromCycleId },
+      select: {
+        student: { select: { id: true, firstName: true, lastName: true, status: true } },
+        program: { select: { id: true, name: true, color: true } },
+      },
+    }),
+    prisma.levelRecord.findMany({
+      where: { cycleId: fromCycleId },
+      select: {
+        student: { select: { id: true, firstName: true, lastName: true, status: true } },
+        program: { select: { id: true, name: true, color: true } },
+        level: { select: { name: true } },
+      },
+    }),
+    prisma.program.findMany({
+      where: { cycles: { some: { id: toCycleId } } },
+      select: { id: true },
+    }),
+    prisma.enrollment.findMany({
+      where: { cycleId: toCycleId },
+      select: { studentId: true },
+    }),
+  ]);
+
+  const targetOffer = new Set(targetPrograms.map((p) => p.id));
+  const alreadyInTarget = new Set(targetEnrolls.map((e) => e.studentId));
+
+  type Prog = { id: string; name: string; color: string | null; levelName: string | null; inTargetOffer: boolean };
+  type Row = {
+    id: string;
+    name: string;
+    status: string;
+    alreadyInTarget: boolean;
+    programs: Map<string, Prog>;
+  };
+  const byStudent = new Map<string, Row>();
+
+  function ensure(student: { id: string; firstName: string; lastName: string; status: string }) {
+    let row = byStudent.get(student.id);
+    if (!row) {
+      row = {
+        id: student.id,
+        name: `${student.firstName} ${student.lastName}`,
+        status: student.status,
+        alreadyInTarget: alreadyInTarget.has(student.id),
+        programs: new Map(),
+      };
+      byStudent.set(student.id, row);
+    }
+    return row;
+  }
+
+  for (const e of enrolls) {
+    const row = ensure(e.student);
+    if (!row.programs.has(e.program.id)) {
+      row.programs.set(e.program.id, {
+        id: e.program.id,
+        name: e.program.name,
+        color: e.program.color,
+        levelName: null,
+        inTargetOffer: targetOffer.has(e.program.id),
+      });
+    }
+  }
+  for (const r of records) {
+    const row = ensure(r.student);
+    const existing = row.programs.get(r.program.id);
+    if (existing) {
+      existing.levelName = r.level.name; // la ubicación de nivel gana como "dónde quedó"
+    } else {
+      row.programs.set(r.program.id, {
+        id: r.program.id,
+        name: r.program.name,
+        color: r.program.color,
+        levelName: r.level.name,
+        inTargetOffer: targetOffer.has(r.program.id),
+      });
+    }
+  }
+
+  const students = [...byStudent.values()]
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      alreadyInTarget: r.alreadyInTarget,
+      programs: [...r.programs.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { copyableCount: targetOffer.size, students };
+}
+
 /** Ciclos por temporada, del más reciente al más antiguo. */
 export async function listCycles() {
   // La temporada es alfabéticamente cronológica: ENE_JUN < JUL_AGO < SEP_DIC.
@@ -275,6 +393,118 @@ export async function getStudentLevels(studentId: string, cycleId: string) {
     },
     orderBy: { program: { name: "asc" } },
   });
+}
+
+/**
+ * Línea de tiempo del participante: su historia entre ciclos, programa por programa.
+ * Para cada ciclo dice en qué nivel estuvo, con qué % lo cerró y si subió de nivel
+ * respecto al ciclo anterior. El dato ya vive en LevelRecord/ItemScore; esto solo lo
+ * cuenta como historia (ordenado del ciclo más reciente al más antiguo).
+ */
+export async function getStudentTimeline(studentId: string) {
+  const records = await prisma.levelRecord.findMany({
+    where: { studentId },
+    select: {
+      id: true,
+      placement: true,
+      gradedAt: true,
+      program: { select: { id: true, name: true, color: true, passThreshold: true } },
+      level: {
+        select: {
+          id: true,
+          name: true,
+          order: true,
+          blocks: { select: { items: { select: { id: true } } } },
+        },
+      },
+      cycle: { select: { id: true, label: true, year: true, season: true } },
+    },
+  });
+  if (records.length === 0) return [];
+
+  // Calificaciones del alumno en los temas de los niveles que aparecen, por ciclo.
+  const itemIds = [
+    ...new Set(records.flatMap((r) => r.level.blocks.flatMap((b) => b.items.map((i) => i.id)))),
+  ];
+  const scores = itemIds.length
+    ? await prisma.itemScore.findMany({
+        where: { studentId, itemId: { in: itemIds } },
+        select: { itemId: true, cycleId: true, score: true },
+      })
+    : [];
+  // Clave (ciclo:tema) → calificación, para calcular el % de un nivel en su ciclo.
+  const scoreByKey = new Map(scores.map((s) => [`${s.cycleId}:${s.itemId}`, s.score]));
+
+  // Orden cronológico del ciclo: año + temporada (ENE_JUN < JUL_AGO < SEP_DIC).
+  const cycleRank = (year: number, season: string) =>
+    year * 10 + (season === "ENE_JUN" ? 1 : season === "JUL_AGO" ? 2 : 3);
+
+  type Entry = {
+    recordId: string;
+    cycle: { id: string; label: string };
+    levelName: string;
+    levelOrder: number;
+    placement: string;
+    percent: number;
+    gradedAt: Date;
+    leveledUp: boolean;
+    rank: number;
+  };
+
+  // Agrupa por programa.
+  const byProgram = new Map<
+    string,
+    { program: { id: string; name: string; color: string | null }; entries: Entry[] }
+  >();
+
+  for (const r of records) {
+    const items = r.level.blocks.flatMap((b) => b.items.map((i) => i.id));
+    const percent =
+      items.length === 0
+        ? 0
+        : Math.round(
+            (items.reduce((acc, id) => {
+              const s = scoreByKey.get(`${r.cycle.id}:${id}`);
+              return acc + (s ? s / 4 : 0);
+            }, 0) /
+              items.length) *
+              100,
+          );
+
+    let group = byProgram.get(r.program.id);
+    if (!group) {
+      group = { program: { id: r.program.id, name: r.program.name, color: r.program.color }, entries: [] };
+      byProgram.set(r.program.id, group);
+    }
+    group.entries.push({
+      recordId: r.id,
+      cycle: { id: r.cycle.id, label: r.cycle.label },
+      levelName: r.level.name,
+      levelOrder: r.level.order,
+      placement: r.placement,
+      percent,
+      gradedAt: r.gradedAt,
+      leveledUp: false,
+      rank: cycleRank(r.cycle.year, r.cycle.season),
+    });
+  }
+
+  // Ordena cada programa de más reciente a más antiguo y marca cuándo subió de nivel.
+  const groups = [...byProgram.values()].map((g) => {
+    g.entries.sort((a, b) => b.rank - a.rank);
+    // Recorre de viejo a nuevo para detectar el salto de nivel respecto al anterior.
+    for (let i = g.entries.length - 1; i >= 0; i--) {
+      const older = g.entries[i + 1];
+      if (older && g.entries[i].levelOrder > older.levelOrder) {
+        g.entries[i].leveledUp = true;
+      }
+    }
+    return g;
+  });
+
+  // Programas con historia más reciente primero.
+  groups.sort((a, b) => (b.entries[0]?.rank ?? 0) - (a.entries[0]?.rank ?? 0));
+  return groups;
 }
 
 /**
@@ -762,6 +992,28 @@ export async function listCanceledSessions(fromKey: string, toKey: string) {
       },
     },
     select: { programId: true, date: true, cancelReason: true },
+  });
+}
+
+/**
+ * Bitácora de cambios (auditoría), de lo más reciente a lo más antiguo. Solo la
+ * consulta la dirección. Si se pasa studentId, se acota a ese participante (para
+ * mostrar su actividad dentro del expediente).
+ */
+export async function listAuditLog(opts?: { studentId?: string; take?: number }) {
+  return prisma.auditLog.findMany({
+    where: opts?.studentId ? { studentId: opts.studentId } : undefined,
+    orderBy: { createdAt: "desc" },
+    take: opts?.take ?? 150,
+    select: {
+      id: true,
+      action: true,
+      summary: true,
+      actorName: true,
+      actorRole: true,
+      createdAt: true,
+      student: { select: { id: true, firstName: true, lastName: true } },
+    },
   });
 }
 

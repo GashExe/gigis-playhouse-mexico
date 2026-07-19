@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { UserSchema } from "@/lib/validators";
+import { generatePassword } from "@/lib/credentials";
+import { logAudit } from "@/lib/audit";
 
 export type UserFormState =
   | { errors?: Record<string, string[]>; message?: string; ok?: boolean }
@@ -116,4 +118,46 @@ export async function toggleUserActive(id: string, active: boolean) {
   if (me.id === id) return; // no desactivarse a sí misma
   await prisma.user.update({ where: { id }, data: { active } });
   revalidatePath("/usuarios");
+}
+
+/**
+ * Repone la contraseña de acceso de un participante para cuando la familia la olvidó.
+ * Genera una nueva (con el mismo criterio que al crear la cuenta), la guarda como
+ * contraseña inicial para que la dirección se la entregue, y queda en la bitácora.
+ * Devuelve la nueva contraseña para mostrarla al momento.
+ */
+export async function resetStudentPassword(
+  studentId: string,
+): Promise<{ ok: true; password: string } | { ok: false }> {
+  await requireDirectora();
+  const [account, student] = await Promise.all([
+    prisma.user.findFirst({
+      where: { studentId, role: "ALUMNO" },
+      select: { id: true },
+    }),
+    prisma.student.findUnique({
+      where: { id: studentId },
+      select: { firstName: true, lastName: true },
+    }),
+  ]);
+  if (!account || !student) return { ok: false };
+
+  const password = generatePassword(
+    student.firstName,
+    student.lastName.split(" ")[0] ?? "",
+    new Date().getFullYear(),
+  );
+  await prisma.user.update({
+    where: { id: account.id },
+    data: { passwordHash: await bcrypt.hash(password, 10), initialPassword: password },
+  });
+  await logAudit({
+    action: "acceso.repone-contrasena",
+    summary: `Repuso la contraseña de acceso de ${student.firstName} ${student.lastName}`,
+    entityType: "Student",
+    entityId: studentId,
+    studentId,
+  });
+  revalidatePath(`/estudiantes/${studentId}`);
+  return { ok: true, password };
 }

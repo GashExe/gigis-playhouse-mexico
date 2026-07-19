@@ -135,6 +135,23 @@ export const OnboardingSchema = z.object({
   acceptRules: z.string().optional(),
 });
 
+/**
+ * Cambio de la propia contraseña (desde Mi espacio o el equipo). Se confirma la
+ * actual y la nueva se escribe dos veces para evitar errores de dedo.
+ */
+export const PasswordChangeSchema = z
+  .object({
+    current: z.string().min(1, { message: "Ingresa tu contraseña actual." }),
+    next: z
+      .string()
+      .min(8, { message: "La nueva contraseña debe tener al menos 8 caracteres." }),
+    confirm: z.string().min(1, { message: "Repite la nueva contraseña." }),
+  })
+  .refine((d) => d.next === d.confirm, {
+    message: "Las contraseñas no coinciden.",
+    path: ["confirm"],
+  });
+
 export const UserSchema = z.object({
   name: z.string().trim().min(1, { message: "El nombre es obligatorio." }),
   username: usernameField,

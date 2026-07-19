@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireGraderForProgram } from "@/lib/dal";
+import { logAudit } from "@/lib/audit";
 
 const PLACEMENTS = ["REGULAR", "PROBATORIO", "POSIBLE_GRADUADO"] as const;
 type Placement = (typeof PLACEMENTS)[number];
@@ -30,7 +31,7 @@ export async function setLevelRecord(studentId: string, formData: FormData) {
   // El nivel elegido debe ser de ese programa (evita mezclar niveles de otro).
   const level = await prisma.programLevel.findFirst({
     where: { id: programLevelId, programId },
-    select: { id: true },
+    select: { id: true, name: true, program: { select: { name: true } } },
   });
   if (!level) return;
 
@@ -38,6 +39,13 @@ export async function setLevelRecord(studentId: string, formData: FormData) {
     where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
     update: { programLevelId, placement, note, gradedAt: new Date() },
     create: { studentId, programId, cycleId, programLevelId, placement, note },
+  });
+  await logAudit({
+    action: "nivel.ubicar",
+    summary: `Ubicó en «${level.name}» de ${level.program.name}`,
+    entityType: "LevelRecord",
+    entityId: programId,
+    studentId,
   });
   revalidatePath(`/estudiantes/${studentId}`);
 }
@@ -62,7 +70,7 @@ export async function promoteToNextLevel(
       id: true,
       note: true,
       level: { select: { id: true, name: true, order: true } },
-      program: { select: { passThreshold: true } },
+      program: { select: { passThreshold: true, name: true } },
     },
   });
   if (!record) return;
@@ -114,6 +122,13 @@ export async function promoteToNextLevel(
           .join(" · "),
       },
     });
+    await logAudit({
+      action: "nivel.promover",
+      summary: `Subió de «${record.level.name}» a «${nextLevel.name}» en ${record.program.name}`,
+      entityType: "LevelRecord",
+      entityId: programId,
+      studentId,
+    });
   } else {
     // Último nivel completo: candidato a concluir el programa.
     await prisma.levelRecord.update({
@@ -129,6 +144,13 @@ export async function promoteToNextLevel(
           .join(" · "),
       },
     });
+    await logAudit({
+      action: "nivel.promover",
+      summary: `Marcó posible graduado en ${record.program.name} (último nivel «${record.level.name}»)`,
+      entityType: "LevelRecord",
+      entityId: programId,
+      studentId,
+    });
   }
   revalidatePath(`/estudiantes/${studentId}`);
   revalidatePath(`/calendario/${programId}`);
@@ -138,10 +160,17 @@ export async function promoteToNextLevel(
 export async function removeLevelRecord(recordId: string, studentId: string) {
   const record = await prisma.levelRecord.findUnique({
     where: { id: recordId },
-    select: { programId: true },
+    select: { programId: true, program: { select: { name: true } }, level: { select: { name: true } } },
   });
   if (!record) return;
   await requireGraderForProgram(record.programId);
   await prisma.levelRecord.delete({ where: { id: recordId } });
+  await logAudit({
+    action: "nivel.quitar",
+    summary: `Quitó la ubicación de nivel «${record.level.name}» en ${record.program.name}`,
+    entityType: "LevelRecord",
+    entityId: record.programId,
+    studentId,
+  });
   revalidatePath(`/estudiantes/${studentId}`);
 }

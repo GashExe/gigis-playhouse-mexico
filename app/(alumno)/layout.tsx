@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { BookOpenText, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import { logout } from "@/lib/actions/auth";
-import { Logo } from "@/components/brand";
+import { LogoLockup } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function AlumnoLayout({
@@ -20,7 +20,7 @@ export default async function AlumnoLayout({
       <span aria-hidden className="rainbow-strip fixed inset-x-0 top-0 z-20 h-1.5" />
       <header className="sticky top-0 z-10 border-b border-border bg-surface/90 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 sm:px-6">
-          <Logo className="h-7" />
+          <LogoLockup className="h-12" />
           <div className="flex items-center gap-1">
             <ThemeToggle className="size-9" />
             <Link

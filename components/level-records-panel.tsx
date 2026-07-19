@@ -194,8 +194,8 @@ function LevelRow({
         {canGrade && (
         <Link
           href={`/estudiantes/${studentId}/calificar/${r.program.id}?ciclo=${cycleId}`}
-          aria-label="Calificar por bloques"
-          title="Calificar por bloques"
+          aria-label="Calificar"
+          title="Calificar"
           className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ListChecks className="size-4" />

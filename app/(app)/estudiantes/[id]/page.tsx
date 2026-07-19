@@ -9,6 +9,7 @@ import {
   Stack,
   GraduationCap,
   Key,
+  ClockCounterClockwise,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import {
@@ -18,6 +19,8 @@ import {
   getActiveCycle,
   getStudentLevels,
   listProgramsWithLevels,
+  getStudentTimeline,
+  listAuditLog,
 } from "@/lib/queries";
 import { ageFrom } from "@/lib/utils";
 import { fechaLarga } from "@/lib/format";
@@ -29,6 +32,9 @@ import { HealthPanel } from "@/components/health-panel";
 import { StudentActions } from "@/components/student-actions";
 import { EnrollmentsPanel } from "@/components/enrollments-panel";
 import { LevelRecordsPanel } from "@/components/level-records-panel";
+import { StudentTimeline } from "@/components/student-timeline";
+import { AuditLog } from "@/components/audit-log";
+import { ResetPasswordButton } from "@/components/reset-password-button";
 
 const genderLabel: Record<string, string> = {
   FEMENINO: "Femenino",
@@ -57,16 +63,20 @@ export default async function StudentDetailPage({
   const { id } = await params;
   const { ciclo } = await searchParams;
   const activeCycle = await getActiveCycle();
-  const [student, programs, cycles, programsWithLevels] = await Promise.all([
-    getStudent(id),
-    // Solo la oferta del ciclo activo: es a lo único que se puede inscribir.
-    listActivePrograms(activeCycle?.id),
-    listCycles(),
-    listProgramsWithLevels(),
-  ]);
+  const isDirectora = me.role === "DIRECTORA";
+  const [student, programs, cycles, programsWithLevels, timeline, auditEntries] =
+    await Promise.all([
+      getStudent(id),
+      // Solo la oferta del ciclo activo: es a lo único que se puede inscribir.
+      listActivePrograms(activeCycle?.id),
+      listCycles(),
+      listProgramsWithLevels(),
+      getStudentTimeline(id),
+      // La actividad de la bitácora de este participante la ve solo la dirección.
+      isDirectora ? listAuditLog({ studentId: id, take: 15 }) : Promise.resolve([]),
+    ]);
   if (!student) notFound();
 
-  const isDirectora = me.role === "DIRECTORA";
   // La maestra solo consulta: sin editar expediente, estado, salud ni inscripciones.
   const canManage = me.role !== "MAESTRA";
   // Y solo califica (ubicar nivel / temas) en los programas a su cargo.
@@ -179,6 +189,7 @@ export default async function StudentDetailPage({
               gradableProgramIds={gradableProgramIds}
             />
           )}
+          <StudentTimeline groups={timeline} />
         </div>
 
         {/* Barra lateral: información */}
@@ -233,9 +244,24 @@ export default async function StudentDetailPage({
                 </div>
               </dl>
               <p className="mt-3 text-xs leading-relaxed text-muted">
-                Compártela con la familia. Es confidencial: solo tú puedes verla.
+                Confidencial: solo tú la ves. Si la familia ya la cambió aparece «—»;
+                repónla para generar una nueva.
               </p>
+              <ResetPasswordButton studentId={student.id} />
             </Card>
+          )}
+
+          {/* Actividad reciente de la bitácora — solo la directora */}
+          {isDirectora && auditEntries.length > 0 && (
+            <div>
+              <div className="mb-2.5 flex items-center gap-2">
+                <span className="flex size-8 items-center justify-center rounded-[var(--radius-input)] bg-primary-weak text-primary">
+                  <ClockCounterClockwise weight="fill" className="size-[1.05rem]" />
+                </span>
+                <h2 className="text-sm font-bold text-ink">Actividad reciente</h2>
+              </div>
+              <AuditLog entries={auditEntries} showStudent={false} />
+            </div>
           )}
 
           <HealthPanel studentId={student.id} health={student.health} canEdit={canManage} />
