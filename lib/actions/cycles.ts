@@ -6,7 +6,11 @@ import { requireRole } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 
 export type ContinuityState =
-  | { ok?: boolean; error?: string; copied?: { students: number; enrollments: number } }
+  | {
+      ok?: boolean;
+      error?: string;
+      copied?: { students: number; enrollments: number; advanced: number };
+    }
   | undefined;
 
 /**
@@ -22,6 +26,9 @@ export async function carryOverStudents(
   fromCycleId: string,
   toCycleId: string,
   studentIds: string[],
+  /// Claves "studentId:programId" que además de copiarse deben SUBIR al nivel
+  /// siguiente del programa (concluyó el nivel en el ciclo que termina).
+  advanceKeys: string[] = [],
 ): Promise<ContinuityState> {
   await requireRole("DIRECTORA");
   if (!fromCycleId || !toCycleId || fromCycleId === toCycleId) {
@@ -79,8 +86,22 @@ export async function carryOverStudents(
     records.map((r) => [`${r.studentId}:${r.programId}`, r]),
   );
 
+  // Nivel siguiente dentro de cada programa, para quien concluyó el suyo. Si no
+  // hay siguiente (ya está en el último), se queda donde está.
+  const levels = await prisma.programLevel.findMany({
+    orderBy: [{ programId: "asc" }, { order: "asc" }],
+    select: { id: true, order: true, programId: true },
+  });
+  const nextLevelId = new Map<string, string>();
+  for (const l of levels) {
+    const next = levels.find((n) => n.programId === l.programId && n.order > l.order);
+    if (next) nextLevelId.set(l.id, next.id);
+  }
+  const advance = new Set(advanceKeys);
+
   let copiedStudents = 0;
   let copiedEnrollments = 0;
+  let advancedLevels = 0;
 
   for (const [studentId, programIds] of programsByStudent) {
     if (programIds.size === 0) continue;
@@ -97,14 +118,21 @@ export async function carryOverStudents(
       // Copia la ubicación de nivel donde quedó, si la tenía.
       const src = recordByKey.get(`${studentId}:${programId}`);
       if (src) {
+        // Si dirección palomeó "subir de nivel" y ese programa tiene un nivel
+        // más adelante, entra al ciclo nuevo en el siguiente.
+        const promoted = advance.has(`${studentId}:${programId}`)
+          ? nextLevelId.get(src.programLevelId)
+          : undefined;
+        if (promoted) advancedLevels++;
+        const levelId = promoted ?? src.programLevelId;
         await prisma.levelRecord.upsert({
           where: { studentId_programId_cycleId: { studentId, programId, cycleId: toCycleId } },
-          update: { programLevelId: src.programLevelId, placement: src.placement },
+          update: { programLevelId: levelId, placement: src.placement },
           create: {
             studentId,
             programId,
             cycleId: toCycleId,
-            programLevelId: src.programLevelId,
+            programLevelId: levelId,
             placement: src.placement,
             note: src.note,
           },
@@ -115,7 +143,7 @@ export async function carryOverStudents(
 
   await logAudit({
     action: "ciclo.continuidad",
-    summary: `Trajo ${copiedStudents} participante(s) al ciclo ${toCycle.label} (${copiedEnrollments} inscripción/es)`,
+    summary: `Trajo ${copiedStudents} participante(s) al ciclo ${toCycle.label} (${copiedEnrollments} inscripción/es${advancedLevels > 0 ? `, ${advancedLevels} subida(s) de nivel` : ""})`,
     entityType: "Cycle",
     entityId: toCycleId,
   });
@@ -123,5 +151,12 @@ export async function carryOverStudents(
   revalidatePath("/programas");
   revalidatePath("/programas/continuidad");
   revalidatePath("/panel");
-  return { ok: true, copied: { students: copiedStudents, enrollments: copiedEnrollments } };
+  return {
+    ok: true,
+    copied: {
+      students: copiedStudents,
+      enrollments: copiedEnrollments,
+      advanced: advancedLevels,
+    },
+  };
 }

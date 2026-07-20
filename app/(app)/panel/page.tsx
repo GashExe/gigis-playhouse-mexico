@@ -8,17 +8,13 @@ import {
   Star,
   CalendarCheck,
   WarningCircle,
-  Check,
-  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import {
   getDashboardStats,
   getAbsenceAlerts,
-  listPendingReservations,
-  meetsAgeRequirement,
+  listRecentFamilyReservations,
 } from "@/lib/queries";
-import { decideReservation } from "@/lib/actions/reservations";
 import { saludo, haceTiempo } from "@/lib/format";
 import { ageFrom } from "@/lib/utils";
 import { StatBar } from "@/components/ui/stat-bar";
@@ -37,8 +33,8 @@ export default async function PanelPage() {
     getDashboardStats(),
     // La maestra ve las rachas de SUS grupos; dirección y coordinación, todas.
     getAbsenceAlerts(isMaestra ? user.id : undefined),
-    // Las reservas las resuelven dirección y coordinación.
-    isMaestra ? Promise.resolve([]) : listPendingReservations(),
+    // Enterado de quién apartó lugar: solo dirección y coordinación.
+    isMaestra ? Promise.resolve([]) : listRecentFamilyReservations(),
   ]);
   const firstName = user.name.split(" ")[0];
   const maxEnroll = Math.max(1, ...stats.programsWithCounts.map((p) => p._count.enrollments));
@@ -52,7 +48,7 @@ export default async function PanelPage() {
         </p>
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">
           {user.role === "DIRECTORA"
-            ? "Este es el estado de tu playhouse"
+            ? "Este es el estado de Gigi's"
             : "Aquí está el resumen de hoy"}
         </h1>
       </div>
@@ -83,15 +79,15 @@ export default async function PanelPage() {
         ]}
       />
 
-      {/* Reservas de las familias por resolver */}
+      {/* Lugares que las familias apartaron por su cuenta (enterado, no aprobación) */}
       {reservations.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>
               <span className="flex items-center gap-2">
                 <CalendarCheck weight="fill" className="size-4 text-primary" />
-                Reservas por resolver
-                <Badge tone="warning">{reservations.length}</Badge>
+                Lugares apartados por las familias
+                <Badge tone="info">{reservations.length}</Badge>
               </span>
             </CardTitle>
           </CardHeader>
@@ -99,7 +95,6 @@ export default async function PanelPage() {
             {reservations.map((r) => {
               const full = r.occupied >= r.program.studentCapacity;
               const age = ageFrom(r.student.birthDate);
-              const ageOk = meetsAgeRequirement(age, r.program.ageMin, r.program.ageMax);
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
                   <span
@@ -115,43 +110,17 @@ export default async function PanelPage() {
                       {age != null && (
                         <span className="font-normal text-muted"> ({age} años)</span>
                       )}{" "}
-                      <span className="font-normal text-muted">quiere lugar en</span>{" "}
+                      <span className="font-normal text-muted">se inscribió a</span>{" "}
                       {r.program.name}
                     </p>
                     <p className="text-xs text-muted">
                       <span className={`tnum font-semibold ${full ? "text-danger-strong" : ""}`}>
                         {r.occupied}/{r.program.studentCapacity} cupos
                       </span>
-                      {(r.program.ageMin != null || r.program.ageMax != null) && (
-                        <>
-                          {" · requisito: "}
-                          <span className={ageOk ? "" : "font-bold text-danger-strong"}>
-                            {r.program.ageMin != null && r.program.ageMax != null
-                              ? `${r.program.ageMin}–${r.program.ageMax} años`
-                              : r.program.ageMin != null
-                                ? `desde ${r.program.ageMin} años`
-                                : `hasta ${r.program.ageMax} años`}
-                          </span>
-                        </>
-                      )}
+                      {full ? " · cupo lleno" : ""}
                       {" · "}
                       {haceTiempo(r.createdAt)}
-                      {r.message ? ` · «${r.message}»` : ""}
                     </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    <form action={decideReservation.bind(null, r.id, true)}>
-                      <Button type="submit" size="sm" disabled={full} title={full ? "Ya no hay cupo" : undefined}>
-                        <Check weight="bold" className="size-3.5" />
-                        Aprobar
-                      </Button>
-                    </form>
-                    <form action={decideReservation.bind(null, r.id, false)}>
-                      <Button type="submit" size="sm" variant="secondary">
-                        <X weight="bold" className="size-3.5" />
-                        Rechazar
-                      </Button>
-                    </form>
                   </div>
                 </li>
               );

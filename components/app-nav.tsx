@@ -12,6 +12,7 @@ import {
   Megaphone,
   BookOpenText,
   ClockCounterClockwise,
+  FileText,
   MagnifyingGlass,
   DotsThreeOutline,
   SignOut,
@@ -59,6 +60,7 @@ const NAV: NavItem[] = [
   { href: "/programas", label: "Programas", icon: Books },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
   { href: "/avisos", label: "Avisos", icon: Megaphone, roles: ["DIRECTORA"] },
+  { href: "/oficios", label: "Oficios", icon: FileText, roles: ["DIRECTORA"] },
   { href: "/bitacora", label: "Bitácora", icon: ClockCounterClockwise, roles: ["DIRECTORA"] },
   { href: "/manual", label: "Manual", icon: BookOpenText },
 ];

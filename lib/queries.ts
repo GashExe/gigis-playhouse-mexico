@@ -286,7 +286,7 @@ export async function getCycleContinuity(fromCycleId: string, toCycleId: string)
       select: {
         student: { select: { id: true, firstName: true, lastName: true, status: true } },
         program: { select: { id: true, name: true, color: true } },
-        level: { select: { name: true } },
+        level: { select: { id: true, name: true, order: true } },
       },
     }),
     prisma.program.findMany({
@@ -302,7 +302,26 @@ export async function getCycleContinuity(fromCycleId: string, toCycleId: string)
   const targetOffer = new Set(targetPrograms.map((p) => p.id));
   const alreadyInTarget = new Set(targetEnrolls.map((e) => e.studentId));
 
-  type Prog = { id: string; name: string; color: string | null; levelName: string | null; inTargetOffer: boolean };
+  // Niveles de cada programa, para saber cuál sigue después del que traen.
+  const levels = await prisma.programLevel.findMany({
+    orderBy: [{ programId: "asc" }, { order: "asc" }],
+    select: { id: true, name: true, order: true, programId: true },
+  });
+  const nextLevelOf = new Map<string, { id: string; name: string }>();
+  for (const l of levels) {
+    const next = levels.find((n) => n.programId === l.programId && n.order > l.order);
+    if (next) nextLevelOf.set(l.id, { id: next.id, name: next.name });
+  }
+
+  type Prog = {
+    id: string;
+    name: string;
+    color: string | null;
+    levelName: string | null;
+    /// Nombre del nivel que sigue, si lo hay: sin esto no se puede ofrecer "subir".
+    nextLevelName: string | null;
+    inTargetOffer: boolean;
+  };
   type Row = {
     id: string;
     name: string;
@@ -335,6 +354,7 @@ export async function getCycleContinuity(fromCycleId: string, toCycleId: string)
         name: e.program.name,
         color: e.program.color,
         levelName: null,
+        nextLevelName: null,
         inTargetOffer: targetOffer.has(e.program.id),
       });
     }
@@ -342,14 +362,17 @@ export async function getCycleContinuity(fromCycleId: string, toCycleId: string)
   for (const r of records) {
     const row = ensure(r.student);
     const existing = row.programs.get(r.program.id);
+    const next = nextLevelOf.get(r.level.id)?.name ?? null;
     if (existing) {
       existing.levelName = r.level.name; // la ubicación de nivel gana como "dónde quedó"
+      existing.nextLevelName = next;
     } else {
       row.programs.set(r.program.id, {
         id: r.program.id,
         name: r.program.name,
         color: r.program.color,
         levelName: r.level.name,
+        nextLevelName: next,
         inTargetOffer: targetOffer.has(r.program.id),
       });
     }
@@ -807,38 +830,35 @@ export function meetsAgeRequirement(
   return true;
 }
 
-/** Reservas pendientes por resolver (para la tarjeta del panel de dirección). */
-export async function listPendingReservations() {
-  const pending = await prisma.reservation.findMany({
-    where: { status: "PENDIENTE" },
-    orderBy: { createdAt: "asc" },
+/**
+ * Últimos lugares apartados por las familias (para la tarjeta del panel de
+ * dirección). Ya no hay nada que aprobar: es un enterado de quién se inscribió
+ * solo, con el cupo del programa a la vista.
+ */
+export async function listRecentFamilyReservations(limit = 8) {
+  const recent = await prisma.reservation.findMany({
+    where: { status: "APROBADA" },
+    orderBy: { createdAt: "desc" },
+    take: limit,
     select: {
       id: true,
-      message: true,
       createdAt: true,
       cycleId: true,
       student: { select: { id: true, firstName: true, lastName: true, birthDate: true } },
       program: {
-        select: {
-          id: true,
-          name: true,
-          color: true,
-          studentCapacity: true,
-          ageMin: true,
-          ageMax: true,
-        },
+        select: { id: true, name: true, color: true, studentCapacity: true },
       },
     },
   });
-  // Cupo ocupado por programa+ciclo, para decidir con el dato a la vista.
+  // Cupo ocupado por programa+ciclo, para ver de un vistazo qué tan lleno quedó.
   const seats = await Promise.all(
-    pending.map((r) =>
+    recent.map((r) =>
       prisma.enrollment.count({
         where: { programId: r.program.id, cycleId: r.cycleId, status: "ACTIVA" },
       }),
     ),
   );
-  return pending.map((r, i) => ({ ...r, occupied: seats[i] }));
+  return recent.map((r, i) => ({ ...r, occupied: seats[i] }));
 }
 
 /**
@@ -992,6 +1012,32 @@ export async function listCanceledSessions(fromKey: string, toKey: string) {
       },
     },
     select: { programId: true, date: true, cancelReason: true },
+  });
+}
+
+/**
+ * Eventos internos de la semana (juntas, capacitaciones, visitas…). Solo para el
+ * equipo: esta consulta no debe alimentar ninguna pantalla de familias.
+ */
+export async function listCalendarEvents(fromKey: string, toKey: string) {
+  return prisma.calendarEvent.findMany({
+    where: {
+      date: {
+        gte: new Date(`${fromKey}T00:00:00.000Z`),
+        lte: new Date(`${toKey}T00:00:00.000Z`),
+      },
+    },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    select: {
+      id: true,
+      title: true,
+      date: true,
+      startTime: true,
+      endTime: true,
+      notes: true,
+      color: true,
+      author: { select: { name: true } },
+    },
   });
 }
 

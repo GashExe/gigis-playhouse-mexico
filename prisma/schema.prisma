@@ -36,6 +36,7 @@ model User {
   studentNotes StudentNote[] @relation("AutorAnotaciones") // Anotaciones que ha escrito
   announcements Announcement[] @relation("AutorAnuncios") // Anuncios que ha publicado
   reservationsDecided Reservation[] @relation("DecideReservas") // Reservas que resolvió
+  calendarEvents CalendarEvent[] @relation("AutorEventos") // Eventos del calendario interno
   auditLogs   AuditLog[]    @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
 
   @@index([role])
@@ -488,6 +489,29 @@ enum ReservationStatus {
   APROBADA
   RECHAZADA
   CANCELADA // La familia se arrepintió antes de que se resolviera
+}
+
+/// Evento del calendario interno: juntas, capacitaciones, visitas, eventos de
+/// recaudación, días inhábiles… Lo captura dirección y lo ve SOLO el equipo
+/// (dirección, coordinación y maestras). Nunca aparece en Mi espacio: para avisar
+/// a las familias están los anuncios y la suspensión de clases.
+model CalendarEvent {
+  id     String   @id @default(cuid())
+  title  String
+  date   DateTime @db.Date // Día del evento (sin hora)
+  /// Horas opcionales "HH:MM": un evento de todo el día no las lleva.
+  startTime String?
+  endTime   String?
+  notes  String? // Detalle: lugar, quién asiste, qué hay que llevar
+  color  String? // Color para distinguirlo en la semana
+
+  author   User?   @relation("AutorEventos", fields: [authorId], references: [id], onDelete: SetNull)
+  authorId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
 }
 
 /// Anuncio de la dirección para las familias. Si `toAllActive` está activo lo ven

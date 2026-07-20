@@ -101,7 +101,9 @@ export default async function ContinuidadPage({
           <Link href={`/programas?ciclo=${toId}`} className="font-semibold underline">
             oferta de {toLabel}
           </Link>
-          . Arma primero la oferta del ciclo destino si falta algún programa.
+          . Arma primero la oferta del ciclo destino si falta algún programa. Cada
+          participante llega al nivel donde quedó; toca su programa para subirlo al
+          nivel siguiente si ya lo concluyó.
         </span>
       </p>
 

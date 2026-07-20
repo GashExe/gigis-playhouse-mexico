@@ -14,6 +14,7 @@ import {
   getActiveCycle,
   listCalendarPrograms,
   listCanceledSessions,
+  listCalendarEvents,
 } from "@/lib/queries";
 import {
   WEEKDAYS,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/schedule";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
+import { EventChip, NewEventButton } from "@/components/calendar-events";
 
 export const metadata = { title: "Calendario" };
 
@@ -48,8 +50,28 @@ export default async function CalendarioPage({
   const monday = mondayOf(semana && isDateKey(semana) ? fromDateKey(semana) : today);
   const todayKey = toDateKey(today);
 
-  // Semana de lunes a sábado; el domingo solo aparece si algún programa lo usa.
-  const hasSunday = programs.some((p) => p.scheduleSlots.some((s) => s.weekday === 0));
+  // Eventos internos de la semana (juntas, capacitaciones…). Todo el equipo los
+  // ve; solo dirección y coordinación los capturan. Se piden de lunes a domingo
+  // aunque la semana se pinte más corta: hace falta saber si hay algo en domingo
+  // antes de decidir cuántos días caben.
+  const canManageEvents = me.role === "DIRECTORA" || me.role === "COORDINADOR";
+  const events = await listCalendarEvents(
+    toDateKey(monday),
+    toDateKey(addDays(monday, 6)),
+  );
+  const eventsByDay = new Map<string, typeof events>();
+  for (const e of events) {
+    // La fecha es pura (@db.Date): su clave sale del ISO, no de la hora local.
+    const key = e.date.toISOString().slice(0, 10);
+    eventsByDay.set(key, [...(eventsByDay.get(key) ?? []), e]);
+  }
+
+  // Semana de lunes a sábado; el domingo solo aparece si algún programa lo usa o
+  // si cae ahí un evento interno (si no, el evento quedaría invisible).
+  const sundayKey = toDateKey(addDays(monday, 6));
+  const hasSunday =
+    programs.some((p) => p.scheduleSlots.some((s) => s.weekday === 0)) ||
+    eventsByDay.has(sundayKey);
   const days = Array.from({ length: hasSunday ? 7 : 6 }, (_, i) => addDays(monday, i));
 
   // Clases suspendidas de la semana, para tacharlas en su tarjeta.
@@ -109,9 +131,10 @@ export default async function CalendarioPage({
             Ciclo {cycle.label}
           </span>
         )}
+        {canManageEvents && <NewEventButton defaultDateKey={todayKey} />}
       </div>
 
-      {withSlots.length === 0 ? (
+      {withSlots.length === 0 && events.length === 0 ? (
         <EmptyState
           icon={<CalendarBlank weight="fill" className="size-6" />}
           title={onlyMine ? "No tienes clases con horario" : "Ningún programa tiene horario"}
@@ -126,6 +149,7 @@ export default async function CalendarioPage({
           {days.map((day) => {
             const key = toDateKey(day);
             const isToday = key === todayKey;
+            const dayEvents = eventsByDay.get(key) ?? [];
             const classes = withSlots
               .flatMap((p) =>
                 p.scheduleSlots
@@ -154,10 +178,27 @@ export default async function CalendarioPage({
                     {day.getDate()}
                   </span>
                 </header>
-                {classes.length === 0 ? (
+                {classes.length === 0 && dayEvents.length === 0 ? (
                   <p className="py-3 text-center text-xs text-subtle">Sin clases</p>
                 ) : (
                   <ul className="space-y-2">
+                    {dayEvents.map((e) => (
+                      <li key={e.id}>
+                        <EventChip
+                          event={{
+                            id: e.id,
+                            title: e.title,
+                            dateKey: e.date.toISOString().slice(0, 10),
+                            startTime: e.startTime,
+                            endTime: e.endTime,
+                            notes: e.notes,
+                            color: e.color,
+                            authorName: e.author?.name ?? null,
+                          }}
+                          canEdit={canManageEvents}
+                        />
+                      </li>
+                    ))}
                     {classes.map(({ program: p, slot }, i) => {
                       const color = p.color ?? "var(--primary)";
                       const isCanceled = canceledSet.has(`${p.id}:${key}`);

@@ -10,8 +10,6 @@ import {
   Megaphone,
   CalendarX,
   UsersThree,
-  HourglassMedium,
-  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import {
@@ -21,7 +19,7 @@ import {
   listAnnouncementsFor,
   listUpcomingSuspensionsFor,
 } from "@/lib/queries";
-import { requestReservation, cancelReservation } from "@/lib/actions/reservations";
+import { requestReservation } from "@/lib/actions/reservations";
 import { meetsAgeRequirement } from "@/lib/queries";
 import { needsOnboarding } from "@/lib/legal";
 import { slotsLabel } from "@/lib/schedule";
@@ -101,9 +99,9 @@ export default async function MiEspacioPage() {
                 <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-muted">
                   {a.body}
                 </p>
-                {a.author && (
-                  <p className="mt-1.5 text-xs text-subtle">— {a.author.name}</p>
-                )}
+                {/* Los avisos van firmados por la institución, no por la persona
+                    que los escribió: para la familia el remitente es la casa. */}
+                <p className="mt-1.5 text-xs text-subtle">— Dirección Gigi&apos;s</p>
               </li>
             ))}
           </ul>
@@ -148,8 +146,7 @@ export default async function MiEspacioPage() {
             )}
           </div>
           <p className="-mt-2 text-sm text-muted">
-            Pide lugar en una actividad para {firstName}; el equipo de Gigi&apos;s
-            confirma tu solicitud.
+            {`Aparta lugar para ${firstName} en las actividades del ciclo. Mientras haya lugares queda inscrito al momento.`}
           </p>
           {(() => {
             const available = offer.programs.filter(
@@ -162,7 +159,6 @@ export default async function MiEspacioPage() {
                 </p>
               );
             }
-            const byProgram = new Map(offer.reservations.map((r) => [r.programId, r]));
             const age = ageFrom(offer.birthDate);
             return (
               <ul className="grid gap-3 sm:grid-cols-2">
@@ -170,9 +166,6 @@ export default async function MiEspacioPage() {
                   const color = p.color ?? "var(--brand-teal)";
                   const horario = slotsLabel(p.scheduleSlots);
                   const left = Math.max(0, p.studentCapacity - p._count.enrollments);
-                  const reservation = byProgram.get(p.id);
-                  const pendingRes = reservation?.status === "PENDIENTE";
-                  const rejected = reservation?.status === "RECHAZADA";
                   // Requisitos de la actividad: si no se cumplen, no se puede apartar.
                   const ageOk = meetsAgeRequirement(age, p.ageMin, p.ageMax);
                   return (
@@ -229,22 +222,6 @@ export default async function MiEspacioPage() {
                                 : `hasta ${p.ageMax} años`}
                             .
                           </p>
-                        ) : pendingRes ? (
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5 text-xs font-bold text-warning-strong">
-                              <HourglassMedium weight="fill" className="size-3.5" />
-                              Solicitud enviada
-                            </span>
-                            <form action={cancelReservation.bind(null, reservation!.id)}>
-                              <button
-                                type="submit"
-                                className="flex items-center gap-1 rounded-[var(--radius-input)] px-2 py-1 text-xs font-semibold text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
-                              >
-                                <X className="size-3.5" />
-                                Cancelar
-                              </button>
-                            </form>
-                          </div>
                         ) : (
                           <form action={requestReservation}>
                             <input type="hidden" name="programId" value={p.id} />
@@ -253,13 +230,8 @@ export default async function MiEspacioPage() {
                               disabled={left === 0}
                               className="w-full rounded-[var(--radius-control)] bg-primary px-3 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
                             >
-                              {rejected ? "Volver a pedir lugar" : "Apartar lugar"}
+                              {left === 0 ? "Sin lugares" : "Apartar lugar"}
                             </button>
-                            {rejected && (
-                              <p className="mt-1 text-center text-[0.7rem] text-muted">
-                                La solicitud anterior no se pudo aceptar.
-                              </p>
-                            )}
                           </form>
                         )}
                       </div>

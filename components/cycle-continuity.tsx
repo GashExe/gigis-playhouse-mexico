@@ -17,6 +17,7 @@ type Program = {
   name: string;
   color: string | null;
   levelName: string | null;
+  nextLevelName: string | null;
   inTargetOffer: boolean;
 };
 type Student = {
@@ -57,6 +58,35 @@ export function CycleContinuity({
     () => new Set(copyable.filter((s) => s.status === "ACTIVO").map((s) => s.id)),
   );
 
+  // Quién sube de nivel al pasar de ciclo, por "alumno:programa". Vacío por
+  // defecto: subir a alguien que no terminó su nivel es peor que dejarlo igual,
+  // así que dirección lo palomea a mano (o con "Subir a todos").
+  const [advance, setAdvance] = useState<Set<string>>(() => new Set());
+
+  /// Pares alumno:programa que PUEDEN subir: tienen nivel, hay uno siguiente y
+  /// el programa está en la oferta del destino.
+  const promotable = useMemo(() => {
+    const keys: string[] = [];
+    for (const s of copyable) {
+      for (const p of s.programs) {
+        if (p.inTargetOffer && p.levelName && p.nextLevelName) keys.push(`${s.id}:${p.id}`);
+      }
+    }
+    return keys;
+  }, [copyable]);
+
+  function toggleAdvance(key: string) {
+    setAdvance((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const allAdvancing =
+    promotable.length > 0 && promotable.every((k) => advance.has(k));
+
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -76,7 +106,9 @@ export function CycleContinuity({
   function copy() {
     setResult(undefined);
     startTransition(async () => {
-      const res = await carryOverStudents(fromId, toId, [...selected]);
+      // Solo mandamos las subidas de alumnos que efectivamente se van a copiar.
+      const keys = [...advance].filter((k) => selected.has(k.split(":")[0]));
+      const res = await carryOverStudents(fromId, toId, [...selected], keys);
       setResult(res);
       if (res?.ok) router.refresh();
     });
@@ -127,6 +159,17 @@ export function CycleContinuity({
           </span>
           Todos los que continúan ({copyable.length})
         </label>
+        {promotable.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setAdvance(allAdvancing ? new Set() : new Set(promotable))
+            }
+            className="rounded-[var(--radius-input)] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            {allAdvancing ? "Dejar a todos en su nivel" : "Subir a todos de nivel"}
+          </button>
+        )}
         <button
           type="button"
           onClick={copy}
@@ -146,8 +189,10 @@ export function CycleContinuity({
       {result?.ok && result.copied && (
         <div className="flex items-center gap-2 rounded-[var(--radius-card)] border border-success/30 bg-success-weak px-4 py-3 text-sm font-medium text-success-strong">
           <CheckCircle weight="fill" className="size-5 shrink-0" />
-          Listo: {result.copied.students} participante(s) y {result.copied.enrollments}{" "}
-          inscripción(es) copiadas a {toLabel}.
+          {`Listo: ${result.copied.students} participante(s) y ${result.copied.enrollments} inscripción(es) copiadas a ${toLabel}`}
+          {result.copied.advanced > 0
+            ? `, ${result.copied.advanced} subieron de nivel.`
+            : "."}
         </div>
       )}
       {result?.error && (
@@ -216,31 +261,67 @@ export function CycleContinuity({
                     )}
                   </div>
                   <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                    {s.programs.map((p) => (
-                      <li
-                        key={p.id}
-                        title={
-                          p.inTargetOffer
-                            ? undefined
-                            : `«${p.name}» no está en la oferta de ${toLabel}: no se copiará.`
-                        }
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
-                          p.inTargetOffer
-                            ? "border-border bg-surface-2/60 text-ink"
-                            : "border-dashed border-border text-subtle opacity-70"
-                        }`}
-                      >
-                        <span
-                          aria-hidden
-                          className="size-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: p.color ?? "var(--primary)" }}
-                        />
-                        {p.name}
-                        {p.levelName && (
-                          <span className="font-semibold text-muted">· {p.levelName}</span>
-                        )}
-                      </li>
-                    ))}
+                    {s.programs.map((p) => {
+                      const key = `${s.id}:${p.id}`;
+                      // Se puede ofrecer subir de nivel si va a copiarse, tiene
+                      // nivel registrado y su programa tiene uno más adelante.
+                      const canPromote =
+                        isCopyable && p.inTargetOffer && !!p.levelName && !!p.nextLevelName;
+                      const promoting = canPromote && advance.has(key);
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            disabled={!canPromote}
+                            onClick={(e) => {
+                              // El chip vive dentro del <label> de la fila: sin esto
+                              // subir de nivel despalomearía al participante.
+                              e.preventDefault();
+                              toggleAdvance(key);
+                            }}
+                            title={
+                              !p.inTargetOffer
+                                ? `«${p.name}» no está en la oferta de ${toLabel}: no se copiará.`
+                                : canPromote
+                                  ? promoting
+                                    ? `Entrará a ${toLabel} en ${p.nextLevelName}. Toca para dejarlo en ${p.levelName}.`
+                                    : `Concluyó ${p.levelName}: toca para subirlo a ${p.nextLevelName}.`
+                                  : p.levelName
+                                    ? `${p.levelName} es el último nivel de «${p.name}».`
+                                    : undefined
+                            }
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                              promoting
+                                ? "border-primary bg-primary-weak text-primary-strong"
+                                : p.inTargetOffer
+                                  ? "border-border bg-surface-2/60 text-ink"
+                                  : "border-dashed border-border text-subtle opacity-70"
+                            } ${canPromote ? "cursor-pointer hover:border-border-strong" : "cursor-default"}`}
+                          >
+                            <span
+                              aria-hidden
+                              className="size-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: p.color ?? "var(--primary)" }}
+                            />
+                            {p.name}
+                            {p.levelName && (
+                              <span className="font-semibold text-muted">
+                                {promoting ? (
+                                  <>
+                                    {" · "}
+                                    <span className="line-through opacity-60">{p.levelName}</span>
+                                    {" → "}
+                                    <span className="text-primary-strong">{p.nextLevelName}</span>
+                                  </>
+                                ) : (
+                                  ` · ${p.levelName}`
+                                )}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               </label>
