@@ -53,3 +53,29 @@ export function ageFrom(date: Date | null | undefined): number | null {
   if (m < 0 || (m === 0 && now.getDate() < date.getDate())) age--;
   return age >= 0 ? age : null;
 }
+
+/** Edad en meses cumplidos a partir de fecha de nacimiento. */
+export function ageMonthsFrom(date: Date | null | undefined): number | null {
+  if (!date) return null;
+  const now = new Date();
+  let months =
+    (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
+  if (now.getDate() < date.getDate()) months--;
+  return months >= 0 ? months : null;
+}
+
+/**
+ * Etiqueta de edad legible. Los bebés (menos de un año) se muestran en meses, y
+ * los de menos de un mes en días, para no dejar un confuso "0 años". Devuelve
+ * null si no hay fecha de nacimiento.
+ */
+export function edadLabel(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  const years = ageFrom(date);
+  if (years == null) return null;
+  if (years >= 1) return `${years} ${years === 1 ? "año" : "años"}`;
+  const months = ageMonthsFrom(date) ?? 0;
+  if (months >= 1) return `${months} ${months === 1 ? "mes" : "meses"}`;
+  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000));
+  return `${days} ${days === 1 ? "día" : "días"}`;
+}

@@ -16,7 +16,7 @@ import {
   listRecentFamilyReservations,
 } from "@/lib/queries";
 import { saludo, haceTiempo } from "@/lib/format";
-import { ageFrom } from "@/lib/utils";
+import { edadLabel } from "@/lib/utils";
 import { StatBar } from "@/components/ui/stat-bar";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
@@ -94,7 +94,7 @@ export default async function PanelPage() {
           <ul className="divide-y divide-border px-5 pb-4">
             {reservations.map((r) => {
               const full = r.occupied >= r.program.studentCapacity;
-              const age = ageFrom(r.student.birthDate);
+              const edad = edadLabel(r.student.birthDate);
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
                   <span
@@ -107,8 +107,8 @@ export default async function PanelPage() {
                       <Link href={`/estudiantes/${r.student.id}`} className="hover:underline">
                         {r.student.firstName} {r.student.lastName}
                       </Link>
-                      {age != null && (
-                        <span className="font-normal text-muted"> ({age} años)</span>
+                      {edad && (
+                        <span className="font-normal text-muted"> ({edad})</span>
                       )}{" "}
                       <span className="font-normal text-muted">se inscribió a</span>{" "}
                       {r.program.name}

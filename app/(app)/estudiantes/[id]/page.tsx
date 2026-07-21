@@ -22,7 +22,7 @@ import {
   getStudentTimeline,
   listAuditLog,
 } from "@/lib/queries";
-import { ageFrom } from "@/lib/utils";
+import { edadLabel } from "@/lib/utils";
 import { fechaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
@@ -89,7 +89,7 @@ export default async function StudentDetailPage({
   const selectedCycleId = validCiclo ?? activeCycle?.id ?? cycles[0]?.id ?? "";
   const levelRecords = selectedCycleId ? await getStudentLevels(id, selectedCycleId) : [];
 
-  const age = ageFrom(student.birthDate);
+  const edad = edadLabel(student.birthDate);
   const activeEnrollments = student.enrollments.filter((e) => e.status === "ACTIVA").length;
 
   const contactRows = [
@@ -125,7 +125,7 @@ export default async function StudentDetailPage({
               )}
             </div>
             <p className="mt-1 text-sm text-muted">
-              {age != null ? `${age} años` : "Edad no registrada"}
+              {edad ?? "Edad no registrada"}
               {student.gender ? ` · ${genderLabel[student.gender]}` : ""}
               {student.birthDate ? ` · Nació el ${fechaLarga(student.birthDate)}` : ""}
             </p>

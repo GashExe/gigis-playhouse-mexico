@@ -8,7 +8,7 @@ import {
 import { listStudents, countStudentsByStatus } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/dal";
 import { StudentStatusSchema } from "@/lib/validators";
-import { ageFrom } from "@/lib/utils";
+import { edadLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -96,7 +96,7 @@ export default async function StudentsPage({
         <Card className="overflow-hidden p-0">
           <ul className="divide-y divide-border">
             {students.map((s) => {
-              const age = ageFrom(s.birthDate);
+              const edad = edadLabel(s.birthDate);
               return (
                 <li key={s.id}>
                   <Link
@@ -109,7 +109,7 @@ export default async function StudentsPage({
                         {s.firstName} {s.lastName}
                       </p>
                       <p className="truncate text-sm text-muted">
-                        {age != null ? `${age} años` : "Edad no registrada"}
+                        {edad ?? "Edad no registrada"}
                         {s.guardianName ? ` · Tutor: ${s.guardianName}` : ""}
                       </p>
                     </div>
