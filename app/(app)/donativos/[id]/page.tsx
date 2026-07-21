@@ -103,7 +103,7 @@ export default async function CampaignDetailPage({
                   Obligatoria
                 </span>
                 <span className="mt-0.5 block text-xs text-muted">
-                  Restringe apartar clases a quien no cumpla.
+                  Restringe apartar clases al llegar la fecha límite (a quien no cumpla).
                 </span>
               </span>
             </label>

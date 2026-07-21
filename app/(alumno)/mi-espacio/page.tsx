@@ -33,6 +33,7 @@ import { slotsLabel } from "@/lib/schedule";
 import { fecha, fechaDia } from "@/lib/format";
 import { ageFrom } from "@/lib/utils";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { DonationCountdown } from "@/components/donation-countdown";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -152,9 +153,13 @@ export default async function MiEspacioPage() {
                       <CheckCircle weight="fill" className="size-3" />
                       {c.status === "GRACIA" ? "Con prórroga" : "Cumplido"}
                     </span>
-                  ) : c.mandatory ? (
+                  ) : c.blocking ? (
                     <span className="inline-flex items-center rounded-full bg-danger-weak px-2 py-0.5 text-[0.7rem] font-bold text-danger-strong">
                       Pendiente
+                    </span>
+                  ) : c.countingDown ? (
+                    <span className="inline-flex items-center rounded-full bg-warning-weak px-2 py-0.5 text-[0.7rem] font-bold text-warning-strong">
+                      Por cumplir
                     </span>
                   ) : null}
                 </div>
@@ -182,6 +187,16 @@ export default async function MiEspacioPage() {
                     </span>
                   )}
                 </div>
+                {/* Cuenta regresiva: aún puede apartar clases; al llegar la fecha se pausa. */}
+                {c.countingDown && c.dueDate && (
+                  <div className="mt-3 rounded-[var(--radius-control)] border border-warning/50 bg-warning-weak/30 p-3">
+                    <DonationCountdown target={new Date(c.dueDate).toISOString()} />
+                    <p className="mt-2 text-xs text-muted">
+                      Aún puedes apartar clases. Al llegar la fecha límite se pausará hasta
+                      cumplir el donativo o recibir una prórroga.
+                    </p>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

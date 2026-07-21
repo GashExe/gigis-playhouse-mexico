@@ -96,7 +96,8 @@ export default async function DonativosPage() {
                   Obligatoria
                 </span>
                 <span className="mt-0.5 block text-xs text-muted">
-                  Si no cumplen, no podrán apartar nuevas clases hasta cumplir o recibir prórroga.
+                  Al llegar la fecha límite, quien no cumpla no podrá apartar clases hasta cumplir
+                  o recibir prórroga. Necesita fecha límite para poder restringir.
                 </span>
               </span>
             </label>

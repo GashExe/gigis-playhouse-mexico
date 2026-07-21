@@ -111,7 +111,7 @@ export function CampaignFamilies({
         </div>
         <div className="rounded-[var(--radius-card)] border border-border bg-surface p-3 text-center">
           <p className="text-2xl font-extrabold text-ink">{pendientes}</p>
-          <p className="text-xs text-muted">{mandatory ? "Restringidas" : "Pendientes"}</p>
+          <p className="text-xs text-muted">Pendientes</p>
         </div>
       </div>
 

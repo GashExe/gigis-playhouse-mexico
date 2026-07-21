@@ -1104,9 +1104,18 @@ function contributionSatisfied(
 }
 
 /**
- * Campañas OBLIGATORIAS activas que la familia no ha cumplido (y sin prórroga
- * vigente). Si devuelve algo, la familia no puede apartar clases hasta cumplir o
- * que la dirección la libere. Vacío = puede inscribir.
+ * ¿Ya llegó la fecha límite? La restricción de una campaña obligatoria NO arranca
+ * al crearla: solo empieza cuando llega su fecha límite. Sin fecha límite no hay
+ * momento en que bloquee (queda como recordatorio pendiente).
+ */
+function deadlineReached(dueDate: Date | null) {
+  return dueDate != null && todayUTC() >= dueDate;
+}
+
+/**
+ * Campañas OBLIGATORIAS que HOY restringen apartar clases: activas, con su fecha
+ * límite ya cumplida, sin prórroga vigente y sin haber cumplido. Vacío = puede
+ * inscribir. Antes de la fecha límite no bloquean (solo corre el countdown).
  */
 export async function familyDonationHold(studentId: string) {
   const campaigns = await prisma.donationCampaign.findMany({
@@ -1125,7 +1134,9 @@ export async function familyDonationHold(studentId: string) {
     },
   });
   return campaigns
-    .filter((c) => !contributionSatisfied(c.contributions[0]))
+    .filter(
+      (c) => deadlineReached(c.dueDate) && !contributionSatisfied(c.contributions[0]),
+    )
     .map(({ contributions, ...c }) => c);
 }
 
@@ -1155,6 +1166,7 @@ export async function listFamilyCampaigns(studentId: string) {
   return campaigns.map(({ contributions, ...c }) => {
     const mine = contributions[0] ?? null;
     const satisfied = contributionSatisfied(mine);
+    const reached = deadlineReached(c.dueDate);
     return {
       ...c,
       status: mine?.status ?? "PENDIENTE",
@@ -1163,7 +1175,11 @@ export async function listFamilyCampaigns(studentId: string) {
       graceUntil: mine?.graceUntil ?? null,
       graceValid: mine ? graceIsValid(mine.status, mine.graceUntil) : false,
       satisfied,
-      blocking: c.mandatory && !satisfied,
+      deadlineReached: reached,
+      // Ya bloquea: obligatoria, con la fecha límite cumplida y sin cumplir.
+      blocking: c.mandatory && !satisfied && reached,
+      // Cuenta regresiva en curso: obligatoria pendiente con fecha límite futura.
+      countingDown: c.mandatory && !satisfied && c.dueDate != null && !reached,
     };
   });
 }
