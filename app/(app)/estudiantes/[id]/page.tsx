@@ -23,7 +23,7 @@ import {
   listAuditLog,
 } from "@/lib/queries";
 import { edadLabel } from "@/lib/utils";
-import { fechaLarga } from "@/lib/format";
+import { fechaDiaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { StudentStatusControl } from "@/components/student-status-control";
@@ -127,7 +127,7 @@ export default async function StudentDetailPage({
             <p className="mt-1 text-sm text-muted">
               {edad ?? "Edad no registrada"}
               {student.gender ? ` · ${genderLabel[student.gender]}` : ""}
-              {student.birthDate ? ` · Nació el ${fechaLarga(student.birthDate)}` : ""}
+              {student.birthDate ? ` · Nació el ${fechaDiaLarga(student.birthDate)}` : ""}
             </p>
           </div>
         </div>

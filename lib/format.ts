@@ -22,6 +22,17 @@ export function fechaLarga(date: Date | string | null | undefined): string {
   return format(new Date(date), "d 'de' MMMM 'de' yyyy", { locale: es });
 }
 
+/**
+ * Versión larga de `fechaDia`: para campos SOLO-FECHA (guardados a medianoche
+ * UTC, como birthDate). Lee las partes UTC para no correr el día en México.
+ */
+export function fechaDiaLarga(date: Date | string | null | undefined): string {
+  if (!date) return "—";
+  const d = new Date(date);
+  const local = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12);
+  return format(local, "d 'de' MMMM 'de' yyyy", { locale: es });
+}
+
 export function haceTiempo(date: Date | string | null | undefined): string {
   if (!date) return "—";
   return formatDistanceToNow(new Date(date), { locale: es, addSuffix: true });
