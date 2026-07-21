@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/dal";
 import { getActiveCycle } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
+import { ensurePlacementOnEnroll } from "@/lib/placement";
 
 const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
   ACTIVA: "activa",
@@ -58,6 +59,9 @@ export async function addEnrollment(studentId: string, formData: FormData) {
     entityId: programId,
     studentId,
   });
+  // Ubicación automática de nivel: recupera su nivel del historial o lo coloca en
+  // el más bajo si es nuevo en el programa.
+  await ensurePlacementOnEnroll(studentId, programId, cycle.id);
   revalidatePath(`/estudiantes/${studentId}`);
   revalidatePath("/panel");
 }

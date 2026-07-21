@@ -1081,3 +1081,248 @@ export async function listUsers() {
     },
   });
 }
+
+// ── Donativos ───────────────────────────────────────────────────────────────
+
+/** Medianoche UTC del día de hoy: base para comparar contra fechas @db.Date. */
+function todayUTC() {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+}
+
+/** ¿La prórroga sigue vigente? (válida hasta `graceUntil` inclusive) */
+function graceIsValid(status: string, graceUntil: Date | null) {
+  return status === "GRACIA" && graceUntil != null && graceUntil >= todayUTC();
+}
+
+/** ¿El aporte cuenta como cumplido (no bloquea)? */
+function contributionSatisfied(
+  c: { status: string; graceUntil: Date | null } | undefined | null,
+) {
+  if (!c) return false;
+  return c.status === "CUMPLIDO" || graceIsValid(c.status, c.graceUntil);
+}
+
+/**
+ * Campañas OBLIGATORIAS activas que la familia no ha cumplido (y sin prórroga
+ * vigente). Si devuelve algo, la familia no puede apartar clases hasta cumplir o
+ * que la dirección la libere. Vacío = puede inscribir.
+ */
+export async function familyDonationHold(studentId: string) {
+  const campaigns = await prisma.donationCampaign.findMany({
+    where: { active: true, mandatory: true },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      goalLabel: true,
+      goalAmount: true,
+      dueDate: true,
+      contributions: {
+        where: { studentId },
+        select: { status: true, graceUntil: true },
+      },
+    },
+  });
+  return campaigns
+    .filter((c) => !contributionSatisfied(c.contributions[0]))
+    .map(({ contributions, ...c }) => c);
+}
+
+/**
+ * Campañas activas para el espacio de la familia: cada una con el estado de esta
+ * familia. Incluye obligatorias y voluntarias; `blocking` marca las que hoy le
+ * impiden apartar clases.
+ */
+export async function listFamilyCampaigns(studentId: string) {
+  const campaigns = await prisma.donationCampaign.findMany({
+    where: { active: true },
+    orderBy: [{ mandatory: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      goalLabel: true,
+      goalAmount: true,
+      mandatory: true,
+      dueDate: true,
+      contributions: {
+        where: { studentId },
+        select: { status: true, amount: true, note: true, graceUntil: true },
+      },
+    },
+  });
+  return campaigns.map(({ contributions, ...c }) => {
+    const mine = contributions[0] ?? null;
+    const satisfied = contributionSatisfied(mine);
+    return {
+      ...c,
+      status: mine?.status ?? "PENDIENTE",
+      amount: mine?.amount ?? null,
+      note: mine?.note ?? null,
+      graceUntil: mine?.graceUntil ?? null,
+      graceValid: mine ? graceIsValid(mine.status, mine.graceUntil) : false,
+      satisfied,
+      blocking: c.mandatory && !satisfied,
+    };
+  });
+}
+
+/** Campañas de donativos con su avance (para el panel de la dirección). */
+export async function listCampaigns() {
+  const [campaigns, totalFamilies] = await Promise.all([
+    prisma.donationCampaign.findMany({
+      orderBy: [{ active: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        goalLabel: true,
+        goalAmount: true,
+        mandatory: true,
+        active: true,
+        dueDate: true,
+        createdAt: true,
+        contributions: { select: { status: true, graceUntil: true } },
+      },
+    }),
+    prisma.student.count({ where: { status: "ACTIVO" } }),
+  ]);
+  return campaigns.map(({ contributions, ...c }) => {
+    const cumplidas = contributions.filter((x) => x.status === "CUMPLIDO").length;
+    const gracia = contributions.filter((x) =>
+      graceIsValid(x.status, x.graceUntil),
+    ).length;
+    return { ...c, totalFamilies, cumplidas, gracia };
+  });
+}
+
+/**
+ * Una campaña con el estado de CADA familia activa (aunque aún no tenga registro).
+ * Es la vista donde la dirección marca cumplido, registra el donativo o da prórroga.
+ */
+export async function getCampaign(id: string) {
+  const campaign = await prisma.donationCampaign.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      goalLabel: true,
+      goalAmount: true,
+      mandatory: true,
+      active: true,
+      dueDate: true,
+      createdAt: true,
+    },
+  });
+  if (!campaign) return null;
+
+  const students = await prisma.student.findMany({
+    where: { status: "ACTIVO" },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      matricula: true,
+      donations: {
+        where: { campaignId: id },
+        select: { status: true, amount: true, note: true, graceUntil: true },
+      },
+    },
+  });
+
+  const families = students.map(({ donations, ...s }) => {
+    const mine = donations[0] ?? null;
+    return {
+      ...s,
+      status: mine?.status ?? "PENDIENTE",
+      amount: mine?.amount ?? null,
+      note: mine?.note ?? null,
+      graceUntil: mine?.graceUntil ?? null,
+      graceValid: mine ? graceIsValid(mine.status, mine.graceUntil) : false,
+      satisfied: contributionSatisfied(mine),
+    };
+  });
+
+  return { campaign, families };
+}
+
+/**
+ * El "proceso" del niño que ve la familia: por cada programa inscrito en el ciclo,
+ * en qué nivel va y qué tanto lleva avanzado bloque por bloque. Se calcula de las
+ * calificaciones por tema (1–4) ya registradas; un bloque se muestra "logrado" al
+ * llegar al umbral del programa.
+ */
+export async function getFamilyProgress(studentId: string, cycleId: string) {
+  const records = await prisma.levelRecord.findMany({
+    where: { studentId, cycleId },
+    orderBy: { program: { name: "asc" } },
+    select: {
+      placement: true,
+      program: {
+        select: { id: true, name: true, color: true, area: true, passThreshold: true },
+      },
+      level: {
+        select: {
+          id: true,
+          name: true,
+          order: true,
+          blocks: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              items: { select: { id: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (records.length === 0) return [];
+
+  const itemIds = [
+    ...new Set(records.flatMap((r) => r.level.blocks.flatMap((b) => b.items.map((i) => i.id)))),
+  ];
+  const scores = itemIds.length
+    ? await prisma.itemScore.findMany({
+        where: { studentId, cycleId, itemId: { in: itemIds } },
+        select: { itemId: true, score: true },
+      })
+    : [];
+  const scoreByItem = new Map(scores.map((s) => [s.itemId, s.score]));
+
+  const pct = (ids: string[]) =>
+    ids.length === 0
+      ? 0
+      : Math.round(
+          (ids.reduce((acc, id) => acc + (scoreByItem.get(id) ?? 0) / 4, 0) / ids.length) * 100,
+        );
+
+  return records.map((r) => {
+    const threshold = r.program.passThreshold;
+    const blocks = r.level.blocks.map((b) => {
+      const ids = b.items.map((i) => i.id);
+      const percent = pct(ids);
+      return {
+        id: b.id,
+        code: b.code,
+        name: b.name,
+        percent,
+        achieved: ids.length > 0 && percent >= threshold,
+        hasItems: ids.length > 0,
+      };
+    });
+    const allIds = r.level.blocks.flatMap((b) => b.items.map((i) => i.id));
+    return {
+      program: r.program,
+      placement: r.placement,
+      levelName: r.level.name,
+      overall: pct(allIds),
+      blocks,
+    };
+  });
+}

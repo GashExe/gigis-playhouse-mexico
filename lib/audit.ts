@@ -25,7 +25,14 @@ export type AuditAction =
   | "alumno.estado"
   | "alumno.baja"
   | "ciclo.continuidad"
-  | "acceso.repone-contrasena";
+  | "acceso.repone-contrasena"
+  | "donativo.campana.alta"
+  | "donativo.campana.editar"
+  | "donativo.campana.estado"
+  | "donativo.campana.baja"
+  | "donativo.cumplido"
+  | "donativo.gracia"
+  | "donativo.reabrir";
 
 type AuditInput = {
   action: AuditAction;

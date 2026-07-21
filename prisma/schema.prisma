@@ -86,6 +86,7 @@ model Student {
   attendance   AttendanceRecord[] // Asistencia por clase
   studentNotes StudentNote[] // Anotaciones del equipo sobre el participante
   reservations Reservation[] // Reservas de actividades pedidas por la familia
+  donations    DonationContribution[] // Aportes de la familia a las campañas de donativos
   announcementsFor AnnouncementRecipient[] // Anuncios dirigidos específicamente a él
   auditLogs    AuditLog[] // Movimientos registrados sobre este participante
 
@@ -489,6 +490,56 @@ enum ReservationStatus {
   APROBADA
   RECHAZADA
   CANCELADA // La familia se arrepintió antes de que se resolviera
+}
+
+/// Campaña de donativos que arma la dirección para las familias. Los donativos a
+/// veces son en especie, así que el cumplimiento lo marca la dirección (no se suma
+/// solo). Si la campaña es obligatoria (`mandatory`) y la familia no cumple, se le
+/// restringe apartar/inscribir clases hasta que cumpla o reciba una prórroga.
+model DonationCampaign {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  goalLabel   String?   // Mínimo esperado en texto (ej. "$200 o material escolar"); en especie no siempre es número
+  goalAmount  Int?      // Mínimo sugerido en pesos (opcional; informativo)
+  mandatory   Boolean   @default(false) // El "check": si es obligatoria y no cumplen, se restringe apartar clases
+  active      Boolean   @default(true)
+  dueDate     DateTime? @db.Date // Fecha límite (opcional)
+
+  contributions DonationContribution[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}
+
+/// Aporte de una familia a una campaña. El estado lo lleva la dirección: PENDIENTE
+/// mientras no cumple, CUMPLIDO cuando entregó (dinero o especie) y GRACIA cuando se
+/// le dio una prórroga (vigente hasta `graceUntil`). El registro puede no existir aún
+/// para una familia: esa ausencia cuenta como PENDIENTE.
+model DonationContribution {
+  id         String           @id @default(cuid())
+  campaign   DonationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaignId String
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId  String
+  status     DonationStatus   @default(PENDIENTE)
+  amount     Int?             // Monto aportado en pesos (opcional; los donativos en especie van en la nota)
+  note       String?          // Detalle del donativo (útil para donativos en especie)
+  graceUntil DateTime?        @db.Date // Prórroga: liberado hasta esta fecha inclusive
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, studentId])
+  @@index([studentId])
+}
+
+enum DonationStatus {
+  PENDIENTE
+  CUMPLIDO
+  GRACIA // Prórroga vigente hasta graceUntil
 }
 
 /// Evento del calendario interno: juntas, capacitaciones, visitas, eventos de

@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
-import { getActiveCycle, meetsAgeRequirement } from "@/lib/queries";
+import { getActiveCycle, meetsAgeRequirement, familyDonationHold } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
+import { ensurePlacementOnEnroll } from "@/lib/placement";
 import { ageFrom } from "@/lib/utils";
 
 /**
@@ -35,6 +36,11 @@ export async function requestReservation(formData: FormData) {
 
   const cycle = await getActiveCycle();
   if (!cycle) return;
+
+  // Compuerta de donativos: si la familia tiene un donativo OBLIGATORIO sin cumplir
+  // (y sin prórroga vigente), no puede apartar clases hasta cumplir o que la dirección
+  // la libere. La pantalla ya lo avisa; esto cierra la puerta por si entran por URL.
+  if ((await familyDonationHold(studentId)).length > 0) return;
 
   // Solo actividades reales de la oferta del ciclo.
   const program = await prisma.program.findFirst({
@@ -101,6 +107,10 @@ export async function requestReservation(formData: FormData) {
     entityId: program.id,
     studentId,
   });
+
+  // Ubicación automática de nivel: recupera su nivel si ya tuvo historial, o lo
+  // coloca en el más bajo si es nuevo en el programa.
+  await ensurePlacementOnEnroll(studentId, programId, cycle.id);
 
   revalidatePath("/mi-espacio");
   revalidatePath("/panel");
