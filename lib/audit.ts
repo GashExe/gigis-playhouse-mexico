@@ -32,7 +32,8 @@ export type AuditAction =
   | "donativo.campana.baja"
   | "donativo.cumplido"
   | "donativo.gracia"
-  | "donativo.reabrir";
+  | "donativo.reabrir"
+  | "config.legal.editar";
 
 type AuditInput = {
   action: AuditAction;

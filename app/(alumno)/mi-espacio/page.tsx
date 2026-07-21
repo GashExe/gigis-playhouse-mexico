@@ -28,7 +28,7 @@ import {
 } from "@/lib/queries";
 import { requestReservation } from "@/lib/actions/reservations";
 import { meetsAgeRequirement } from "@/lib/queries";
-import { needsOnboarding } from "@/lib/legal";
+import { getLegalConfig, needsOnboarding } from "@/lib/legal";
 import { slotsLabel } from "@/lib/schedule";
 import { fecha, fechaDia } from "@/lib/format";
 import { ageFrom } from "@/lib/utils";
@@ -42,7 +42,7 @@ export default async function MiEspacioPage() {
   const student = user.studentId ? await getStudentSpace(user.studentId) : null;
 
   // Compuerta: sin datos básicos + salud + aviso/reglamento aceptados, no hay acceso a clases.
-  if (student && needsOnboarding(student)) {
+  if (student && needsOnboarding(student, (await getLegalConfig()).version)) {
     redirect("/mi-espacio/bienvenida");
   }
 

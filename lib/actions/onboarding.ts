@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { OnboardingSchema } from "@/lib/validators";
-import { LEGAL_VERSION } from "@/lib/legal";
+import { getLegalConfig } from "@/lib/legal";
 
 export type OnboardingState =
   | { errors?: Record<string, string[]>; error?: string }
@@ -61,6 +61,7 @@ export async function completeOnboarding(
   }
 
   const now = new Date();
+  const legal = await getLegalConfig();
   const healthData = {
     bloodType: d.bloodType || null,
     allergies: d.allergies || null,
@@ -88,7 +89,7 @@ export async function completeOnboarding(
       address: d.address || null,
       privacyAcceptedAt: now,
       rulesAcceptedAt: now,
-      consentVersion: LEGAL_VERSION,
+      consentVersion: legal.version,
       onboardingCompletedAt: now,
       health: {
         upsert: { create: healthData, update: healthData },

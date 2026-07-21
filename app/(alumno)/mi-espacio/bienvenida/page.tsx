@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { HeartStraight } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import { getOnboardingData } from "@/lib/queries";
-import { AVISO_PRIVACIDAD, REGLAMENTO, needsOnboarding } from "@/lib/legal";
+import { getLegalConfig, needsOnboarding } from "@/lib/legal";
 import { OnboardingForm } from "@/components/onboarding-form";
 
 export const metadata: Metadata = { title: "Bienvenida" };
@@ -12,11 +12,14 @@ export default async function BienvenidaPage() {
   const user = await getCurrentUser();
   if (user.role !== "ALUMNO" || !user.studentId) redirect("/panel");
 
-  const student = await getOnboardingData(user.studentId);
+  const [student, legal] = await Promise.all([
+    getOnboardingData(user.studentId),
+    getLegalConfig(),
+  ]);
   if (!student) redirect("/mi-espacio");
 
   // Si ya completó el onboarding con la versión vigente, no hay nada que llenar.
-  if (!needsOnboarding(student)) redirect("/mi-espacio");
+  if (!needsOnboarding(student, legal.version)) redirect("/mi-espacio");
 
   const firstName = student.firstName.split(" ")[0];
   const h = student.health;
@@ -38,8 +41,8 @@ export default async function BienvenidaPage() {
       </section>
 
       <OnboardingForm
-        avisoPrivacidad={AVISO_PRIVACIDAD}
-        reglamento={REGLAMENTO}
+        avisoPrivacidad={legal.avisoPrivacidad}
+        reglamento={legal.reglamento}
         defaults={{
           birthDate: student.birthDate ? student.birthDate.toISOString().slice(0, 10) : undefined,
           gender: student.gender ?? undefined,

@@ -38,6 +38,7 @@ model User {
   reservationsDecided Reservation[] @relation("DecideReservas") // Reservas que resolvió
   calendarEvents CalendarEvent[] @relation("AutorEventos") // Eventos del calendario interno
   auditLogs   AuditLog[]    @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
+  legalEdits  LegalConfig[] @relation("ConfigEditor") // Ediciones de los textos legales
 
   @@index([role])
 }
@@ -642,4 +643,19 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([studentId, createdAt])
+}
+
+/// Textos legales que el tutor acepta en su primer ingreso (aviso de privacidad y
+/// reglamento), editables por la dirección desde /configuracion. Es un registro
+/// ÚNICO (singleton, id = 1). Al cambiar cualquiera de los textos se genera una
+/// nueva `version`; como el onboarding compara la versión aceptada por la familia
+/// contra la vigente, subir la versión obliga a aceptarlos de nuevo.
+model LegalConfig {
+  id              Int      @id @default(1) // singleton: siempre 1
+  avisoPrivacidad String
+  reglamento      String
+  version         String // sube en cada cambio; dispara la re-aceptación de las familias
+  updatedAt       DateTime @updatedAt
+  updatedById     String? // quién hizo la última edición
+  updatedBy       User?    @relation("ConfigEditor", fields: [updatedById], references: [id], onDelete: SetNull)
 }

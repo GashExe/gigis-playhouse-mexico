@@ -1,16 +1,20 @@
+import { cache } from "react";
+import { prisma } from "@/lib/prisma";
+
 /**
- * Textos legales que el tutor debe aceptar en su primer ingreso.
+ * Textos legales que el tutor acepta en su primer ingreso (aviso de privacidad y
+ * reglamento).
  *
- * ⚠️ PROVISIONAL: estos son textos GENÉRICOS de ejemplo. Cuando llegue el
- * aviso de privacidad y el reglamento oficiales de Gigi's Playhouse, se
- * reemplazan aquí y se SUBE la versión (`LEGAL_VERSION`) para que a todas las
- * familias se les vuelva a pedir la aceptación.
+ * Los textos VIGENTES viven en la base de datos (modelo LegalConfig) y la
+ * dirección los edita desde /configuracion — usa `getLegalConfig()` para leerlos.
+ * Las constantes DEFAULT_* de abajo son solo la semilla inicial: se guardan en la
+ * BD la primera vez y a partir de ahí manda lo que la directora deje escrito.
  */
 
-/** Al cambiar cualquiera de los textos, sube esta versión (ej. "2026-08"). */
-export const LEGAL_VERSION = "generico-2026-07";
+/** Versión semilla. Al editar los textos, la acción genera una versión nueva. */
+export const DEFAULT_LEGAL_VERSION = "generico-2026-07";
 
-export const AVISO_PRIVACIDAD = `AVISO DE PRIVACIDAD (versión provisional)
+export const DEFAULT_AVISO_PRIVACIDAD = `AVISO DE PRIVACIDAD (versión provisional)
 
 Gigi's Playhouse México, con domicilio en la Ciudad de México, es responsable del
 tratamiento y protección de los datos personales que usted proporcione.
@@ -30,7 +34,7 @@ los Particulares.
 
 (Texto provisional: será sustituido por el aviso de privacidad oficial.)`;
 
-export const REGLAMENTO = `REGLAMENTO DE GIGI'S PLAYHOUSE (versión provisional)
+export const DEFAULT_REGLAMENTO = `REGLAMENTO DE GIGI'S PLAYHOUSE (versión provisional)
 
 1. Puntualidad: llegar a tiempo a las sesiones; avisar con anticipación cualquier
    inasistencia.
@@ -50,13 +54,37 @@ Al aceptar, usted declara haber leído y estar de acuerdo con este reglamento.
 (Texto provisional: será sustituido por el reglamento oficial.)`;
 
 /**
+ * Textos legales vigentes (los que edita la dirección). Registro único id=1: si
+ * aún no existe, se siembra con las constantes DEFAULT_*. Cacheado por request.
+ */
+export const getLegalConfig = cache(async () => {
+  const existing = await prisma.legalConfig.findUnique({ where: { id: 1 } });
+  if (existing) return existing;
+  // Primera vez: sembramos la fila con los textos por defecto. `upsert` protege
+  // contra una carrera si dos peticiones la crean a la vez.
+  return prisma.legalConfig.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      avisoPrivacidad: DEFAULT_AVISO_PRIVACIDAD,
+      reglamento: DEFAULT_REGLAMENTO,
+      version: DEFAULT_LEGAL_VERSION,
+    },
+  });
+});
+
+/**
  * ¿El tutor debe completar el onboarding antes de acceder a las clases?
  * Requiere onboarding terminado Y que la versión aceptada sea la vigente
- * (si sube la versión, se re-pide la aceptación).
+ * (si la dirección cambia los textos, sube la versión y se re-pide la aceptación).
  */
-export function needsOnboarding(s: {
-  onboardingCompletedAt: Date | null;
-  consentVersion: string | null;
-}): boolean {
-  return !s.onboardingCompletedAt || s.consentVersion !== LEGAL_VERSION;
+export function needsOnboarding(
+  s: {
+    onboardingCompletedAt: Date | null;
+    consentVersion: string | null;
+  },
+  currentVersion: string,
+): boolean {
+  return !s.onboardingCompletedAt || s.consentVersion !== currentVersion;
 }

@@ -14,6 +14,7 @@ import {
   ClockCounterClockwise,
   FileText,
   HandHeart,
+  GearSix,
   MagnifyingGlass,
   DotsThreeOutline,
   SignOut,
@@ -64,6 +65,7 @@ const NAV: NavItem[] = [
   { href: "/donativos", label: "Donativos", icon: HandHeart, roles: ["DIRECTORA"] },
   { href: "/oficios", label: "Oficios", icon: FileText, roles: ["DIRECTORA"] },
   { href: "/bitacora", label: "Bitácora", icon: ClockCounterClockwise, roles: ["DIRECTORA"] },
+  { href: "/configuracion", label: "Configuración", icon: GearSix, roles: ["DIRECTORA"] },
   { href: "/manual", label: "Manual", icon: BookOpenText },
 ];
 
