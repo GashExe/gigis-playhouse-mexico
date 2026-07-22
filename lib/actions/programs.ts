@@ -94,8 +94,15 @@ export async function createProgram(
 
   const slots = parseSlots(formData);
   if (slots && slots.length > 0) {
+    // Programa recién creado: aún no tiene niveles, así que el horario es de todo
+    // el programa (sin nivel). Se ignora cualquier programLevelId que venga.
     await prisma.scheduleSlot.createMany({
-      data: slots.map((s) => ({ programId: program.id, ...s })),
+      data: slots.map((s) => ({
+        programId: program.id,
+        weekday: s.weekday,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
     });
   }
 
@@ -189,11 +196,28 @@ export async function updateProgram(
   // la verdad. null = el campo no vino o vino roto; en ese caso no se toca.
   const slots = parseSlots(formData);
   if (slots) {
+    // El horario puede colgar de un nivel (programas por niveles) o del programa
+    // completo (programLevelId null). Se valida que el nivel sea de ESTE programa;
+    // cualquier id ajeno o inválido se degrada a horario de programa.
+    const validLevelIds = new Set(
+      (
+        await prisma.programLevel.findMany({
+          where: { programId: id },
+          select: { id: true },
+        })
+      ).map((l) => l.id),
+    );
+    const rows = slots.map((s) => ({
+      programId: id,
+      weekday: s.weekday,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      programLevelId:
+        s.programLevelId && validLevelIds.has(s.programLevelId) ? s.programLevelId : null,
+    }));
     await prisma.$transaction([
       prisma.scheduleSlot.deleteMany({ where: { programId: id } }),
-      ...(slots.length > 0
-        ? [prisma.scheduleSlot.createMany({ data: slots.map((s) => ({ programId: id, ...s })) })]
-        : []),
+      ...(rows.length > 0 ? [prisma.scheduleSlot.createMany({ data: rows })] : []),
     ]);
   }
 

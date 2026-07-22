@@ -157,7 +157,8 @@ export function CampaignFamilies({
 
               {open && (
                 <div className="mt-3 space-y-3 rounded-[var(--radius-control)] border border-border bg-surface-2 p-3">
-                  {/* Marcar cumplido (con monto/nota opcionales, útil para especie) */}
+                  {/* Marcar cumplido (con monto/nota opcionales; el donativo puede ser
+                      en especie, tiempo o dinero, sin obligar a especificar cuál) */}
                   <form action={markContributionDone} className="space-y-2">
                     <input type="hidden" name="campaignId" value={campaignId} />
                     <input type="hidden" name="studentId" value={f.id} />
@@ -172,7 +173,7 @@ export function CampaignFamilies({
                       <Input
                         name="note"
                         defaultValue={f.note ?? ""}
-                        placeholder="Nota (ej. entregó material)"
+                        placeholder="Nota (ej. material, dinero o apoyó con tiempo)"
                         className="h-9 bg-surface text-sm"
                       />
                     </div>

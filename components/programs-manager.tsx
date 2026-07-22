@@ -32,6 +32,8 @@ type Teacher = { id: string; name: string };
 
 type ScheduleSlot = Slot & { id?: string };
 
+type Level = { id: string; name: string; order: number };
+
 type Program = {
   id: string;
   name: string;
@@ -41,6 +43,7 @@ type Program = {
   active: boolean;
   schedule: string | null;
   scheduleSlots: ScheduleSlot[];
+  levels: Level[];
   type: string | null;
   ageMin: number | null;
   ageMax: number | null;
@@ -204,14 +207,48 @@ function ProgramCard({
 
       {/* Datos de la actividad. El horario estructurado manda sobre el texto libre. */}
       <dl className="mt-3 space-y-1.5 text-sm text-muted">
-        {(p.scheduleSlots.length > 0 || p.schedule) && (
-          <div className="flex items-center gap-2">
-            <Clock className="size-4 shrink-0 text-subtle" />
-            <span>
-              {p.scheduleSlots.length > 0 ? slotsLabel(p.scheduleSlots) : p.schedule}
-            </span>
-          </div>
-        )}
+        {(() => {
+          const hasLevelSlots = p.scheduleSlots.some((s) => s.programLevelId);
+          if (p.scheduleSlots.length > 0 && hasLevelSlots) {
+            // Horario separado por nivel: una línea por nivel (más "Todo el programa").
+            const shared = p.scheduleSlots.filter((s) => !s.programLevelId);
+            const rows = [
+              ...p.levels
+                .map((l) => ({
+                  label: l.name,
+                  slots: p.scheduleSlots.filter((s) => s.programLevelId === l.id),
+                }))
+                .filter((r) => r.slots.length > 0),
+              ...(shared.length > 0
+                ? [{ label: "Todo el programa", slots: shared }]
+                : []),
+            ];
+            return (
+              <div className="flex items-start gap-2">
+                <Clock className="mt-0.5 size-4 shrink-0 text-subtle" />
+                <span className="space-y-0.5">
+                  {rows.map((r) => (
+                    <span key={r.label} className="block">
+                      <span className="font-medium text-ink">{r.label}:</span>{" "}
+                      {slotsLabel(r.slots)}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            );
+          }
+          if (p.scheduleSlots.length > 0 || p.schedule) {
+            return (
+              <div className="flex items-center gap-2">
+                <Clock className="size-4 shrink-0 text-subtle" />
+                <span>
+                  {p.scheduleSlots.length > 0 ? slotsLabel(p.scheduleSlots) : p.schedule}
+                </span>
+              </div>
+            );
+          }
+          return null;
+        })()}
         {ageRangeLabel(p.ageMin, p.ageMax) && (
           <div className="flex items-center gap-2">
             <UsersThree className="size-4 shrink-0 text-subtle" />
@@ -279,17 +316,31 @@ function ProgramCard({
  * Editor de días y horas de clase. Mantiene las filas en estado local y las envía
  * como JSON en un campo oculto "slots"; el servidor reemplaza el horario completo.
  */
-function SlotsEditor({ initial }: { initial: ScheduleSlot[] }) {
+function SlotsEditor({ initial, levels = [] }: { initial: ScheduleSlot[]; levels?: Level[] }) {
   const [slots, setSlots] = useState<Slot[]>(
-    initial.map(({ weekday, startTime, endTime }) => ({ weekday, startTime, endTime })),
+    initial.map(({ weekday, startTime, endTime, programLevelId }) => ({
+      weekday,
+      startTime,
+      endTime,
+      programLevelId: programLevelId ?? null,
+    })),
   );
 
   const update = (i: number, patch: Partial<Slot>) =>
     setSlots((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
 
+  // Solo los programas con niveles pueden separar el horario por nivel.
+  const byLevel = levels.length > 0;
+
   return (
     <div>
       <span className="mb-1.5 block text-sm font-semibold text-ink">Días de clase</span>
+      {byLevel && (
+        <p className="mb-1.5 text-xs text-muted">
+          Cada nivel puede tener su propio horario. Deja «Todo el programa» si el
+          horario es igual para todos.
+        </p>
+      )}
       <input type="hidden" name="slots" value={JSON.stringify(slots)} />
       <div className="space-y-2">
         {slots.map((s, i) => (
@@ -323,6 +374,21 @@ function SlotsEditor({ initial }: { initial: ScheduleSlot[] }) {
               className="w-28"
               required
             />
+            {byLevel && (
+              <Select
+                aria-label="Nivel"
+                value={s.programLevelId ?? ""}
+                onChange={(e) => update(i, { programLevelId: e.target.value || null })}
+                className="w-44"
+              >
+                <option value="">Todo el programa</option>
+                {levels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            )}
             <button
               type="button"
               onClick={() => setSlots((prev) => prev.filter((_, j) => j !== i))}
@@ -348,6 +414,7 @@ function SlotsEditor({ initial }: { initial: ScheduleSlot[] }) {
                 weekday: last ? (last.weekday % 6) + 1 : 1,
                 startTime: last?.startTime ?? "10:00",
                 endTime: last?.endTime ?? "11:00",
+                programLevelId: last?.programLevelId ?? null,
               },
             ];
           })
@@ -423,7 +490,7 @@ function ProgramForm({
         </Field>
 
         {/* Días y horas de clase: es lo que pinta el calendario del equipo. */}
-        <SlotsEditor initial={defaults?.scheduleSlots ?? []} />
+        <SlotsEditor initial={defaults?.scheduleSlots ?? []} levels={defaults?.levels ?? []} />
 
         {/* Datos de la actividad */}
         <div className="grid gap-4 sm:grid-cols-2">

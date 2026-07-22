@@ -1,107 +1,111 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   Printer,
   ArrowsOutSimple,
   ArrowsInSimple,
+  FloppyDisk,
+  SealCheck,
+  Lock,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { saveOficio, approveOficio } from "@/lib/actions/oficios";
 
 /**
- * Generador de oficios membretados. La hoja de abajo ES el oficio: se escribe
- * directo sobre el membrete y se manda a imprimir o a "Guardar como PDF". No se
- * guarda nada: es una herramienta para sacar el oficio del momento sin abrir Word.
+ * Editor de oficios membretados con persistencia. La hoja de abajo ES el oficio: se
+ * escribe directo sobre el membrete. A diferencia de antes, el oficio SE GUARDA y su
+ * número lo asigna la dirección al aprobarlo; hasta entonces no se puede imprimir.
  *
- * El contenido fluye como texto normal (no en cajas de tamaño fijo), así que si el
- * oficio pasa de una hoja, el "Atentamente" y la firma se recorren solos a la
- * siguiente. Para que el membrete salga en TODAS las hojas se usan dos piezas:
- *
- *  - la hoja se imprime SIN márgenes de @page, así que cada 11in de documento es
- *    exactamente una hoja de papel. Por eso el membrete puede ir de mosaico
- *    (`repeat-y` cada 8.5×11in): cae clavado en cada hoja, sin irse recorriendo.
- *  - los márgenes de arriba y abajo son el `thead` y el `tfoot` de una tabla, que
- *    el navegador repite en cada hoja. Así el texto nunca se encima con el logo
- *    ni con el pie de la dirección.
- *
- * Ambas piezas están verificadas imprimiendo a PDF, no supuestas: un membrete en
- * `position: fixed` NO se repite bien (se pinta descuadrado), y con márgenes de
- * @page el fondo se desfasa hoja con hoja porque el flujo deja de ir 1:1 con el
- * papel. Si alguien cambia esto, que lo compruebe imprimiendo dos hojas.
+ * Detalles del membrete (mosaico por hoja, márgenes como thead/tfoot de una tabla)
+ * están verificados imprimiendo a PDF; si alguien los cambia, que lo compruebe con
+ * dos hojas. Los campos van sin control de React (contentEditable): React escribe el
+ * contenido inicial una vez y ya no lo toca, para no perder el cursor al escribir.
  */
+
+type Zona = "DIRECCION" | "OPERACION";
+
+type Oficio = {
+  id: string;
+  zona: Zona;
+  status: "BORRADOR" | "APROBADO";
+  year: number;
+  folio: number | null;
+  lugarFecha: string | null;
+  destinatario: string | null;
+  cuerpo: string;
+  firmante: string | null;
+};
 
 const MESES = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-/**
- * Campo que se escribe directo sobre la hoja. Es `contentEditable` y no un input:
- * así crece con el texto, se ajusta al ancho de lo escrito y —lo importante— el
- * cuerpo puede partirse entre hojas al imprimir (un `textarea` no se parte).
- * Acepta negritas con Ctrl/⌘+B, como en Word.
- *
- * Va sin control de React a propósito: React escribe el contenido inicial y ya no
- * lo vuelve a tocar, que es lo que necesita un campo editable para no perder el
- * cursor mientras se escribe.
- */
-function Campo({
-  children,
-  placeholder,
-  bloque = false,
-  className = "",
-}: {
-  children?: React.ReactNode;
-  placeholder?: string;
-  /** true = párrafo que puede ocupar varios renglones; false = una línea. */
-  bloque?: boolean;
-  className?: string;
-}) {
-  const Tag = bloque ? "div" : "span";
-  return (
-    <Tag
-      contentEditable
-      suppressContentEditableWarning
-      data-ph={placeholder}
-      className={`oficio-campo ${bloque ? "block" : "inline-block"} ${className}`}
-    >
-      {children}
-    </Tag>
-  );
-}
+/** Firma por defecto de un oficio de dirección (la de Eva). */
+const FIRMA_DIRECCION =
+  "<div>Eva Patricia Barba Reynoso</div>" +
+  "<div>Directora General</div>" +
+  "<div>GiGi's Playhouse Mexico I.A.P</div>" +
+  '<div class="underline">http://gigisplayhouse.org/mexico/</div>';
 
 /** Medidas del formato, en pulgadas. */
 const ALTO_HOJA = 11;
 const MARGEN_SUP = 2.25;
 const MARGEN_INF = 0.7;
-const PX = 96; // pulgada en px de CSS
+const PX = 96;
 
-export function OficioEditor() {
+export function OficioEditor({
+  oficio,
+  proximoFolio,
+  canApprove,
+}: {
+  oficio: Oficio;
+  /** Folio que tomaría en cada zona al aprobarse (mayor emitido + 1). */
+  proximoFolio: Record<Zona, number>;
+  /** Solo la dirección (Eva) puede aprobar. */
+  canApprove: boolean;
+}) {
   const hoy = new Date();
+  const aprobado = oficio.status === "APROBADO";
   const [zoom, setZoom] = useState(1);
+  const [zona, setZona] = useState<Zona>(oficio.zona);
+  const [guardado, setGuardado] = useState(false);
+  const [pending, startTransition] = useTransition();
+
   const hojaRef = useRef<HTMLDivElement>(null);
   const fondoRef = useRef<HTMLDivElement>(null);
+  const lugarFechaRef = useRef<HTMLDivElement>(null);
+  const destinatarioRef = useRef<HTMLDivElement>(null);
+  const cuerpoRef = useRef<HTMLDivElement>(null);
+  const firmanteRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Ajusta el mosaico del membrete a un número entero de hojas antes de imprimir.
-   *
-   * Hace falta porque el fondo se recorta donde termina el texto: si el oficio
-   * acaba a media hoja, el pie con la dirección sale cortado. Y no se puede
-   * resolver sumándole una hoja de más —eso imprime una hoja en blanco al final—,
-   * así que se calcula cuántas hojas ocupa de verdad: el alto del texto entre lo
-   * que cabe en cada hoja, que es la hoja menos los dos márgenes (que el navegador
-   * repite en todas).
-   */
+  // Contenido inicial de los campos: se escribe UNA vez al montar.
+  useEffect(() => {
+    const lugarDefault = `Santiago de Querétaro, Querétaro., a ${hoy.getDate()} de ${
+      MESES[hoy.getMonth()]
+    } del ${hoy.getFullYear()}`;
+    if (lugarFechaRef.current) {
+      lugarFechaRef.current.innerText = oficio.lugarFecha ?? lugarDefault;
+    }
+    if (destinatarioRef.current) {
+      destinatarioRef.current.innerHTML = oficio.destinatario ?? "";
+    }
+    if (cuerpoRef.current) {
+      cuerpoRef.current.innerHTML = oficio.cuerpo ?? "";
+    }
+    if (firmanteRef.current) {
+      firmanteRef.current.innerHTML =
+        oficio.firmante ?? (oficio.zona === "DIRECCION" ? FIRMA_DIRECCION : "");
+    }
+    // Solo al montar / cuando cambia el oficio (tras aprobar).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oficio.id, oficio.status]);
+
+  const zonaCode = zona === "OPERACION" ? "O" : "D";
+  const folioMostrar = aprobado ? oficio.folio : proximoFolio[zona];
+  const numero = `${folioMostrar}/GMP/${zonaCode}/${oficio.year}`;
+
   function ajustarMembrete() {
     const hoja = hojaRef.current;
     const fondo = fondoRef.current;
@@ -114,7 +118,6 @@ export function OficioEditor() {
     fondo.style.height = `${hojas * ALTO_HOJA * PX}px`;
   }
 
-  // Ctrl+P también debe salir bien, no solo el botón.
   useEffect(() => {
     const limpiar = () => {
       if (fondoRef.current) fondoRef.current.style.height = "";
@@ -127,19 +130,82 @@ export function OficioEditor() {
     };
   }, []);
 
+  function leerCampos() {
+    return {
+      zona,
+      lugarFecha: lugarFechaRef.current?.innerText ?? "",
+      destinatario: destinatarioRef.current?.innerHTML ?? "",
+      cuerpo: cuerpoRef.current?.innerHTML ?? "",
+      firmante: firmanteRef.current?.innerHTML ?? "",
+    };
+  }
+
+  function guardar() {
+    startTransition(async () => {
+      await saveOficio(oficio.id, leerCampos());
+      setGuardado(true);
+      setTimeout(() => setGuardado(false), 2500);
+    });
+  }
+
+  function aprobar() {
+    startTransition(async () => {
+      // Guarda primero para no aprobar una versión vieja, luego asigna folio.
+      await saveOficio(oficio.id, leerCampos());
+      await approveOficio(oficio.id);
+    });
+  }
+
+  function imprimir() {
+    ajustarMembrete();
+    window.print();
+  }
+
   return (
     <div>
       {/* Barra de herramientas: no se imprime */}
       <div className="mb-5 flex flex-wrap items-center gap-2 print:hidden">
-        <Button
-          onClick={() => {
-            ajustarMembrete();
-            window.print();
-          }}
-        >
-          <Printer weight="fill" className="size-4" />
-          Imprimir o guardar PDF
-        </Button>
+        {!aprobado && (
+          <>
+            <label className="flex items-center gap-2 text-sm font-semibold text-ink">
+              Zona
+              <select
+                value={zona}
+                onChange={(e) => setZona(e.target.value as Zona)}
+                className="h-9 rounded-[var(--radius-input)] border border-border bg-surface px-2 text-sm"
+              >
+                <option value="DIRECCION">Dirección</option>
+                <option value="OPERACION">Operación</option>
+              </select>
+            </label>
+            <Button variant="secondary" onClick={guardar} loading={pending}>
+              <FloppyDisk weight="fill" className="size-4" />
+              Guardar
+            </Button>
+            {guardado && (
+              <span className="text-xs font-semibold text-success-strong">Guardado ✓</span>
+            )}
+            {canApprove && (
+              <Button onClick={aprobar} loading={pending}>
+                <SealCheck weight="fill" className="size-4" />
+                Aprobar y asignar folio
+              </Button>
+            )}
+          </>
+        )}
+
+        {aprobado ? (
+          <Button onClick={imprimir}>
+            <Printer weight="fill" className="size-4" />
+            Imprimir o guardar PDF
+          </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] border border-warning bg-warning-weak/40 px-3 py-2 text-xs font-semibold text-warning-strong">
+            <Lock weight="fill" className="size-4" />
+            La impresión se habilita cuando la dirección lo apruebe
+          </span>
+        )}
+
         <button
           type="button"
           onClick={() => setZoom((z) => (z === 1 ? 0.72 : 1))}
@@ -152,30 +218,30 @@ export function OficioEditor() {
           )}
           {zoom === 1 ? "Ver hoja completa" : "Tamaño real"}
         </button>
-        <p className="text-xs text-muted">
+      </div>
+
+      {!aprobado && (
+        <p className="mb-4 text-xs text-muted print:hidden">
           Escribe directo sobre la hoja; con{" "}
-          <span className="font-semibold text-ink">Ctrl/⌘+B</span> pones
-          negritas. Al imprimir elige tamaño{" "}
+          <span className="font-semibold text-ink">Ctrl/⌘+B</span> pones negritas. El
+          número que ves ({numero}) es el que tomará al aprobarse; puede cambiar si se
+          aprueba otro oficio de la misma zona antes. Al imprimir elige tamaño{" "}
           <span className="font-semibold text-ink">Carta</span>, márgenes{" "}
           <span className="font-semibold text-ink">ninguno</span> y activa{" "}
-          <span className="font-semibold text-ink">gráficos de fondo</span>. Si
-          el oficio pasa de una hoja, aquí lo verás de corrido: el reparto en
-          hojas —con su membrete y la firma completa— se arma en la vista previa
-          de impresión.
+          <span className="font-semibold text-ink">gráficos de fondo</span>.
         </p>
-      </div>
+      )}
 
       {/* El zoom es solo de pantalla; al imprimir se anula por CSS. */}
       <div
         className="oficio-zoom mx-auto origin-top"
         style={{ width: "8.5in", transform: `scale(${zoom})` }}
       >
-        <div className="oficio-hoja" ref={hojaRef}>
+        <div className={`oficio-hoja ${aprobado ? "" : "oficio-draft"}`} ref={hojaRef}>
           {/* El membrete. Al imprimir se vuelve mosaico y sale en cada hoja. */}
           <div className="oficio-fondo" ref={fondoRef} aria-hidden />
 
           <table className="oficio-tabla">
-            {/* Margen superior: el navegador lo repite en cada hoja, bajo el logo. */}
             <thead>
               <tr>
                 <td>
@@ -186,67 +252,58 @@ export function OficioEditor() {
             <tbody>
               <tr>
                 <td className="oficio-contenido">
-                  {/* Ubicación y fecha, en un solo renglón */}
-                  <p className="text-right">
-                    <Campo placeholder="Ciudad, Estado.">
-                      Santiago de Querétaro, Querétaro.
-                    </Campo>
-                    {", a "}
-                    <Campo placeholder="10">{hoy.getDate()}</Campo>
-                    {" de "}
-                    <Campo placeholder="Julio">{MESES[hoy.getMonth()]}</Campo>
-                    {" del "}
-                    <Campo placeholder="2026">{hoy.getFullYear()}</Campo>
-                  </p>
+                  {/* Ubicación y fecha */}
+                  <div
+                    ref={lugarFechaRef}
+                    contentEditable={!aprobado}
+                    suppressContentEditableWarning
+                    data-ph="Ciudad, Estado., a 10 de Julio del 2026"
+                    className="oficio-campo block text-right"
+                  />
 
-                  {/* Número de oficio */}
-                  <p className="text-right">
-                    {"Oficio: "}
-                    <Campo placeholder="1655/GMP/D/2026">
-                      {`/GMP/D/${hoy.getFullYear()}`}
-                    </Campo>
+                  {/* Número de oficio (no editable: lo define la zona y el folio) */}
+                  <p className="mt-1 text-right">
+                    Oficio: <span className="font-semibold">{numero}</span>
                   </p>
 
                   {/* Destinatario */}
                   <div className="mt-6">
-                    <Campo placeholder="Nombre del contacto" bloque />
-                    <Campo placeholder="Empresa" bloque />
+                    <div
+                      ref={destinatarioRef}
+                      contentEditable={!aprobado}
+                      suppressContentEditableWarning
+                      data-ph="Nombre del contacto y empresa"
+                      className="oficio-campo block"
+                    />
                     <p>Presente.</p>
                   </div>
 
                   {/* Cuerpo del oficio */}
-                  <Campo
-                    bloque
-                    placeholder="Por medio de la presente…"
-                    className="oficio-cuerpo mt-5 text-justify"
+                  <div
+                    ref={cuerpoRef}
+                    contentEditable={!aprobado}
+                    suppressContentEditableWarning
+                    data-ph="Por medio de la presente…"
+                    className="oficio-campo oficio-cuerpo mt-5 block text-justify"
                   />
 
-                  {/* Firma. Se mantiene entera: si ya no cabe, pasa completa a la
-              hoja siguiente en lugar de partirse a la mitad. */}
+                  {/* Firma: se mantiene entera (no se parte a la mitad entre hojas). */}
                   <div className="oficio-firma mt-5">
                     <p>Atentamente,</p>
                     <div className="mt-6 text-center">
                       <p>__________________________________</p>
-                      <Campo placeholder="Nombre de quien firma" bloque>
-                        Eva Patricia Barba Reynoso
-                      </Campo>
-                      <Campo placeholder="Cargo" bloque>
-                        Directora General
-                      </Campo>
-                      <p>GiGi&apos;s Playhouse Mexico I.A.P</p>
-                      <Campo
-                        placeholder="Sitio web"
-                        bloque
-                        className="underline"
-                      >
-                        http://gigisplayhouse.org/mexico/
-                      </Campo>
+                      <div
+                        ref={firmanteRef}
+                        contentEditable={!aprobado}
+                        suppressContentEditableWarning
+                        data-ph="Nombre y cargo de quien firma"
+                        className="oficio-campo block"
+                      />
                     </div>
                   </div>
                 </td>
               </tr>
             </tbody>
-            {/* Margen inferior: deja libre el pie con la dirección, en cada hoja. */}
             <tfoot>
               <tr>
                 <td>
@@ -270,10 +327,6 @@ export function OficioEditor() {
           line-height: 1.22;
           box-shadow: var(--shadow-lg);
         }
-        /* En pantalla el membrete sale UNA vez: la hoja crece como un borrador
-           continuo. No se repite aquí a propósito —en pantalla no hay saltos de
-           página, así que un mosaico cada 11in caería en medio del texto y daría
-           una idea falsa. Al imprimir sí se pone de mosaico (ver @media print). */
         .oficio-fondo {
           position: absolute;
           top: 0;
@@ -290,15 +343,12 @@ export function OficioEditor() {
           width: 100%;
           border-collapse: collapse;
         }
-        /* Márgenes del formato: dejan libre el logo (arriba), el pie con la
-           dirección (abajo) y la banda de manos (izquierda). */
         .oficio-margen-sup { height: 2.25in; }
         .oficio-margen-inf { height: 0.7in; }
         .oficio-contenido {
           padding: 0 0.8in 0 2in;
           vertical-align: top;
         }
-        /* Espacio entre párrafos del cuerpo, como en el formato de Word. */
         .oficio-cuerpo { min-height: 2.5in; }
         .oficio-cuerpo p { margin: 0 0 0.45em; }
         .oficio-cuerpo p:last-child { margin-bottom: 0; }
@@ -314,12 +364,7 @@ export function OficioEditor() {
         }
 
         @media print {
-          /* Sin márgenes: cada 11in de documento = una hoja, que es lo que hace
-             que el mosaico del membrete caiga clavado hoja tras hoja. */
           @page { size: letter; margin: 0; }
-
-          /* El zoom es de pantalla. Además, un transform en un ancestro descoloca
-             el fondo al imprimir, así que aquí se anula. */
           .oficio-zoom {
             transform: none !important;
             margin: 0 !important;
@@ -328,10 +373,7 @@ export function OficioEditor() {
             min-height: 0;
             box-shadow: none;
           }
-          /* El papel es blanco hasta el borde: sin esto se cuela el fondo de la
-             plataforma en lo que sobra de la última hoja. */
           html, body { background: #fff !important; }
-          /* Un membrete por hoja. El alto exacto lo pone ajustarMembrete(). */
           .oficio-fondo {
             background-repeat: repeat-y;
             -webkit-print-color-adjust: exact;
@@ -339,6 +381,20 @@ export function OficioEditor() {
           }
           .oficio-campo:empty::before { content: ""; }
           .oficio-campo:focus { background: none; }
+          /* Un borrador sin aprobar no debe imprimirse como oficio válido. */
+          .oficio-draft::after {
+            content: "BORRADOR · SIN FOLIO";
+            position: absolute;
+            top: 45%;
+            left: 0;
+            right: 0;
+            text-align: center;
+            transform: rotate(-24deg);
+            font-size: 48pt;
+            font-weight: 800;
+            color: rgba(200, 0, 0, 0.18);
+            letter-spacing: 0.1em;
+          }
         }
       `}</style>
     </div>

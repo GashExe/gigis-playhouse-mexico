@@ -190,6 +190,45 @@ export default async function StudentDetailPage({
             />
           )}
           <StudentTimeline groups={timeline} />
+
+          {/* Reportes: historial completo y boleta por asignatura */}
+          <Card className="p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex size-8 items-center justify-center rounded-[var(--radius-input)] bg-primary-weak text-primary">
+                <ClockCounterClockwise weight="fill" className="size-[1.05rem]" />
+              </span>
+              <h2 className="text-sm font-bold text-ink">Reportes</h2>
+            </div>
+            <Link
+              href={`/estudiantes/${student.id}/historial`}
+              className="flex items-center justify-between gap-2 rounded-[var(--radius-control)] border border-border px-3 py-2 text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+            >
+              Historial de calificaciones (todos los ciclos)
+              <ArrowLeft className="size-4 rotate-180 text-subtle" />
+            </Link>
+            {student.enrollments.length > 0 && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs font-semibold text-subtle">Boleta por asignatura</p>
+                <ul className="flex flex-wrap gap-2">
+                  {student.enrollments.map((e) => (
+                    <li key={e.id}>
+                      <Link
+                        href={`/estudiantes/${student.id}/boleta/${e.program.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs font-semibold text-ink transition-colors hover:border-primary"
+                      >
+                        <span
+                          aria-hidden
+                          className="size-2 rounded-full"
+                          style={{ backgroundColor: e.program.color ?? "var(--brand-teal)" }}
+                        />
+                        {e.program.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </Card>
         </div>
 
         {/* Barra lateral: información */}

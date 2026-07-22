@@ -16,7 +16,30 @@ export const WEEKDAYS = [
 
 export const WEEKDAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"] as const;
 
-export type Slot = { weekday: number; startTime: string; endTime: string };
+export type Slot = {
+  weekday: number;
+  startTime: string;
+  endTime: string;
+  programLevelId?: string | null;
+};
+
+/**
+ * Filtra el horario al nivel del alumno cuando el programa separa horario por nivel.
+ * - Si NINGÚN slot tiene nivel, el horario es de todo el programa: se devuelve igual.
+ * - Si los hay, se muestran los del nivel del alumno más los compartidos (sin nivel).
+ *   Si el alumno no tiene nivel (o su nivel no tiene horario), quedan solo los
+ *   compartidos (posiblemente ninguno).
+ */
+export function slotsForLevel<T extends { programLevelId?: string | null }>(
+  slots: T[],
+  levelId: string | null | undefined,
+): T[] {
+  const hasLevelSlots = slots.some((s) => s.programLevelId);
+  if (!hasLevelSlots) return slots;
+  const shared = slots.filter((s) => !s.programLevelId);
+  const own = levelId ? slots.filter((s) => s.programLevelId === levelId) : [];
+  return own.length > 0 ? [...own, ...shared] : shared;
+}
 
 /** Orden lunes-primero para pintar la semana (la casa trabaja de lunes a sábado). */
 export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;

@@ -79,14 +79,14 @@ export default async function PanelPage() {
         ]}
       />
 
-      {/* Lugares que las familias apartaron por su cuenta (enterado, no aprobación) */}
+      {/* Inscripciones que las familias hicieron por su cuenta (enterado, no aprobación) */}
       {reservations.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>
               <span className="flex items-center gap-2">
                 <CalendarCheck weight="fill" className="size-4 text-primary" />
-                Lugares apartados por las familias
+                Inscripciones de las familias
                 <Badge tone="info">{reservations.length}</Badge>
               </span>
             </CardTitle>

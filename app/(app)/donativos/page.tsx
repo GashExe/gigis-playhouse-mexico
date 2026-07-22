@@ -37,7 +37,7 @@ export default async function DonativosPage() {
     <div>
       <PageHeader
         title="Campañas de donativos"
-        subtitle="Arma campañas para las familias. Las que marques como obligatorias restringen apartar clases a quien no cumpla, hasta que cumpla o le des una prórroga."
+        subtitle="Arma campañas para las familias. Las que marques como obligatorias restringen inscribir clases a quien no cumpla, hasta que cumpla o le des una prórroga."
       />
 
       <div className="grid gap-5 lg:grid-cols-5">
@@ -62,7 +62,7 @@ export default async function DonativosPage() {
             <Field
               label="Mínimo esperado"
               htmlFor="c-goalLabel"
-              hint="En texto, tal cual. Sirve para donativos en especie (ej. «$200 o un paquete de material»)."
+              hint="En texto, tal cual. El donativo puede ser en especie, tiempo o dinero (ej. «$200, un paquete de material o una tarde de apoyo»)."
             >
               <Input
                 id="c-goalLabel"
@@ -96,7 +96,7 @@ export default async function DonativosPage() {
                   Obligatoria
                 </span>
                 <span className="mt-0.5 block text-xs text-muted">
-                  Al llegar la fecha límite, quien no cumpla no podrá apartar clases hasta cumplir
+                  Al llegar la fecha límite, quien no cumpla no podrá inscribir clases hasta cumplir
                   o recibir prórroga. Necesita fecha límite para poder restringir.
                 </span>
               </span>

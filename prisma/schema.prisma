@@ -39,6 +39,9 @@ model User {
   calendarEvents CalendarEvent[] @relation("AutorEventos") // Eventos del calendario interno
   auditLogs   AuditLog[]    @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
   legalEdits  LegalConfig[] @relation("ConfigEditor") // Ediciones de los textos legales
+  oficiosCreados  Oficio[] @relation("OficioAutor")   // Oficios que redactó
+  oficiosAprobados Oficio[] @relation("OficioAprobador") // Oficios que aprobó (Eva)
+  surveyEdits SurveyConfig[] @relation("SurveyEditor") // Ediciones de la encuesta
 
   @@index([role])
 }
@@ -88,6 +91,7 @@ model Student {
   studentNotes StudentNote[] // Anotaciones del equipo sobre el participante
   reservations Reservation[] // Reservas de actividades pedidas por la familia
   donations    DonationContribution[] // Aportes de la familia a las campañas de donativos
+  surveyResponses SurveyResponse[] // Respuestas de la familia a la encuesta de fin de ciclo
   announcementsFor AnnouncementRecipient[] // Anuncios dirigidos específicamente a él
   auditLogs    AuditLog[] // Movimientos registrados sobre este participante
 
@@ -190,6 +194,7 @@ model ProgramLevel {
 
   records LevelRecord[]
   blocks  EvalBlock[] // Bloques/áreas de la plantilla que cuelgan de este nivel
+  scheduleSlots ScheduleSlot[] // Horario propio del nivel (los programas por niveles lo usan)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -206,12 +211,16 @@ model Cycle {
   year   Int // Año calendario
   label  String // Etiqueta legible (ej. "Ene–Jun 2026")
   active Boolean     @default(false) // Ciclo vigente para registrar
+  // Encuesta de satisfacción de fin de ciclo. Cuando la directora la abre, las
+  // familias deben contestarla para seguir usando Mi espacio (compuerta de acceso).
+  surveyOpen Boolean  @default(false)
 
   records     LevelRecord[]
   itemScores  ItemScore[] // Calificaciones por tema registradas en este ciclo
   enrollments Enrollment[] // Inscripciones de este ciclo
   programs    Program[]    @relation("ProgramasDelCiclo") // Qué programas se ofrecen en este ciclo
   reservations Reservation[] // Reservas pedidas para este ciclo
+  surveyResponses SurveyResponse[] // Respuestas a la encuesta de este ciclo
 
   createdAt DateTime @default(now())
 
@@ -407,6 +416,11 @@ model ScheduleSlot {
   id        String  @id @default(cuid())
   program   Program @relation(fields: [programId], references: [id], onDelete: Cascade)
   programId String
+  // Nivel al que pertenece el horario. null = horario de todo el programa (formatos
+  // PLANO sin niveles, o programas que no separan horario por nivel). Cuando se llena,
+  // el horario es propio de ese nivel (ej. Lectura Inicial a una hora, Avanzado a otra).
+  level          ProgramLevel? @relation(fields: [programLevelId], references: [id], onDelete: Cascade)
+  programLevelId String?
   weekday   Int // Día de la semana como Date.getDay(): 0=domingo … 6=sábado
   startTime String // "HH:MM" en 24h (ej. "10:00")
   endTime   String // "HH:MM" en 24h (ej. "11:00")
@@ -414,6 +428,7 @@ model ScheduleSlot {
   createdAt DateTime @default(now())
 
   @@index([programId])
+  @@index([programLevelId])
 }
 
 /// Una clase concreta de un programa en una fecha: el "panel de control" del día.
@@ -658,4 +673,75 @@ model LegalConfig {
   updatedAt       DateTime @updatedAt
   updatedById     String? // quién hizo la última edición
   updatedBy       User?    @relation("ConfigEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+/// Zona a la que pertenece un oficio. Cada zona lleva su propia serie de folios
+/// (el número de oficio es distinto entre Dirección y Operación).
+enum OficioZona {
+  DIRECCION
+  OPERACION
+}
+
+enum OficioStatus {
+  BORRADOR // Redactado, aún sin aprobar: no se puede imprimir/descargar
+  APROBADO // Eva (dirección) lo aprobó: se le asignó folio y ya se puede imprimir
+}
+
+/// Oficio membretado. Lo redactan la coordinación o la dirección sobre el papel
+/// oficial; Eva (dirección) lo aprueba y hasta entonces se le asigna el folio
+/// definitivo (el siguiente de su zona/año) y se habilita imprimir/descargar.
+/// El folio se asigna SOLO al aprobar, así que los borradores no consumen número.
+model Oficio {
+  id          String       @id @default(cuid())
+  zona        OficioZona
+  folio       Int? // Número de oficio definitivo; se asigna al aprobar (null en borrador)
+  year        Int // Año de la serie de folios (el folio corre por zona + año)
+  // Contenido del oficio (lo que hoy captura el editor membretado)
+  lugarFecha  String? // Lugar y fecha (ej. "Ciudad de México, a 22 de julio de 2026")
+  destinatario String? // A quién va dirigido
+  asunto      String? // Asunto del oficio
+  cuerpo      String  @default("") // Cuerpo del oficio
+  firmante    String? // Quién firma (nombre y cargo)
+
+  status      OficioStatus @default(BORRADOR)
+  createdBy   User?   @relation("OficioAutor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+  approvedBy   User?  @relation("OficioAprobador", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedById String?
+  approvedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([zona, year, folio]) // No se repite folio dentro de una zona/año
+  @@index([zona, status])
+}
+
+/// Configuración de la encuesta de satisfacción de fin de ciclo. Registro ÚNICO
+/// (singleton, id = 1). La directora edita las preguntas desde /configuracion, igual
+/// que los textos legales. `questions` es la lista de preguntas (texto + tipo).
+model SurveyConfig {
+  id          Int      @id @default(1) // singleton: siempre 1
+  /// Lista de preguntas. Forma: [{ id, text, type: "escala" | "abierta" }]
+  questions   Json
+  version     String   // sube en cada cambio de las preguntas
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?    @relation("SurveyEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+/// Respuesta de una familia a la encuesta de fin de ciclo, por ciclo. Mientras el
+/// ciclo tenga la encuesta abierta y no exista esta respuesta, se bloquea Mi espacio.
+model SurveyResponse {
+  id          String   @id @default(cuid())
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId   String
+  cycle       Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId     String
+  /// Respuestas por pregunta. Forma: [{ questionId, value }] (value: número 1–5 o texto)
+  answers     Json
+  submittedAt DateTime @default(now())
+
+  @@unique([studentId, cycleId])
+  @@index([cycleId])
 }

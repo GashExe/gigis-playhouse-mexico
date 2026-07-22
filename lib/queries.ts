@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { StudentStatus } from "@/lib/generated/prisma/client";
+import { ageFrom } from "@/lib/utils";
 
 export async function getDashboardStats() {
   const [
@@ -139,8 +140,10 @@ export async function getOnboardingData(studentId: string) {
   });
 }
 
-/** Datos propios del alumno para su espacio (solo su expediente y programas activos). */
-export async function getStudentSpace(studentId: string) {
+/** Datos propios del alumno para su espacio (solo su expediente y programas activos).
+ *  Con el ciclo activo, trae el nivel donde está ubicado en cada programa para poder
+ *  mostrar el horario de SU nivel (los programas por niveles separan horario). */
+export async function getStudentSpace(studentId: string, activeCycleId?: string) {
   return prisma.student.findUnique({
     where: { id: studentId },
     select: {
@@ -149,6 +152,13 @@ export async function getStudentSpace(studentId: string) {
       matricula: true,
       onboardingCompletedAt: true,
       consentVersion: true,
+      // Nivel del alumno por programa en el ciclo activo: mapea programId → nivel.
+      levelRecords: activeCycleId
+        ? {
+            where: { cycleId: activeCycleId },
+            select: { programId: true, programLevelId: true },
+          }
+        : false,
       enrollments: {
         where: { status: "ACTIVA" },
         orderBy: { startDate: "desc" },
@@ -156,13 +166,19 @@ export async function getStudentSpace(studentId: string) {
           id: true,
           program: {
             select: {
+              id: true,
               name: true,
               color: true,
               area: true,
               teacher: { select: { name: true } },
               scheduleSlots: {
                 orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
-                select: { weekday: true, startTime: true, endTime: true },
+                select: {
+                  weekday: true,
+                  startTime: true,
+                  endTime: true,
+                  programLevelId: true,
+                },
               },
             },
           },
@@ -209,9 +225,19 @@ export async function listPrograms(cycleId?: string) {
     include: {
       teacher: { select: { id: true, name: true } },
       cycles: { select: { id: true } },
+      levels: {
+        orderBy: { order: "asc" },
+        select: { id: true, name: true, order: true },
+      },
       scheduleSlots: {
         orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
-        select: { id: true, weekday: true, startTime: true, endTime: true },
+        select: {
+          id: true,
+          weekday: true,
+          startTime: true,
+          endTime: true,
+          programLevelId: true,
+        },
       },
       _count: {
         select: {
@@ -531,6 +557,134 @@ export async function getStudentTimeline(studentId: string) {
 }
 
 /**
+ * Historial COMPLETO de calificaciones de un alumno, ciclo por ciclo: en cada ciclo,
+ * su nivel en cada programa y el detalle bloque por bloque (con % y si lo logró),
+ * más la fecha en que se calificó. Es el mismo dato de LevelRecord/ItemScore que el
+ * "proceso", pero abierto a TODOS los ciclos (no solo el activo). Con `programId` se
+ * acota a una asignatura. Ordenado del ciclo más reciente al más antiguo.
+ */
+export async function getStudentGradeHistory(studentId: string, programId?: string) {
+  const records = await prisma.levelRecord.findMany({
+    where: { studentId, ...(programId ? { programId } : {}) },
+    select: {
+      id: true,
+      placement: true,
+      gradedAt: true,
+      note: true,
+      program: { select: { id: true, name: true, color: true, passThreshold: true } },
+      cycle: { select: { id: true, label: true, year: true, season: true } },
+      level: {
+        select: {
+          id: true,
+          name: true,
+          order: true,
+          description: true,
+          blocks: {
+            orderBy: { order: "asc" },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              items: { select: { id: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (records.length === 0) return [];
+
+  const itemIds = [
+    ...new Set(records.flatMap((r) => r.level.blocks.flatMap((b) => b.items.map((i) => i.id)))),
+  ];
+  const scores = itemIds.length
+    ? await prisma.itemScore.findMany({
+        where: { studentId, itemId: { in: itemIds } },
+        select: { itemId: true, cycleId: true, score: true },
+      })
+    : [];
+  const scoreByKey = new Map(scores.map((s) => [`${s.cycleId}:${s.itemId}`, s.score]));
+
+  const cycleRank = (year: number, season: string) =>
+    year * 10 + (season === "ENE_JUN" ? 1 : season === "JUL_AGO" ? 2 : 3);
+  const pct = (cycleId: string, ids: string[]) =>
+    ids.length === 0
+      ? 0
+      : Math.round(
+          (ids.reduce((acc, id) => acc + (scoreByKey.get(`${cycleId}:${id}`) ?? 0) / 4, 0) /
+            ids.length) *
+            100,
+        );
+
+  type Entry = {
+    recordId: string;
+    cycle: { id: string; label: string };
+    levelName: string;
+    levelDescription: string | null;
+    placement: string;
+    gradedAt: Date;
+    note: string | null;
+    overall: number;
+    rank: number;
+    blocks: {
+      id: string;
+      code: string | null;
+      name: string;
+      percent: number;
+      achieved: boolean;
+      hasItems: boolean;
+    }[];
+  };
+
+  const byProgram = new Map<
+    string,
+    { program: { id: string; name: string; color: string | null }; entries: Entry[] }
+  >();
+
+  for (const r of records) {
+    const threshold = r.program.passThreshold;
+    const blocks = r.level.blocks.map((b) => {
+      const ids = b.items.map((i) => i.id);
+      const percent = pct(r.cycle.id, ids);
+      return {
+        id: b.id,
+        code: b.code,
+        name: b.name,
+        percent,
+        achieved: ids.length > 0 && percent >= threshold,
+        hasItems: ids.length > 0,
+      };
+    });
+    const allIds = r.level.blocks.flatMap((b) => b.items.map((i) => i.id));
+
+    let group = byProgram.get(r.program.id);
+    if (!group) {
+      group = {
+        program: { id: r.program.id, name: r.program.name, color: r.program.color },
+        entries: [],
+      };
+      byProgram.set(r.program.id, group);
+    }
+    group.entries.push({
+      recordId: r.id,
+      cycle: { id: r.cycle.id, label: r.cycle.label },
+      levelName: r.level.name,
+      levelDescription: r.level.description,
+      placement: r.placement,
+      gradedAt: r.gradedAt,
+      note: r.note,
+      overall: pct(r.cycle.id, allIds),
+      rank: cycleRank(r.cycle.year, r.cycle.season),
+      blocks,
+    });
+  }
+
+  return [...byProgram.values()]
+    .map((g) => ({ program: g.program, entries: g.entries.sort((a, b) => b.rank - a.rank) }))
+    .sort((a, b) => a.program.name.localeCompare(b.program.name));
+}
+
+/**
  * Programas que YA tienen plantilla, con sus totales. Son los únicos de los que tiene
  * sentido copiar al crear un programa nuevo.
  */
@@ -694,7 +848,13 @@ export async function listCalendarPrograms(cycleId?: string, teacherId?: string)
       teacher: { select: { id: true, name: true } },
       scheduleSlots: {
         orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
-        select: { weekday: true, startTime: true, endTime: true },
+        select: {
+          weekday: true,
+          startTime: true,
+          endTime: true,
+          programLevelId: true,
+          level: { select: { name: true } },
+        },
       },
       _count: {
         select: {
@@ -725,7 +885,13 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
         teacher: { select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
-          select: { weekday: true, startTime: true, endTime: true },
+          select: {
+            weekday: true,
+            startTime: true,
+            endTime: true,
+            programLevelId: true,
+            level: { select: { name: true } },
+          },
         },
       },
     }),
@@ -1140,6 +1306,117 @@ export async function familyDonationHold(studentId: string) {
     .map(({ contributions, ...c }) => c);
 }
 
+// ── Reportes ────────────────────────────────────────────────────────────────
+
+/** Rango de edad al que cae una edad en años (para las gráficas del reporte). */
+export const AGE_BUCKETS = ["0–2", "3–5", "6–12", "13–17", "18+"] as const;
+function ageBucket(age: number | null): string {
+  if (age == null) return "Sin dato";
+  if (age <= 2) return "0–2";
+  if (age <= 5) return "3–5";
+  if (age <= 12) return "6–12";
+  if (age <= 17) return "13–17";
+  return "18+";
+}
+
+/**
+ * Reporte general de un programa en un ciclo: los participantes inscritos con su
+ * edad y sexo, el estado de su donativo, y los totales/distribuciones para graficar.
+ * "Al corriente" = sin ninguna campaña OBLIGATORIA vencida sin cumplir.
+ */
+export async function getProgramCycleReport(programId: string, cycleId: string) {
+  const [program, cycle, enrollments, campaigns] = await Promise.all([
+    prisma.program.findUnique({
+      where: { id: programId },
+      select: { id: true, name: true, color: true, area: true },
+    }),
+    prisma.cycle.findUnique({ where: { id: cycleId }, select: { id: true, label: true } }),
+    prisma.enrollment.findMany({
+      where: { programId, cycleId, status: "ACTIVA" },
+      orderBy: [{ student: { firstName: "asc" } }, { student: { lastName: "asc" } }],
+      select: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            matricula: true,
+            birthDate: true,
+            gender: true,
+            guardianName: true,
+            guardianPhone: true,
+            donations: {
+              select: { campaignId: true, status: true, graceUntil: true },
+            },
+          },
+        },
+      },
+    }),
+    prisma.donationCampaign.findMany({
+      where: { active: true },
+      select: { id: true, mandatory: true, dueDate: true },
+    }),
+  ]);
+  if (!program || !cycle) return null;
+
+  const participants = enrollments.map(({ student: s }) => {
+    const byCampaign = new Map(s.donations.map((d) => [d.campaignId, d]));
+    const cumplidas = campaigns.filter((c) =>
+      contributionSatisfied(byCampaign.get(c.id)),
+    ).length;
+    // Pendiente si alguna campaña obligatoria ya venció y no la cumplió (ni prórroga).
+    const pendienteObligatorio = campaigns.some(
+      (c) =>
+        c.mandatory && deadlineReached(c.dueDate) && !contributionSatisfied(byCampaign.get(c.id)),
+    );
+    const age = ageFrom(s.birthDate);
+    return {
+      id: s.id,
+      firstName: s.firstName,
+      lastName: s.lastName,
+      matricula: s.matricula,
+      birthDate: s.birthDate,
+      gender: s.gender,
+      guardianName: s.guardianName,
+      guardianPhone: s.guardianPhone,
+      age,
+      ageBucket: ageBucket(age),
+      donationsCumplidas: cumplidas,
+      donationsTotal: campaigns.length,
+      alCorriente: !pendienteObligatorio,
+    };
+  });
+
+  const byGender = { FEMENINO: 0, MASCULINO: 0, OTRO: 0, "Sin dato": 0 };
+  const byAge: Record<string, number> = {
+    "0–2": 0,
+    "3–5": 0,
+    "6–12": 0,
+    "13–17": 0,
+    "18+": 0,
+    "Sin dato": 0,
+  };
+  let alCorriente = 0;
+  for (const p of participants) {
+    byGender[p.gender ?? "Sin dato"] += 1;
+    byAge[p.ageBucket] += 1;
+    if (p.alCorriente) alCorriente += 1;
+  }
+
+  return {
+    program,
+    cycle,
+    participants,
+    totals: {
+      total: participants.length,
+      byGender,
+      byAge,
+      alCorriente,
+      pendientes: participants.length - alCorriente,
+    },
+  };
+}
+
 /**
  * Campañas activas para el espacio de la familia: cada una con el estado de esta
  * familia. Incluye obligatorias y voluntarias; `blocking` marca las que hoy le
@@ -1341,4 +1618,73 @@ export async function getFamilyProgress(studentId: string, cycleId: string) {
       blocks,
     };
   });
+}
+
+// ── Oficios ─────────────────────────────────────────────────────────────────
+
+const ZONA_LABEL: Record<string, string> = {
+  DIRECCION: "Dirección",
+  OPERACION: "Operación",
+};
+
+/** Etiqueta legible de una zona de oficios. */
+export function zonaLabel(zona: string) {
+  return ZONA_LABEL[zona] ?? zona;
+}
+
+/** Número de oficio con el formato de la casa (ej. "1655/GMP/D/2026"). La zona
+ *  cambia la letra: Dirección = D, Operación = O. Con folio null aún no se asignó. */
+export function oficioNumero(zona: string, folio: number | null, year: number) {
+  const code = zona === "OPERACION" ? "O" : "D";
+  return folio == null ? `—/GMP/${code}/${year}` : `${folio}/GMP/${code}/${year}`;
+}
+
+/** Lista de oficios: primero los borradores (por editar), luego los aprobados. */
+export async function listOficios() {
+  return prisma.oficio.findMany({
+    orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+    select: {
+      id: true,
+      zona: true,
+      folio: true,
+      year: true,
+      status: true,
+      destinatario: true,
+      updatedAt: true,
+      approvedAt: true,
+      createdBy: { select: { name: true } },
+      approvedBy: { select: { name: true } },
+    },
+  });
+}
+
+/** Un oficio con todo su contenido, para el editor / la vista de impresión. */
+export async function getOficio(id: string) {
+  return prisma.oficio.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      zona: true,
+      folio: true,
+      year: true,
+      status: true,
+      lugarFecha: true,
+      destinatario: true,
+      cuerpo: true,
+      firmante: true,
+      approvedAt: true,
+      createdBy: { select: { name: true } },
+      approvedBy: { select: { name: true } },
+    },
+  });
+}
+
+/** El folio que TOMARÁ un oficio de esta zona/año al aprobarse (mayor emitido + 1). */
+export async function nextOficioFolio(zona: string, year: number) {
+  const last = await prisma.oficio.findFirst({
+    where: { zona: zona as "DIRECCION" | "OPERACION", year, folio: { not: null } },
+    orderBy: { folio: "desc" },
+    select: { folio: true },
+  });
+  return (last?.folio ?? 0) + 1;
 }

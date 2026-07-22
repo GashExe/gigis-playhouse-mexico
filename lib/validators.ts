@@ -81,6 +81,8 @@ export const ScheduleSlotsSchema = z.array(
     weekday: z.number().int().min(0).max(6),
     startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    // Nivel del horario (opcional). null/ausente = horario de todo el programa.
+    programLevelId: z.string().min(1).nullish(),
   }),
 );
 

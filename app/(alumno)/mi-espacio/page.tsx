@@ -29,7 +29,8 @@ import {
 import { requestReservation } from "@/lib/actions/reservations";
 import { meetsAgeRequirement } from "@/lib/queries";
 import { getLegalConfig, needsOnboarding } from "@/lib/legal";
-import { slotsLabel } from "@/lib/schedule";
+import { hasSurveyResponse } from "@/lib/survey";
+import { slotsLabel, slotsForLevel } from "@/lib/schedule";
 import { fecha, fechaDia } from "@/lib/format";
 import { ageFrom } from "@/lib/utils";
 import { ChangePasswordForm } from "@/components/change-password-form";
@@ -39,14 +40,29 @@ export const metadata: Metadata = { title: "Mi espacio" };
 
 export default async function MiEspacioPage() {
   const user = await getCurrentUser();
-  const student = user.studentId ? await getStudentSpace(user.studentId) : null;
+  const cycle = await getActiveCycle();
+  const student = user.studentId
+    ? await getStudentSpace(user.studentId, cycle?.id)
+    : null;
 
   // Compuerta: sin datos básicos + salud + aviso/reglamento aceptados, no hay acceso a clases.
   if (student && needsOnboarding(student, (await getLegalConfig()).version)) {
     redirect("/mi-espacio/bienvenida");
   }
 
-  const cycle = await getActiveCycle();
+  // Compuerta de fin de ciclo: si la encuesta está abierta y la familia no la ha
+  // contestado, se le pide antes de seguir usando Mi espacio.
+  if (student && cycle?.surveyOpen && user.studentId) {
+    if (!(await hasSurveyResponse(user.studentId, cycle.id))) {
+      redirect("/mi-espacio/encuesta");
+    }
+  }
+
+  // Nivel del alumno por programa en el ciclo activo, para mostrar el horario de SU nivel.
+  const levelByProgram = new Map(
+    (student?.levelRecords ?? []).map((r) => [r.programId, r.programLevelId]),
+  );
+
   const [offer, announcements, suspensions, campaigns] = user.studentId
     ? await Promise.all([
         cycle
@@ -126,10 +142,10 @@ export default async function MiEspacioPage() {
             <div className="rounded-[var(--radius-card)] border border-warning bg-warning-weak/40 p-4">
               <p className="flex items-center gap-2 text-sm font-extrabold text-warning-strong">
                 <Lock weight="fill" className="size-4" />
-                Apartar clases está en pausa
+                La inscripción está en pausa
               </p>
               <p className="mt-1 text-sm text-ink">
-                Para volver a apartar actividades, primero hay que cumplir el donativo obligatorio
+                Para volver a inscribir actividades, primero hay que cumplir el donativo obligatorio
                 pendiente. Si ya lo hiciste o necesitas más tiempo, avísale a la dirección.
               </p>
             </div>
@@ -192,7 +208,7 @@ export default async function MiEspacioPage() {
                   <div className="mt-3 rounded-[var(--radius-control)] border border-warning/50 bg-warning-weak/30 p-3">
                     <DonationCountdown target={new Date(c.dueDate).toISOString()} />
                     <p className="mt-2 text-xs text-muted">
-                      Aún puedes apartar clases. Al llegar la fecha límite se pausará hasta
+                      Aún puedes inscribir clases. Al llegar la fecha límite se pausará hasta
                       cumplir el donativo o recibir una prórroga.
                     </p>
                   </div>
@@ -255,14 +271,14 @@ export default async function MiEspacioPage() {
         </section>
       )}
 
-      {/* Apartar actividades del ciclo (en pausa si hay un donativo obligatorio sin cumplir) */}
+      {/* Inscripción de actividades del ciclo (en pausa si hay un donativo obligatorio sin cumplir) */}
       {offer && !donationBlocked && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="flex items-center gap-2">
               <CalendarCheck weight="fill" className="size-5 text-primary" />
               <h2 className="text-base font-extrabold tracking-tight text-ink">
-                Apartar actividades
+                Inscripción
               </h2>
             </span>
             {cycle && (
@@ -272,7 +288,7 @@ export default async function MiEspacioPage() {
             )}
           </div>
           <p className="-mt-2 text-sm text-muted">
-            {`Aparta lugar para ${firstName} en las actividades del ciclo. Mientras haya lugares queda inscrito al momento.`}
+            {`Inscribe a ${firstName} en las actividades del ciclo. Mientras haya lugares queda inscrito al momento.`}
           </p>
           {(() => {
             const available = offer.programs.filter(
@@ -356,7 +372,7 @@ export default async function MiEspacioPage() {
                               disabled={left === 0}
                               className="w-full rounded-[var(--radius-control)] bg-primary px-3 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
                             >
-                              {left === 0 ? "Sin lugares" : "Apartar lugar"}
+                              {left === 0 ? "Sin lugares" : "Inscribir"}
                             </button>
                           </form>
                         )}
@@ -391,7 +407,12 @@ export default async function MiEspacioPage() {
           <ul className="grid gap-3 sm:grid-cols-2">
             {programs.map((e) => {
               const color = e.program.color ?? "var(--brand-teal)";
-              const horario = slotsLabel(e.program.scheduleSlots);
+              const horario = slotsLabel(
+                slotsForLevel(
+                  e.program.scheduleSlots,
+                  levelByProgram.get(e.program.id) ?? null,
+                ),
+              );
               return (
                 <li
                   key={e.id}

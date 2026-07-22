@@ -33,7 +33,9 @@ export type AuditAction =
   | "donativo.cumplido"
   | "donativo.gracia"
   | "donativo.reabrir"
-  | "config.legal.editar";
+  | "oficio.aprobado"
+  | "config.legal.editar"
+  | "config.encuesta.editar";
 
 type AuditInput = {
   action: AuditAction;
