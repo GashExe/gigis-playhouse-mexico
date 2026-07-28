@@ -22,8 +22,10 @@ import {
   listProgramsWithLevels,
   getStudentTimeline,
   listAuditLog,
+  meetsAgeRequirement,
 } from "@/lib/queries";
-import { edadLabel } from "@/lib/utils";
+import { findScheduleClashes, type ScheduleClash } from "@/lib/enrollment-rules";
+import { edadLabel, ageFrom } from "@/lib/utils";
 import { fechaDiaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
@@ -95,6 +97,32 @@ export default async function StudentDetailPage({
 
   const edad = edadLabel(student.birthDate);
   const activeEnrollments = student.enrollments.filter((e) => e.status === "ACTIVA").length;
+
+  // Requisitos de cada actividad para ESTE participante. Dirección puede pasar por
+  // encima de ellos (es la única que puede), pero se le avisa antes de hacerlo.
+  const clashes = activeCycle
+    ? await findScheduleClashes(
+        student.id,
+        activeCycle.id,
+        programs.map((p) => p.id),
+      )
+    : new Map<string, ScheduleClash>();
+  const studentAge = ageFrom(student.birthDate);
+  const programOptions = programs.map((p) => {
+    const clash = clashes.get(p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      ageWarning: meetsAgeRequirement(studentAge, p.ageMin, p.ageMax)
+        ? null
+        : p.ageMin != null && p.ageMax != null
+          ? `Es para ${p.ageMin}–${p.ageMax} años`
+          : p.ageMin != null
+            ? `Es de ${p.ageMin} años en adelante`
+            : `Es para hasta ${p.ageMax} años`,
+      clashWarning: clash ? `Se empalma con ${clash.programName} (${clash.label})` : null,
+    };
+  });
 
   const contactRows = [
     student.guardianName && { icon: User, label: "Tutor", value: student.guardianName },
@@ -173,7 +201,7 @@ export default async function StudentDetailPage({
                 area: e.program.area,
               },
             }))}
-            allPrograms={programs.map((p) => ({ id: p.id, name: p.name }))}
+            allPrograms={programOptions}
             canManage={puedeGestionar}
           />
           {cycles.length > 0 && (

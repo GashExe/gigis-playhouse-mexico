@@ -41,6 +41,27 @@ export function slotsForLevel<T extends { programLevelId?: string | null }>(
   return own.length > 0 ? [...own, ...shared] : shared;
 }
 
+/**
+ * ¿Dos horarios se empalman? Mismo día y horas que se cruzan. Que una termine
+ * justo cuando la otra empieza (10–11 y 11–12) NO es empalme: se puede pasar de
+ * un salón al otro.
+ */
+export function slotsClash(a: Slot, b: Slot): boolean {
+  if (a.weekday !== b.weekday) return false;
+  return a.startTime < b.endTime && b.startTime < a.endTime;
+}
+
+/**
+ * Primer horario de `slots` que choca con alguno de `others` (null si conviven).
+ * Devuelve el horario propio, que es el que se le enseña a quien inscribe.
+ */
+export function findSlotClash(slots: Slot[], others: Slot[]): Slot | null {
+  for (const s of slots) {
+    if (others.some((o) => slotsClash(s, o))) return s;
+  }
+  return null;
+}
+
 /** Orden lunes-primero para pintar la semana (la casa trabaja de lunes a sábado). */
 export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 

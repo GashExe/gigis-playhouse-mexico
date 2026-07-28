@@ -27,12 +27,10 @@ import {
   listFamilyCampaigns,
 } from "@/lib/queries";
 import { requestReservation } from "@/lib/actions/reservations";
-import { meetsAgeRequirement } from "@/lib/queries";
 import { getLegalConfig, needsOnboarding } from "@/lib/legal";
 import { hasSurveyResponse } from "@/lib/survey";
 import { slotsLabel, slotsForLevel } from "@/lib/schedule";
 import { fecha, fechaDia } from "@/lib/format";
-import { ageFrom } from "@/lib/utils";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { DonationCountdown } from "@/components/donation-countdown";
 import { TutorialVideo } from "@/components/tutorial-video";
@@ -300,25 +298,27 @@ export default async function MiEspacioPage() {
             {`Inscribe a ${firstName} en las actividades del ciclo. Mientras haya lugares queda inscrito al momento.`}
           </p>
           {(() => {
-            const available = offer.programs.filter(
+            const noInscritas = offer.programs.filter(
               (p) => !offer.enrolledProgramIds.has(p.id),
             );
+            // Las que no son para su edad ni se le enseñan: si dirección quiere
+            // meterlo de todos modos, lo hace desde el expediente.
+            const available = noInscritas.filter((p) => p.ageOk);
             if (available.length === 0) {
               return (
                 <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-sm text-muted">
-                  {firstName} ya está en todas las actividades del ciclo. 🎉
+                  {noInscritas.length === 0
+                    ? `${firstName} ya está en todas las actividades del ciclo. 🎉`
+                    : `Por ahora no hay actividades del ciclo para la edad de ${firstName}. Si tienes dudas, habla con la dirección.`}
                 </p>
               );
             }
-            const age = ageFrom(offer.birthDate);
             return (
               <ul className="grid gap-3 sm:grid-cols-2">
                 {available.map((p) => {
                   const color = p.color ?? "var(--brand-teal)";
                   const horario = slotsLabel(p.scheduleSlots);
                   const left = Math.max(0, p.studentCapacity - p._count.enrollments);
-                  // Requisitos de la actividad: si no se cumplen, no se puede apartar.
-                  const ageOk = meetsAgeRequirement(age, p.ageMin, p.ageMax);
                   return (
                     <li
                       key={p.id}
@@ -363,15 +363,16 @@ export default async function MiEspacioPage() {
                         {p.teacher && <p>Con {p.teacher.name}</p>}
                       </div>
                       <div className="mt-auto pt-1">
-                        {!ageOk ? (
+                        {p.dropped ? (
+                          // Dirección lo dio de baja de esta actividad: no se
+                          // vuelve a inscribir solo, se habla con la dirección.
                           <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
-                            Esta actividad es para{" "}
-                            {p.ageMin != null && p.ageMax != null
-                              ? `${p.ageMin}–${p.ageMax} años`
-                              : p.ageMin != null
-                                ? `${p.ageMin} años en adelante`
-                                : `hasta ${p.ageMax} años`}
-                            .
+                            La dirección dio de baja esta actividad. Si quieres volver a
+                            inscribirla, háblalo con la dirección.
+                          </p>
+                        ) : p.clash ? (
+                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
+                            {`Se empalma con ${p.clash.programName} (${p.clash.label}). No se pueden llevar las dos a la misma hora.`}
                           </p>
                         ) : (
                           <form action={requestReservation}>

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { getActiveCycle, meetsAgeRequirement, familyDonationHold } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
 import { ensurePlacementOnEnroll } from "@/lib/placement";
+import { findScheduleClash, isDroppedByStaff } from "@/lib/enrollment-rules";
 import { ageFrom } from "@/lib/utils";
 
 /**
@@ -59,6 +60,14 @@ export async function requestReservation(formData: FormData) {
   if (!meetsAgeRequirement(ageFrom(student.birthDate), program.ageMin, program.ageMax)) {
     return;
   }
+
+  // Baja decidida por dirección: la familia no se vuelve a meter sola. Solo
+  // dirección la reabre desde el expediente.
+  if (await isDroppedByStaff(studentId, programId, cycle.id)) return;
+
+  // Dos actividades a la misma hora no se pueden cursar. La pantalla ya lo dice;
+  // esto cubre la carrera de inscribir las dos a la vez.
+  if (await findScheduleClash(studentId, cycle.id, programId)) return;
 
   // Ya inscrito: nada que apartar.
   const enrolled = await prisma.enrollment.findFirst({
