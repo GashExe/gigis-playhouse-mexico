@@ -398,9 +398,12 @@ enum AttendanceStatus {
   RETARDO
 }
 
-/// Reserva de lugar en una actividad, pedida por la familia desde Mi espacio.
-/// No inscribe por sí sola: dirección la aprueba (y ahí nace la inscripción) o
-/// la rechaza. Única por alumno+programa+ciclo para no duplicar solicitudes.
+/// Lugar de un alumno en una actividad dentro de un ciclo. Nace de dos lados:
+/// cuando la familia aparta desde Mi espacio (queda APROBADA, junto con su
+/// inscripción) y cuando dirección lo da de baja desde el expediente (queda
+/// RECHAZADA). Ese RECHAZADA es la puerta cerrada: mientras esté así, la familia
+/// no puede volver a inscribir esa actividad sola: solo dirección la reabre.
+/// Única por alumno+programa+ciclo.
 model Reservation {
   id          String            @id @default(cuid())
   student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -425,8 +428,8 @@ model Reservation {
 
 enum ReservationStatus {
   PENDIENTE
-  APROBADA
-  RECHAZADA
+  APROBADA // Tiene su lugar (la familia lo apartó, o dirección la reabrió)
+  RECHAZADA // Dirección la sacó de la actividad: la familia ya no puede reinscribirla
   CANCELADA // La familia se arrepintió antes de que se resolviera
 }
 

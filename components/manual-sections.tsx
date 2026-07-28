@@ -8,6 +8,7 @@ import {
   Star,
   CalendarCheck,
   Key,
+  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { Card } from "@/components/ui/card";
 
@@ -216,12 +217,12 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
           </li>
         </ul>
         <Callout tone="teal" icon={<CalendarCheck weight="fill" className="size-4" />}>
-          <strong>Apartar actividades:</strong> en tu espacio ves la oferta del ciclo con
-          horario y lugares disponibles. Pide lugar con un toque; el equipo de Gigi&apos;s
-          confirma tu solicitud y ahí queda la inscripción. Mientras esté pendiente puedes
-          cancelarla. Solo se pueden apartar las actividades cuyos{" "}
-          <strong>requisitos cumple el participante</strong> (por ejemplo, el rango de
-          edad): las demás aparecen con su requisito a la vista.
+          <strong>Inscribir actividades:</strong> en tu espacio ves la oferta del ciclo con
+          horario y lugares disponibles. Inscribes con un toque y queda al momento, mientras
+          haya lugares. Solo verás las actividades <strong>para la edad</strong> de tu hijo o
+          hija, y las que <strong>no se empalman</strong> con las que ya lleva: dos clases a
+          la misma hora no se pueden cursar. Si la dirección lo dio de baja de una actividad,
+          esa ya no la puedes volver a inscribir tú: háblalo con ella.
         </Callout>
       </ManualCard>
     </section>
@@ -486,6 +487,15 @@ export function ManualCoordinacion() {
           Un participante puede repetir un programa en ciclos distintos; cada ciclo guarda su
           propio historial.
         </p>
+        <Callout tone="amber" icon={<Warning weight="fill" className="size-4" />}>
+          <strong>Los reparos los decides tú.</strong> Si la actividad no es para su edad o se
+          empalma con otra que ya lleva, la pantalla te lo advierte y te pide confirmar antes de
+          inscribirlo; queda anotado en la bitácora que lo autorizó dirección. La familia no
+          puede saltarse ninguno de los dos desde su espacio. Y cuando quitas, pausas o
+          finalizas una inscripción, esa actividad le queda <strong>cerrada</strong>: la familia
+          no puede volver a meterse sola. Se reabre volviéndolo a inscribir (o marcándola
+          activa) desde aquí.
+        </Callout>
       </ManualCard>
 
       <ManualCard where="Programas" title="Crear y editar actividades">
@@ -573,11 +583,11 @@ export function ManualDireccion() {
 
       <ManualCard where="Panel" title="Reservas de las familias">
         <p>
-          Cuando una familia <strong>aparta lugar</strong> en una actividad desde su
-          espacio, la solicitud aparece en tu <Chip>Panel</Chip> con el cupo a la vista.
-          Al <Chip>Aprobar</Chip> se crea la inscripción del ciclo; al{" "}
-          <Chip>Rechazar</Chip>, la familia lo ve en su espacio y puede volver a pedir
-          más adelante.
+          Cuando una familia <strong>inscribe</strong> una actividad desde su espacio, queda
+          inscrita al momento —mientras haya lugares, quien llega primero se queda— y aparece
+          en tu <Chip>Panel</Chip> con el cupo a la vista. No hay nada que aprobar: es un
+          enterado. Si esa inscripción no debía ser, la quitas desde el expediente del
+          participante, y con eso la actividad le queda cerrada a la familia.
         </p>
       </ManualCard>
     </section>

@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { StudentStatus } from "@/lib/generated/prisma/client";
 import { ageFrom } from "@/lib/utils";
+import { findScheduleClashes } from "@/lib/enrollment-rules";
 
 export async function getDashboardStats() {
   const [
@@ -272,7 +273,7 @@ export async function listActivePrograms(cycleId?: string) {
       ...(cycleId ? { cycles: { some: { id: cycleId } } } : {}),
     },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, color: true, area: true },
+    select: { id: true, name: true, color: true, area: true, ageMin: true, ageMax: true },
   });
 }
 
@@ -751,6 +752,12 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
  * Oferta del ciclo tal como la ve una familia: actividades con horario, cupo
  * ocupado y las reservas/inscripciones que ese alumno ya tiene, para saber qué
  * puede apartar todavía.
+ *
+ * Cada actividad viene ya juzgada con las reglas de inscripción, para que la
+ * pantalla no ofrezca lo que la acción va a rechazar:
+ *   • `ageOk`   — cumple el rango de edad (si no, ni se le enseña a la familia).
+ *   • `dropped` — dirección lo dio de baja de esta actividad en el ciclo.
+ *   • `clash`   — se empalma con una actividad que ya lleva.
  */
 export async function getFamilyOffer(studentId: string, cycleId: string) {
   const [student, programs, reservations, enrollments] = await Promise.all([
@@ -772,7 +779,7 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
         teacher: { select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
-          select: { weekday: true, startTime: true, endTime: true },
+          select: { weekday: true, startTime: true, endTime: true, programLevelId: true },
         },
         _count: {
           select: { enrollments: { where: { status: "ACTIVA", cycleId } } },
@@ -788,11 +795,29 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
       select: { programId: true },
     }),
   ]);
+
+  const enrolledProgramIds = new Set(enrollments.map((e) => e.programId));
+  // Los empalmes solo se preguntan de lo que todavía puede inscribir.
+  const clashes = await findScheduleClashes(
+    studentId,
+    cycleId,
+    programs.filter((p) => !enrolledProgramIds.has(p.id)).map((p) => p.id),
+  );
+  const dropped = new Set(
+    reservations.filter((r) => r.status === "RECHAZADA").map((r) => r.programId),
+  );
+  const age = ageFrom(student?.birthDate);
+
   return {
     birthDate: student?.birthDate ?? null,
-    programs,
+    programs: programs.map((p) => ({
+      ...p,
+      ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
+      dropped: dropped.has(p.id),
+      clash: clashes.get(p.id) ?? null,
+    })),
     reservations,
-    enrolledProgramIds: new Set(enrollments.map((e) => e.programId)),
+    enrolledProgramIds,
   };
 }
 
@@ -816,10 +841,14 @@ export function meetsAgeRequirement(
  * Últimos lugares apartados por las familias (para la tarjeta del panel de
  * dirección). Ya no hay nada que aprobar: es un enterado de quién se inscribió
  * solo, con el cupo del programa a la vista.
+ *
+ * `decidedById` vacío es justo eso: lo movió la familia y nadie del equipo. Las
+ * altas y bajas que decide dirección quedan en la misma tabla, pero firmadas, y
+ * aquí no pintan nada.
  */
 export async function listRecentFamilyReservations(limit = 8) {
   const recent = await prisma.reservation.findMany({
-    where: { status: "APROBADA" },
+    where: { status: "APROBADA", decidedById: null },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {

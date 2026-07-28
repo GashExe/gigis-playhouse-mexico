@@ -22,47 +22,11 @@ export async function ensurePlacementOnEnroll(
   programId: string,
   cycleId: string,
 ) {
+  const placement = await resolvePlacement(studentId, programId, cycleId);
   // Ya ubicado en este ciclo: se respeta lo que haya (p. ej. ubicación manual).
-  const existing = await prisma.levelRecord.findUnique({
-    where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
-    select: { id: true },
-  });
-  if (existing) return null;
-
-  // El programa debe tener niveles para poder ubicar.
-  const lowest = await prisma.programLevel.findFirst({
-    where: { programId },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true },
-  });
-  if (!lowest) return null;
-
-  // ¿Hay historial en OTRO ciclo? Se recupera el nivel del registro más reciente.
-  const prior = await prisma.levelRecord.findMany({
-    where: { studentId, programId, cycleId: { not: cycleId } },
-    select: {
-      level: { select: { id: true, name: true, order: true } },
-      cycle: { select: { year: true, season: true } },
-    },
-  });
-
-  // Orden cronológico del ciclo (mismo criterio que la línea de tiempo).
-  const rank = (year: number, season: string) =>
-    year * 10 + (season === "ENE_JUN" ? 1 : season === "JUL_AGO" ? 2 : 3);
-
-  let placedLevelId = lowest.id;
-  let placedLevelName = lowest.name;
-  let recovered = false;
-  if (prior.length > 0) {
-    const latest = prior.reduce((best, r) =>
-      rank(r.cycle.year, r.cycle.season) > rank(best.cycle.year, best.cycle.season)
-        ? r
-        : best,
-    );
-    placedLevelId = latest.level.id;
-    placedLevelName = latest.level.name;
-    recovered = true;
-  }
+  // Sin niveles en el programa no hay nada que ubicar.
+  if (!placement || placement.existing) return null;
+  const { levelId: placedLevelId, levelName: placedLevelName, recovered } = placement;
 
   await prisma.levelRecord.create({
     data: {
@@ -87,4 +51,71 @@ export async function ensurePlacementOnEnroll(
   });
 
   return { levelId: placedLevelId, levelName: placedLevelName, recovered };
+}
+
+/** Orden cronológico de un ciclo (mismo criterio que la línea de tiempo). */
+export function cycleRank(cycle: { year: number; season: string }): number {
+  const s = cycle.season;
+  return cycle.year * 10 + (s === "ENE_JUN" ? 1 : s === "JUL_AGO" ? 2 : 3);
+}
+
+/**
+ * En qué nivel queda (o quedaría) el alumno en un programa dentro de un ciclo,
+ * SIN escribir nada. Es la regla de arriba en una sola función, para que quien
+ * necesite anticiparla —el horario de su nivel, por ejemplo— no la adivine ni la
+ * repita. Devuelve null si el programa no tiene niveles.
+ */
+export async function resolvePlacement(
+  studentId: string,
+  programId: string,
+  cycleId: string,
+): Promise<{
+  levelId: string;
+  levelName: string;
+  /** Ya estaba ubicado en este ciclo: es lo que hay, no una predicción. */
+  existing: boolean;
+  /** Se recuperó de su historial en otro ciclo (si no, es el nivel más bajo). */
+  recovered: boolean;
+} | null> {
+  const current = await prisma.levelRecord.findUnique({
+    where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
+    select: { level: { select: { id: true, name: true } } },
+  });
+  if (current) {
+    return {
+      levelId: current.level.id,
+      levelName: current.level.name,
+      existing: true,
+      recovered: false,
+    };
+  }
+
+  // El programa debe tener niveles para poder ubicar.
+  const lowest = await prisma.programLevel.findFirst({
+    where: { programId },
+    orderBy: { order: "asc" },
+    select: { id: true, name: true },
+  });
+  if (!lowest) return null;
+
+  // ¿Hay historial en OTRO ciclo? Se recupera el nivel del registro más reciente.
+  const prior = await prisma.levelRecord.findMany({
+    where: { studentId, programId, cycleId: { not: cycleId } },
+    select: {
+      level: { select: { id: true, name: true } },
+      cycle: { select: { year: true, season: true } },
+    },
+  });
+  if (prior.length === 0) {
+    return { levelId: lowest.id, levelName: lowest.name, existing: false, recovered: false };
+  }
+  const latest = prior.reduce((best, r) =>
+    cycleRank(r.cycle) > cycleRank(best.cycle) ? r : best,
+  );
+  return {
+    levelId: latest.level.id,
+    levelName: latest.level.name,
+    existing: false,
+    recovered: true,
+  };
 }
