@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireRole, getCurrentUser } from "@/lib/dal";
+import { requireWriter, getCurrentUser } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { getActiveCycle } from "@/lib/queries";
 import { getSurveyConfig } from "@/lib/survey";
@@ -22,7 +22,7 @@ export async function updateSurveyConfig(
   _prev: SurveyConfigState,
   formData: FormData,
 ): Promise<SurveyConfigState> {
-  await requireRole("DIRECTORA");
+  await requireWriter("DIRECTORA");
 
   let questions: SurveyQuestion[] = [];
   try {
@@ -54,7 +54,7 @@ export async function updateSurveyConfig(
 
 /** Abre o cierra la encuesta de un ciclo (al abrirla, bloquea Mi espacio hasta llenarla). */
 export async function setCycleSurveyOpen(cycleId: string, open: boolean) {
-  await requireRole("DIRECTORA");
+  await requireWriter("DIRECTORA");
   await prisma.cycle.update({ where: { id: cycleId }, data: { surveyOpen: open } });
   revalidatePath("/configuracion");
   revalidatePath("/mi-espacio");

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { getActiveCycle } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
 import { ensurePlacementOnEnroll } from "@/lib/placement";
@@ -19,7 +19,7 @@ const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
  * cada uno con su propio historial.
  */
 export async function addEnrollment(studentId: string, formData: FormData) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const programId = String(formData.get("programId") ?? "");
   if (!programId) return;
 
@@ -71,7 +71,7 @@ export async function setEnrollmentStatus(
   studentId: string,
   status: "ACTIVA" | "PAUSADA" | "FINALIZADA",
 ) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const enrollment = await prisma.enrollment.update({
     where: { id: enrollmentId },
     data: {
@@ -92,7 +92,7 @@ export async function setEnrollmentStatus(
 }
 
 export async function removeEnrollment(enrollmentId: string, studentId: string) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const enrollment = await prisma.enrollment.delete({
     where: { id: enrollmentId },
     select: { programId: true, program: { select: { name: true } } },

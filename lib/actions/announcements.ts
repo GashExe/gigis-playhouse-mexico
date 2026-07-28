@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 
 /**
  * Anuncios de la dirección para las familias: a todos los participantes activos
@@ -15,7 +15,7 @@ export async function createAnnouncement(
   _prev: AnnouncementFormState,
   formData: FormData,
 ): Promise<AnnouncementFormState> {
-  const user = await requireRole("DIRECTORA");
+  const user = await requireWriter("DIRECTORA", "GESTORA_OPERACIONES");
   const title = String(formData.get("title") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
   const audience = String(formData.get("audience") ?? "all");
@@ -50,7 +50,7 @@ export async function createAnnouncement(
 }
 
 export async function deleteAnnouncement(announcementId: string) {
-  await requireRole("DIRECTORA");
+  await requireWriter("DIRECTORA", "GESTORA_OPERACIONES");
   await prisma.announcement.delete({ where: { id: announcementId } });
   revalidatePath("/avisos");
   revalidatePath("/mi-espacio");

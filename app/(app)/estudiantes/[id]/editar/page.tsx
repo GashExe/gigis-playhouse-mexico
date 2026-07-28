@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
-import { requireRole } from "@/lib/dal";
+import { requireEditor } from "@/lib/dal";
 import { getStudent } from "@/lib/queries";
 import { updateStudent } from "@/lib/actions/students";
 import { PageHeader } from "@/components/ui/page-header";
@@ -14,7 +14,7 @@ export default async function EditStudentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireEditor("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const { id } = await params;
   const student = await getStudent(id);
   if (!student) notFound();

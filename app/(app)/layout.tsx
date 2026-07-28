@@ -7,7 +7,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Solo personal (DIRECTORA/MAESTRA). Un ALUMNO se redirige a /mi-espacio.
+  // Solo el equipo. Un ALUMNO se redirige a /mi-espacio.
   const user = await requireStaff();
 
   return (

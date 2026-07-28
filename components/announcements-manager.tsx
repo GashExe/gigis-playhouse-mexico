@@ -24,10 +24,13 @@ type Announcement = {
 export function AnnouncementsManager({
   students,
   announcements,
+  readOnly = false,
 }: {
   /** Participantes activos, para elegir destinatarios específicos. */
   students: StudentLite[];
   announcements: Announcement[];
+  /** Solo lectura (rol Lector): se leen los avisos, no se publican ni se borran. */
+  readOnly?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -68,8 +71,9 @@ export function AnnouncementsManager({
     });
 
   return (
-    <div className="grid gap-5 lg:grid-cols-5">
+    <div className={`grid gap-5 ${readOnly ? "" : "lg:grid-cols-5"}`}>
       {/* Redactar */}
+      {!readOnly && (
       <Card className="self-start p-5 lg:col-span-2">
         <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
           <Megaphone weight="fill" className="size-4 text-primary" />
@@ -177,9 +181,10 @@ export function AnnouncementsManager({
           </div>
         </form>
       </Card>
+      )}
 
       {/* Publicados */}
-      <div className="space-y-3 lg:col-span-3">
+      <div className={`space-y-3 ${readOnly ? "" : "lg:col-span-3"}`}>
         {announcements.length === 0 ? (
           <EmptyState
             icon={<Megaphone weight="fill" className="size-6" />}
@@ -202,15 +207,17 @@ export function AnnouncementsManager({
                       ? "Todos los activos"
                       : `${a.recipients.length} participante${a.recipients.length === 1 ? "" : "s"}`}
                   </Badge>
-                  <form action={deleteAnnouncement.bind(null, a.id)}>
-                    <button
-                      type="submit"
-                      aria-label="Borrar aviso"
-                      className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
-                    >
-                      <Trash className="size-4" />
-                    </button>
-                  </form>
+                  {!readOnly && (
+                    <form action={deleteAnnouncement.bind(null, a.id)}>
+                      <button
+                        type="submit"
+                        aria-label="Borrar aviso"
+                        className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                      >
+                        <Trash className="size-4" />
+                      </button>
+                    </form>
+                  )}
                 </div>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted">

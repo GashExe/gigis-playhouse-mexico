@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
@@ -11,7 +11,8 @@ import {
   ClockCounterClockwise,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
-import { requireGraderForProgram, getCurrentUser } from "@/lib/dal";
+import { canGradeProgram, getCurrentUser } from "@/lib/dal";
+import { canRunClasses, isReadOnly } from "@/lib/roles";
 import { getActiveCycle, getClassPanel, getGradingData } from "@/lib/queries";
 import {
   addDays,
@@ -50,10 +51,13 @@ export default async function ClassPanelPage({
   const { programId } = await params;
   const { fecha } = await searchParams;
 
-  // Solo quien puede llevar la clase: la maestra en sus programas; dirección y
-  // coordinación en cualquiera.
-  await requireGraderForProgram(programId);
   const me = await getCurrentUser();
+  // Quien lleva la clase: dirección, coordinación y operación en cualquier programa;
+  // la terapeuta solo en los suyos. El lector entra a mirar, sin tocar nada.
+  const soloLectura = isReadOnly(me.role);
+  const puedeCalificar = await canGradeProgram(programId);
+  if (!soloLectura && !canRunClasses(me.role)) redirect("/panel");
+  if (me.role === "TERAPEUTA" && !puedeCalificar) redirect("/panel");
 
   const date = fecha && isDateKey(fecha) ? fromDateKey(fecha) : new Date();
   const dateKey = toDateKey(date);
@@ -65,19 +69,22 @@ export default async function ClassPanelPage({
   );
   if (!program) notFound();
 
-  // Evaluación de cada alumno del grupo, para calificar sin salir del panel.
+  // Calificación de cada alumno del grupo, para poderla poner sin salir del panel.
   // El grupo es chico (cupo ~7), así que traerla completa no pesa.
-  type Grading = NonNullable<Awaited<ReturnType<typeof getGradingData>>>;
   const grading: Record<
     string,
-    { levelName: string; nextLevelName: string | null; blocks: Grading["blocks"] } | null
+    { levelName: string; initialScore: number | null; finalScore: number | null } | null
   > = {};
-  if (cycle) {
+  if (cycle && puedeCalificar) {
     await Promise.all(
       students.map(async (s) => {
         const data = await getGradingData(s.id, programId, cycle.id);
         grading[s.id] = data
-          ? { levelName: data.level.name, nextLevelName: data.nextLevelName, blocks: data.blocks }
+          ? {
+              levelName: data.level.name,
+              initialScore: data.initialScore,
+              finalScore: data.finalScore,
+            }
           : null;
       }),
     );
@@ -165,7 +172,7 @@ export default async function ClassPanelPage({
           <ClockCounterClockwise className="size-4" />
           Historial de bitácoras
         </Link>
-        {!session?.canceled && (
+        {!session?.canceled && !soloLectura && (
           <CancelClassControl
             programId={program.id}
             dateKey={dateKey}
@@ -175,21 +182,30 @@ export default async function ClassPanelPage({
         )}
       </div>
 
-      {session?.canceled && (
-        <CancelClassControl
-          programId={program.id}
-          dateKey={dateKey}
-          canceled
-          reason={session.cancelReason}
-        />
-      )}
+      {session?.canceled &&
+        (soloLectura ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-card)] border border-warning bg-warning-weak/50 px-4 py-3">
+            <p className="text-sm font-extrabold text-warning-strong">Clase suspendida</p>
+            {session.cancelReason && (
+              <p className="text-xs text-muted">{session.cancelReason}</p>
+            )}
+          </div>
+        ) : (
+          <CancelClassControl
+            programId={program.id}
+            dateKey={dateKey}
+            canceled
+            reason={session.cancelReason}
+          />
+        ))}
 
       <ClassPanel
         programId={program.id}
         dateKey={dateKey}
         color={color}
         cycleId={cycle?.id ?? null}
-        passThreshold={program.passThreshold}
+        canGrade={puedeCalificar}
+        readOnly={soloLectura}
         grading={grading}
         students={students}
         attendance={session?.attendance ?? []}
@@ -200,7 +216,7 @@ export default async function ClassPanelPage({
           visibleToFamily: n.visibleToFamily,
           createdAt: n.createdAt.toISOString(),
           authorName: n.author?.name ?? null,
-          canDelete: me.role !== "MAESTRA" || n.authorId === me.id,
+          canDelete: !soloLectura && (me.role !== "TERAPEUTA" || n.authorId === me.id),
           student: n.student,
         }))}
       />

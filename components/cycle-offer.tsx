@@ -119,7 +119,7 @@ export function CycleOffer({
             <Warning className="mt-0.5 size-3.5 shrink-0" />
             <span>
               Quitar un programa de la oferta no borra nada: sus inscripciones,
-              calificaciones y plantilla siguen ahí. Solo deja de poder inscribirse en
+              calificaciones y niveles siguen ahí. Solo deja de poder inscribirse en
               este ciclo.
             </span>
           </p>

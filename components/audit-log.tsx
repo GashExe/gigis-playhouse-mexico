@@ -30,6 +30,10 @@ function actionStyle(action: string): {
   icon: React.ComponentType<{ weight?: "fill" | "bold" | "regular"; className?: string }>;
   cls: string;
 } {
+  if (action === "calificacion.inicial") return { icon: Star, cls: "bg-primary-weak text-primary" };
+  if (action === "calificacion.final") return { icon: ArrowFatLinesUp, cls: "bg-success-weak text-success-strong" };
+  // Registros viejos: antes se calificaba tema por tema y se subía de nivel al
+  // desbloquear los bloques. Los movimientos ya guardados siguen dibujándose bien.
   if (action === "calificacion.tema") return { icon: Star, cls: "bg-primary-weak text-primary" };
   if (action === "nivel.promover") return { icon: ArrowFatLinesUp, cls: "bg-success-weak text-success-strong" };
   if (action === "nivel.ubicar") return { icon: Stack, cls: "bg-info-weak text-info" };

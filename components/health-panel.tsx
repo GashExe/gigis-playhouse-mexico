@@ -38,7 +38,7 @@ export function HealthPanel({
 }: {
   studentId: string;
   health: Health | null;
-  /** La maestra consulta la salud pero no la captura ni la edita. */
+  /** Terapeutas y lectores consultan la salud, pero no la capturan ni la editan. */
   canEdit?: boolean;
 }) {
   const href = `/estudiantes/${studentId}/salud`;

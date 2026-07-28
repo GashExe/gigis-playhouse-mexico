@@ -31,7 +31,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
-import { GradingPanel } from "@/components/grading-panel";
+import { ScorePanel } from "@/components/score-panel";
 
 type StudentLite = { id: string; firstName: string; lastName: string; matricula?: string | null };
 type AttendanceRow = { studentId: string; status: string; note: string | null };
@@ -44,12 +44,10 @@ type Note = {
   canDelete: boolean;
   student: { id: string; firstName: string; lastName: string };
 };
-type GradingItem = { id: string; code: string | null; text: string; score: number | null };
-type GradingBlock = { id: string; code: string | null; name: string; items: GradingItem[] };
 type StudentGrading = {
   levelName: string;
-  nextLevelName: string | null;
-  blocks: GradingBlock[];
+  initialScore: number | null;
+  finalScore: number | null;
 } | null;
 
 const STATUS_META: Record<
@@ -68,7 +66,8 @@ export function ClassPanel({
   dateKey,
   color,
   cycleId,
-  passThreshold,
+  canGrade,
+  readOnly = false,
   grading,
   students,
   attendance,
@@ -79,7 +78,10 @@ export function ClassPanel({
   dateKey: string;
   color: string;
   cycleId: string | null;
-  passThreshold: number;
+  /** ¿Quien mira puede calificar? (operación y lectura no) */
+  canGrade: boolean;
+  /** Solo lectura (rol Lector): se ve todo el panel, no se toca nada. */
+  readOnly?: boolean;
   grading: Record<string, StudentGrading>;
   students: StudentLite[];
   attendance: AttendanceRow[];
@@ -93,7 +95,8 @@ export function ClassPanel({
           programId={programId}
           dateKey={dateKey}
           cycleId={cycleId}
-          passThreshold={passThreshold}
+          canGrade={canGrade}
+          readOnly={readOnly}
           grading={grading}
           students={students}
           attendance={attendance}
@@ -101,7 +104,12 @@ export function ClassPanel({
         />
       </div>
       <div className="space-y-5 lg:col-span-2">
-        <ClassNotes programId={programId} dateKey={dateKey} initial={classNotes} />
+        <ClassNotes
+          programId={programId}
+          dateKey={dateKey}
+          initial={classNotes}
+          readOnly={readOnly}
+        />
         <NotesFeed color={color} notes={notes} />
       </div>
     </div>
@@ -196,7 +204,8 @@ function AttendanceList({
   programId,
   dateKey,
   cycleId,
-  passThreshold,
+  canGrade,
+  readOnly,
   grading,
   students,
   attendance,
@@ -205,7 +214,8 @@ function AttendanceList({
   programId: string;
   dateKey: string;
   cycleId: string | null;
-  passThreshold: number;
+  canGrade: boolean;
+  readOnly: boolean;
   grading: Record<string, StudentGrading>;
   students: StudentLite[];
   attendance: AttendanceRow[];
@@ -258,7 +268,9 @@ function AttendanceList({
         </div>
       </div>
       <p className="mt-1 text-xs text-muted">
-        Toca a un alumno para dejarle una anotación o calificar su evaluación aquí mismo.
+        {readOnly
+          ? "Toca a un alumno para ver sus anotaciones."
+          : "Toca a un alumno para dejarle una anotación o poner su calificación aquí mismo."}
       </p>
 
       {students.length === 0 ? (
@@ -276,7 +288,8 @@ function AttendanceList({
                 row={row}
                 programId={programId}
                 cycleId={cycleId}
-                passThreshold={passThreshold}
+                canGrade={canGrade}
+                readOnly={readOnly}
                 grading={grading[s.id] ?? null}
                 studentNotes={notes.filter((n) => n.student.id === s.id)}
                 onMark={(status) =>
@@ -300,7 +313,8 @@ function AttendanceItem({
   row,
   programId,
   cycleId,
-  passThreshold,
+  canGrade,
+  readOnly,
   grading,
   studentNotes,
   onMark,
@@ -310,7 +324,8 @@ function AttendanceItem({
   row: AttendanceRow | undefined;
   programId: string;
   cycleId: string | null;
-  passThreshold: number;
+  canGrade: boolean;
+  readOnly: boolean;
   grading: StudentGrading;
   studentNotes: Note[];
   onMark: (status: string) => void;
@@ -359,11 +374,12 @@ function AttendanceItem({
                 onClick={() => onMark(status)}
                 title={meta.label}
                 aria-pressed={active}
+                disabled={readOnly}
                 className={`flex h-8 items-center gap-1 rounded-[var(--radius-pill)] border px-2.5 text-xs font-bold transition-colors ${
                   active
                     ? meta.active
                     : "border-border bg-surface text-subtle hover:bg-surface-2 hover:text-ink"
-                }`}
+                } ${readOnly ? "cursor-default opacity-70 hover:bg-surface" : ""}`}
               >
                 <Icon weight="bold" className="size-3.5" />
                 <span className="hidden sm:inline">{meta.label}</span>
@@ -374,6 +390,7 @@ function AttendanceItem({
             type="button"
             onClick={() => setShowNote((v) => !v)}
             aria-label="Nota de asistencia"
+            hidden={readOnly}
             disabled={!row}
             title={row ? "Agregar detalle" : "Marca asistencia primero"}
             className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40"
@@ -382,7 +399,7 @@ function AttendanceItem({
           </button>
         </div>
       </div>
-      {showNote && row && (
+      {showNote && row && !readOnly && (
         <form action={noteAction} className="mt-2 flex items-center gap-2 pl-12">
           <Input
             name="note"
@@ -401,7 +418,8 @@ function AttendanceItem({
           student={s}
           programId={programId}
           cycleId={cycleId}
-          passThreshold={passThreshold}
+          canGrade={canGrade}
+          readOnly={readOnly}
           grading={grading}
           studentNotes={studentNotes}
         />
@@ -416,23 +434,27 @@ function StudentDrawer({
   student: s,
   programId,
   cycleId,
-  passThreshold,
+  canGrade,
+  readOnly,
   grading,
   studentNotes,
 }: {
   student: StudentLite;
   programId: string;
   cycleId: string | null;
-  passThreshold: number;
+  canGrade: boolean;
+  readOnly: boolean;
   grading: StudentGrading;
   studentNotes: Note[];
 }) {
   const [tab, setTab] = useState<"nota" | "evaluacion">("nota");
   const formRef = useRef<HTMLFormElement>(null);
 
+  // Sin permiso de calificar, la pestaña de evaluación no aparece: quien no califica
+  // (operación, lectura) entra aquí a anotar, no a que le rebote una acción.
   const TABS = [
     { id: "nota" as const, label: "Anotación", icon: NotePencil },
-    { id: "evaluacion" as const, label: "Evaluación", icon: Stack },
+    ...(canGrade ? [{ id: "evaluacion" as const, label: "Evaluación", icon: Stack }] : []),
   ];
 
   return (
@@ -456,8 +478,9 @@ function StudentDrawer({
         ))}
       </div>
 
-      {tab === "nota" ? (
+      {tab === "nota" || !canGrade ? (
         <div className="mt-3 space-y-3">
+          {!readOnly && (
           <form
             ref={formRef}
             action={async (fd) => {
@@ -489,6 +512,7 @@ function StudentDrawer({
               </Button>
             </div>
           </form>
+          )}
           {studentNotes.length > 0 && (
             <ul className="space-y-2 border-t border-border pt-3">
               {studentNotes.map((n) => (
@@ -515,20 +539,15 @@ function StudentDrawer({
                 Ubicar desde su expediente →
               </Link>
             </div>
-          ) : grading.blocks.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted">
-              El nivel «{grading.levelName}» aún no tiene plantilla de bloques.
-            </p>
           ) : (
-            <GradingPanel
-              key={grading.levelName}
+            <ScorePanel
+              key={`${grading.levelName}:${cycleId}`}
               studentId={s.id}
               programId={programId}
               cycleId={cycleId}
               levelName={grading.levelName}
-              nextLevelName={grading.nextLevelName}
-              passThreshold={passThreshold}
-              blocks={grading.blocks}
+              initialScore={grading.initialScore}
+              finalScore={grading.finalScore}
             />
           )}
         </div>
@@ -543,10 +562,12 @@ function ClassNotes({
   programId,
   dateKey,
   initial,
+  readOnly,
 }: {
   programId: string;
   dateKey: string;
   initial: string;
+  readOnly: boolean;
 }) {
   const [saved, setSaved] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -580,16 +601,23 @@ function ClassNotes({
           name="notes"
           rows={5}
           defaultValue={initial}
-          placeholder="Qué se trabajó hoy, acuerdos, pendientes para la próxima clase…"
+          readOnly={readOnly}
+          placeholder={
+            readOnly
+              ? "Sin bitácora de esta clase."
+              : "Qué se trabajó hoy, acuerdos, pendientes para la próxima clase…"
+          }
         />
-        <div className="flex items-center justify-end gap-3">
-          {saved && (
-            <span className="text-xs font-semibold text-success-strong">Guardado ✓</span>
-          )}
-          <Button type="submit" size="sm" loading={pending}>
-            Guardar bitácora
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center justify-end gap-3">
+            {saved && (
+              <span className="text-xs font-semibold text-success-strong">Guardado ✓</span>
+            )}
+            <Button type="submit" size="sm" loading={pending}>
+              Guardar bitácora
+            </Button>
+          </div>
+        )}
       </form>
     </Card>
   );

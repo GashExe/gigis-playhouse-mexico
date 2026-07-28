@@ -35,6 +35,7 @@ import { fecha, fechaDia } from "@/lib/format";
 import { ageFrom } from "@/lib/utils";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { DonationCountdown } from "@/components/donation-countdown";
+import { TutorialVideo } from "@/components/tutorial-video";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -111,6 +112,14 @@ export default async function MiEspacioPage() {
           </p>
         )}
       </section>
+
+      {/* Video tutorial: se abre solo la primera vez y queda siempre a la mano */}
+      <TutorialVideo
+        src="/tutoriales/tutorial-familias.mp4"
+        title="Video tutorial para las familias"
+        description="Cómo usar tu espacio de Gigi's. Puedes volver a verlo cuando quieras."
+        autoOpen={user.tutorialSeenAt === null}
+      />
 
       {/* Ver el proceso del niño */}
       <Link

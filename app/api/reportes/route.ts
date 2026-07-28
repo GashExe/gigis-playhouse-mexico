@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { getCurrentUser } from "@/lib/dal";
+import type { Role } from "@/lib/generated/prisma/client";
 import { getProgramCycleReport } from "@/lib/queries";
 import { edadLabel } from "@/lib/utils";
 
@@ -11,11 +12,17 @@ const GENDER_LABEL: Record<string, string> = {
 
 /**
  * Descarga en Excel el reporte de un programa en un ciclo: participantes con edad y
- * sexo y el estado de su donativo. Solo dirección y coordinación.
+ * sexo y el estado de su donativo. Lo descarga quien ve los reportes.
  */
 export async function GET(request: Request) {
   const me = await getCurrentUser();
-  if (me.role !== "DIRECTORA" && me.role !== "COORDINADOR") {
+  const puedeVerReportes: Role[] = [
+    "DIRECTORA",
+    "COORDINADOR",
+    "GESTORA_OPERACIONES",
+    "LECTOR",
+  ];
+  if (!puedeVerReportes.includes(me.role)) {
     return new Response("No autorizado", { status: 403 });
   }
 

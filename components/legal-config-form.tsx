@@ -19,11 +19,14 @@ export function LegalConfigForm({
   reglamento,
   version,
   updatedAt,
+  readOnly = false,
 }: {
   avisoPrivacidad: string;
   reglamento: string;
   version: string;
   updatedAt: string;
+  /** Solo lectura (rol Lector): los textos se leen, no se editan. */
+  readOnly?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ version: string; sinCambios: boolean } | null>(null);
@@ -68,6 +71,7 @@ export function LegalConfigForm({
             name="avisoPrivacidad"
             defaultValue={avisoPrivacidad}
             rows={14}
+            readOnly={readOnly}
             required
             className="font-mono text-[0.8125rem]"
           />
@@ -89,6 +93,7 @@ export function LegalConfigForm({
             name="reglamento"
             defaultValue={reglamento}
             rows={14}
+            readOnly={readOnly}
             required
             className="font-mono text-[0.8125rem]"
           />
@@ -118,10 +123,12 @@ export function LegalConfigForm({
           </span>{" "}
           · Última edición {fecha(updatedAt)}
         </p>
-        <Button type="submit" loading={pending} className="sm:w-auto">
-          <FloppyDisk weight="fill" className="size-4" />
-          Guardar cambios
-        </Button>
+        {!readOnly && (
+          <Button type="submit" loading={pending} className="sm:w-auto">
+            <FloppyDisk weight="fill" className="size-4" />
+            Guardar cambios
+          </Button>
+        )}
       </div>
     </form>
   );

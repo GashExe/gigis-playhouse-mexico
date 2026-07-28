@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { StudentSchema, StudentStatusSchema, HealthSchema } from "@/lib/validators";
 import { ensureAlumnoAccount } from "@/lib/accounts";
 import { logAudit } from "@/lib/audit";
@@ -44,7 +44,7 @@ export async function createStudent(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const parsed = parseStudent(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -87,7 +87,7 @@ export async function updateStudent(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const parsed = parseStudent(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -125,7 +125,7 @@ export async function updateStudent(
  * hacerlo de un clic desde su expediente o la lista, sin abrir el formulario entero.
  */
 export async function setStudentStatus(id: string, status: StudentStatus) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const parsed = StudentStatusSchema.safeParse(status);
   if (!parsed.success) return;
   const student = await prisma.student.update({
@@ -146,7 +146,7 @@ export async function setStudentStatus(id: string, status: StudentStatus) {
 }
 
 export async function deleteStudent(id: string) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const student = await prisma.student.findUnique({
     where: { id },
     select: { firstName: true, lastName: true },
@@ -176,7 +176,7 @@ export async function saveHealth(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const parsed = HealthSchema.safeParse({
     bloodType: formData.get("bloodType") ?? "",
     allergies: formData.get("allergies") ?? "",

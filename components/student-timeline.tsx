@@ -2,6 +2,7 @@ import { ArrowFatLinesUp, ClockCounterClockwise } from "@phosphor-icons/react/di
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { fecha } from "@/lib/format";
+import { ScorePair } from "@/components/grade-report";
 
 type Entry = {
   recordId: string;
@@ -9,7 +10,8 @@ type Entry = {
   levelName: string;
   levelOrder: number;
   placement: string;
-  percent: number;
+  initialScore: number | null;
+  finalScore: number | null;
   gradedAt: Date;
   leveledUp: boolean;
 };
@@ -23,17 +25,18 @@ const PLACEMENT_LABEL: Record<string, string> = {
   POSIBLE_GRADUADO: "Posible graduado",
 };
 
-/** Color del % de cierre del nivel (igual criterio que el panel de calificación). */
-function tone(pct: number): { bar: string; text: string } {
-  if (pct >= 80) return { bar: "#1D9E75", text: "text-success-strong" };
-  if (pct >= 50) return { bar: "#EF9F27", text: "text-warning-strong" };
-  if (pct > 0) return { bar: "var(--primary)", text: "text-primary" };
-  return { bar: "var(--border)", text: "text-subtle" };
+/** Color del punto del ciclo según con qué calificación cerró (1–4). */
+function tone(score: number | null): string {
+  if (score == null) return "var(--border)";
+  if (score === 4) return "#1D9E75";
+  if (score === 3) return "#EF9F27";
+  return "var(--primary)";
 }
 
 /**
  * Historia del participante entre ciclos: en cada programa, qué nivel llevó cada
- * ciclo, con qué % lo cerró y cuándo subió de nivel. Lee de getStudentTimeline.
+ * ciclo, con qué calificación empezó y cerró, y cuándo subió de nivel.
+ * Lee de getStudentTimeline.
  */
 export function StudentTimeline({ groups }: { groups: Group[] }) {
   return (
@@ -68,14 +71,12 @@ export function StudentTimeline({ groups }: { groups: Group[] }) {
               </div>
 
               <ol className="relative ml-1.5 space-y-4 border-l-2 border-border pl-5">
-                {g.entries.map((e) => {
-                  const t = tone(e.percent);
-                  return (
+                {g.entries.map((e) => (
                     <li key={e.recordId} className="relative">
                       <span
                         aria-hidden
                         className="absolute -left-[1.65rem] top-1 size-3 rounded-full border-2 border-surface"
-                        style={{ backgroundColor: t.bar }}
+                        style={{ backgroundColor: tone(e.finalScore ?? e.initialScore) }}
                       />
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="text-sm font-bold text-ink">{e.cycle.label}</span>
@@ -91,14 +92,22 @@ export function StudentTimeline({ groups }: { groups: Group[] }) {
                           </span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-sm text-muted">
-                        Nivel <span className="font-semibold text-ink">{e.levelName}</span> ·
-                        cerró con <span className={`tnum font-bold ${t.text}`}>{e.percent}%</span>
-                      </p>
-                      <p className="text-xs text-subtle">Actualizado {fecha(e.gradedAt)}</p>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm text-muted">
+                            Nivel <span className="font-semibold text-ink">{e.levelName}</span>
+                          </p>
+                          <p className="text-xs text-subtle">
+                            Actualizado {fecha(e.gradedAt)}
+                          </p>
+                        </div>
+                        <ScorePair
+                          initialScore={e.initialScore}
+                          finalScore={e.finalScore}
+                        />
+                      </div>
                     </li>
-                  );
-                })}
+                ))}
               </ol>
             </div>
           ))}

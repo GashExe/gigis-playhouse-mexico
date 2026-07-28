@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession, type SessionPayload } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { canGrade, canRunClasses, isReadOnly } from "@/lib/roles";
 import type { Role } from "@/lib/generated/prisma/client";
 
 /**
@@ -28,7 +29,15 @@ export const getCurrentUser = cache(async () => {
   const session = await verifySession();
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
-    select: { id: true, name: true, email: true, role: true, active: true, studentId: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      active: true,
+      studentId: true,
+      tutorialSeenAt: true,
+    },
   });
   if (!user || !user.active) {
     redirect("/login");
@@ -37,15 +46,31 @@ export const getCurrentUser = cache(async () => {
 });
 
 /**
- * Exige que el usuario tenga uno de los roles indicados; si no, lo manda al panel.
+ * VER: exige que el usuario tenga uno de los roles indicados; si no, lo manda al panel.
  *
  * La DIRECTORA pasa siempre: es el rol maestro y puede hacer absolutamente todo.
  * Va aquí y no en cada lista de roles a propósito — si dependiera de que quien
  * escribe la compuerta se acuerde de nombrarla, tarde o temprano una se le olvida
- * y la directora se queda fuera de su propia plataforma.
+ * y la directora se queda fuera de su propia plataforma. El LECTOR pasa por la misma
+ * razón al revés: su encargo es ver TODA la plataforma, y lo que no puede hacer
+ * (escribir) lo corta `requireWriter`, no esta compuerta.
  */
 export async function requireRole(...roles: Role[]) {
   const user = await getCurrentUser();
+  if (user.role === "DIRECTORA" || user.role === "LECTOR") return user;
+  if (!roles.includes(user.role)) {
+    redirect("/panel");
+  }
+  return user;
+}
+
+/**
+ * VER una pantalla que es puro formulario (alta/edición). Como ahí no hay nada que
+ * mirar, al LECTOR se le manda al panel en vez de enseñarle campos que no puede guardar.
+ */
+export async function requireEditor(...roles: Role[]) {
+  const user = await getCurrentUser();
+  if (isReadOnly(user.role)) redirect("/panel");
   if (user.role !== "DIRECTORA" && !roles.includes(user.role)) {
     redirect("/panel");
   }
@@ -53,8 +78,24 @@ export async function requireRole(...roles: Role[]) {
 }
 
 /**
- * Exige que sea personal (DIRECTORA o MAESTRA). Las cuentas de alumno se envían
- * a su propio espacio, nunca al panel de administración.
+ * ESCRIBIR: la compuerta de las server actions. A diferencia de `requireRole` no
+ * redirige, lanza: una acción que no está autorizada no debe "no hacer nada" en
+ * silencio. El LECTOR nunca pasa, y la DIRECTORA siempre.
+ */
+export async function requireWriter(...roles: Role[]) {
+  const user = await getCurrentUser();
+  if (user.role === "ALUMNO" || isReadOnly(user.role)) {
+    throw new Error("No autorizado");
+  }
+  if (user.role !== "DIRECTORA" && !roles.includes(user.role)) {
+    throw new Error("No autorizado");
+  }
+  return user;
+}
+
+/**
+ * Exige que sea del equipo. Las cuentas de alumno se envían a su propio espacio,
+ * nunca al panel de administración.
  */
 export async function requireStaff() {
   const user = await getCurrentUser();
@@ -65,18 +106,55 @@ export async function requireStaff() {
 }
 
 /**
- * Quién puede calificar en un programa (ubicar en nivel y registrar temas):
- * dirección y coordinación en cualquiera; la maestra SOLO en los programas a su
- * cargo (teacherId). Es la única escritura que conserva el rol maestra.
+ * Quién puede CALIFICAR en un programa (ubicar en nivel y poner la calificación
+ * inicial y final): dirección y coordinación en cualquiera; la terapeuta SOLO en los
+ * programas a su cargo (teacherId). La gestora de operaciones no califica.
  */
 export async function requireGraderForProgram(programId: string) {
   const user = await getCurrentUser();
-  if (user.role === "ALUMNO") redirect("/mi-espacio");
-  if (user.role !== "MAESTRA") return user; // DIRECTORA y COORDINADOR pasan
+  if (!canGrade(user.role)) {
+    throw new Error("No autorizado");
+  }
+  if (user.role !== "TERAPEUTA") return user; // DIRECTORA y COORDINADOR pasan
+  await requireOwnProgram(user.id, programId);
+  return user;
+}
+
+/**
+ * Quién puede LLEVAR LA CLASE de un programa (asistencia, bitácora, anotaciones):
+ * dirección, coordinación y operación en cualquiera; la terapeuta en los suyos.
+ * Pasar lista no es calificar, por eso la gestora de operaciones sí entra aquí.
+ */
+export async function requireClassManagerForProgram(programId: string) {
+  const user = await getCurrentUser();
+  if (!canRunClasses(user.role)) {
+    throw new Error("No autorizado");
+  }
+  if (user.role !== "TERAPEUTA") return user;
+  await requireOwnProgram(user.id, programId);
+  return user;
+}
+
+/**
+ * ¿Esta cuenta puede calificar en ese programa? Para DECIDIR QUÉ MOSTRAR (botones,
+ * enlaces, la pantalla de calificar). Las compuertas de arriba son las que mandan.
+ */
+export async function canGradeProgram(programId: string): Promise<boolean> {
+  const user = await getCurrentUser();
+  if (!canGrade(user.role)) return false;
+  if (user.role !== "TERAPEUTA") return true;
   const own = await prisma.program.findFirst({
     where: { id: programId, teacherId: user.id },
     select: { id: true },
   });
-  if (!own) redirect("/panel");
-  return user;
+  return Boolean(own);
+}
+
+/** El programa debe estar a cargo de esa terapeuta. */
+async function requireOwnProgram(userId: string, programId: string) {
+  const own = await prisma.program.findFirst({
+    where: { id: programId, teacherId: userId },
+    select: { id: true },
+  });
+  if (!own) throw new Error("No autorizado");
 }

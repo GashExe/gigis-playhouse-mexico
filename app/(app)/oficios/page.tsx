@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileText, Plus, CheckCircle, PencilSimple } from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
+import { isReadOnly } from "@/lib/roles";
 import { listOficios, zonaLabel, oficioNumero } from "@/lib/queries";
 import { createOficio } from "@/lib/actions/oficios";
 import { PageHeader } from "@/components/ui/page-header";
@@ -10,7 +11,8 @@ export const metadata = { title: "Oficios" };
 
 export default async function OficiosPage() {
   // Los oficios los redactan coordinación y dirección; la dirección (Eva) los aprueba.
-  await requireRole("DIRECTORA", "COORDINADOR");
+  const me = await requireRole("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
+  const soloLectura = isReadOnly(me.role);
   const oficios = await listOficios();
 
   const borradores = oficios.filter((o) => o.status === "BORRADOR");
@@ -24,7 +26,7 @@ export default async function OficiosPage() {
       />
 
       {/* Nuevo oficio por zona: cada zona lleva su propia serie de folios. */}
-      <div className="mb-6 flex flex-wrap gap-3">
+      <div className={`mb-6 flex flex-wrap gap-3 ${soloLectura ? "hidden" : ""}`}>
         {(["DIRECCION", "OPERACION"] as const).map((zona) => (
           <form key={zona} action={createOficio}>
             <input type="hidden" name="zona" value={zona} />

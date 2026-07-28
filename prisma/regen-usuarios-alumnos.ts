@@ -15,7 +15,7 @@ import { usernameFromName } from "../lib/credentials";
  *
  * DRY-RUN por defecto: imprime "usuario viejo → usuario nuevo" y guarda un reporte
  * en exports/. Solo escribe con --commit. La unicidad respeta a las cuentas de
- * directora/maestra y evita choques entre alumnos agregando 2, 3, …
+ * directora/terapeuta y evita choques entre alumnos agregando 2, 3, …
  */
 
 const prisma = new PrismaClient({

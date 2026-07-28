@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Info } from "@phosphor-icons/react/dist/ssr";
-import { requireRole } from "@/lib/dal";
+import { requireEditor } from "@/lib/dal";
 import {
   listCycles,
   getActiveCycle,
@@ -19,7 +19,7 @@ export default async function ContinuidadPage({
   searchParams: Promise<{ desde?: string; hacia?: string }>;
 }) {
   // Armar la continuidad del calendario escolar es tarea de dirección.
-  await requireRole("DIRECTORA");
+  await requireEditor("DIRECTORA");
   const { desde, hacia } = await searchParams;
 
   const [cycles, activeCycle, activity] = await Promise.all([

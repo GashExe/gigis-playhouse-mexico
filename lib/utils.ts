@@ -28,8 +28,15 @@ export function roleLabel(role: string): string {
       return "Directora";
     case "COORDINADOR":
       return "Coordinador";
+    case "GESTORA_OPERACIONES":
+      return "Gestora de operaciones";
+    case "TERAPEUTA":
+    // La bitácora guarda una copia del rol tal como se llamaba entonces. Los
+    // movimientos viejos dicen MAESTRA: es el mismo rol con el nombre anterior.
     case "MAESTRA":
-      return "Maestra";
+      return "Terapeuta";
+    case "LECTOR":
+      return "Lector";
     case "ALUMNO":
       return "Alumno";
     default:
@@ -37,10 +44,31 @@ export function roleLabel(role: string): string {
   }
 }
 
+/** Qué hace cada rol, en una línea (para el administrador del equipo). */
+export function roleDescription(role: string): string {
+  switch (role) {
+    case "DIRECTORA":
+      return "Puede hacer todo en la plataforma.";
+    case "COORDINADOR":
+      return "Coordina los programas educativos: gestiona y califica.";
+    case "GESTORA_OPERACIONES":
+      return "Lleva la operación (participantes, programas, calendario, donativos, avisos, oficios y reportes). No califica.";
+    case "TERAPEUTA":
+      return "Pasa lista, escribe bitácora y califica en los programas a su cargo.";
+    case "LECTOR":
+      return "Ve toda la plataforma; no puede modificar nada.";
+    case "ALUMNO":
+      return "Cuenta de la familia para Mi espacio.";
+    default:
+      return "";
+  }
+}
+
 /** Tono del Badge para el rol (para <Badge tone={...}>). */
-export function roleTone(role: string): "accent" | "warning" | "primary" {
+export function roleTone(role: string): "accent" | "warning" | "primary" | "neutral" {
   if (role === "DIRECTORA") return "accent";
   if (role === "COORDINADOR") return "warning";
+  if (role === "LECTOR") return "neutral";
   return "primary";
 }
 

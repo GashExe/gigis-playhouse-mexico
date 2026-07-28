@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "@phosphor-icons/react/dist/ssr";
-import { requireRole } from "@/lib/dal";
+import { requireEditor } from "@/lib/dal";
 import { createStudent } from "@/lib/actions/students";
 import { PageHeader } from "@/components/ui/page-header";
 import { StudentForm } from "@/components/student-form";
@@ -8,7 +8,7 @@ import { StudentForm } from "@/components/student-form";
 export const metadata = { title: "Nuevo participante" };
 
 export default async function NewStudentPage() {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireEditor("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
 
   return (
     <div className="mx-auto max-w-3xl">

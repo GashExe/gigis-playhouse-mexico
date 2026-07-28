@@ -11,9 +11,10 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:import-alumnos": "tsx prisma/import-alumnos.ts",
     "db:seed-programas": "tsx prisma/seed-programas.ts",
+    "db:seed-lectores": "tsx prisma/seed-lectores.ts",
+    "db:migrar-roles": "tsx prisma/migrar-roles.ts",
     "db:seed-niveles": "tsx prisma/seed-niveles.ts",
     "db:import-niveles": "tsx prisma/import-niveles.ts",
-    "db:seed-plantillas": "tsx prisma/seed-plantillas.ts",
     "db:regen-usuarios": "tsx prisma/regen-usuarios-alumnos.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"

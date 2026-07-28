@@ -30,7 +30,7 @@ export async function createUser(
     name: formData.get("name"),
     username: formData.get("username"),
     email: formData.get("email"),
-    role: (formData.get("role") as string) || "MAESTRA",
+    role: (formData.get("role") as string) || "TERAPEUTA",
     password: formData.get("password") ?? "",
   });
   if (!parsed.success) {
@@ -74,7 +74,7 @@ export async function updateUser(
     name: formData.get("name"),
     username: formData.get("username"),
     email: formData.get("email"),
-    role: (formData.get("role") as string) || "MAESTRA",
+    role: (formData.get("role") as string) || "TERAPEUTA",
     password: formData.get("password") ?? "",
   });
   if (!parsed.success) {

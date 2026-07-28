@@ -4,7 +4,6 @@ import {
   ChalkboardTeacher,
   PencilRuler,
   Crown,
-  Lightbulb,
   LockSimple,
   Star,
   CalendarCheck,
@@ -204,12 +203,12 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
             el equipo de Gigi&apos;s.
           </li>
           <li>
-            Las <strong>anotaciones del equipo</strong>: avances y avisos que las maestras
+            Las <strong>anotaciones del equipo</strong>: avances y avisos que las terapeutas
             comparten con la familia sobre {quien}.
           </li>
           <li>
             La <strong>asistencia reciente</strong> a sus clases, tal como la registró la
-            maestra al pasar lista.
+            terapeuta al pasar lista.
           </li>
           <li>
             Los <strong>avisos de Gigi&apos;s</strong> (anuncios de la dirección) y las{" "}
@@ -229,10 +228,10 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
   );
 }
 
-/* ---------- Maestras y maestros ---------- */
+/* ---------- Terapeutas ---------- */
 
-export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolean }) {
-  // Con rol maestra la sección habla de "tus programas" (los únicos que ve y
+export function ManualTerapeuta({ soloAsignados = true }: { soloAsignados?: boolean }) {
+  // Con rol terapeuta la sección habla de "tus programas" (los únicos que ve y
   // califica); coordinación y dirección leen el flujo sin esa restricción.
   return (
     <section className="space-y-3">
@@ -278,9 +277,9 @@ export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolea
               para que en casa estén enterados; si no, queda interna del equipo.
             </>,
             <>
-              En <Chip>Evaluación</Chip> calificas los temas de su nivel (escala 1 a 4, se
-              guarda al instante) sin salir del calendario. Es la misma evaluación que se ve
-              en el expediente.
+              En <Chip>Evaluación</Chip> registras su <strong>calificación inicial</strong> y{" "}
+              <strong>final</strong> del ciclo (escala 1 a 4, se guarda al instante) sin salir
+              del calendario. Es la misma calificación que se ve en el expediente.
             </>,
           ]}
         />
@@ -371,29 +370,34 @@ export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolea
         </div>
       </ManualCard>
 
-      <ManualCard where="Expediente · Calificar" title="Calificar por bloques">
+      <ManualCard where="Expediente · Calificar" title="Calificación inicial y final">
+        <p>
+          La calificación del ciclo son <strong>dos notas</strong>: con cuál llegó el
+          participante (<strong>inicial</strong>) y con cuál cerró (<strong>final</strong>).
+          La diferencia entre las dos es su avance. No hay bloques ni temas que palomear.
+        </p>
         <Steps
           steps={[
             <>
-              En la sección de niveles del expediente, pulsa el botón{" "}
-              <Chip>Calificar por bloques</Chip> del programa.
+              En la sección de niveles del expediente, pulsa el botón <Chip>Calificar</Chip>{" "}
+              del programa.
             </>,
             <>
-              Verás la plantilla del nivel: sus bloques y, dentro de cada uno, los temas u
-              objetivos («Puedo contar hasta 10»).
+              Al empezar el ciclo registra la <strong>calificación inicial</strong>; al
+              cerrarlo, la <strong>final</strong>.
             </>,
             <>
-              Toca la calificación de cada tema. <strong>Se guarda sola al instante</strong>; no
-              hay botón de guardar.
+              Toca el número. <strong>Se guarda solo al instante</strong>; no hay botón de
+              guardar. Si te equivocas, toca de nuevo el número puesto para borrarlo.
             </>,
           ]}
         />
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            ["1", "Iniciando"],
+            ["1", "Inicial"],
             ["2", "En proceso"],
-            ["3", "Casi lo logra"],
-            ["4", "Dominado"],
+            ["3", "Casi logrado"],
+            ["4", "Logrado"],
           ].map(([n, label]) => (
             <div
               key={n}
@@ -419,13 +423,10 @@ export function ManualMaestro({ soloAsignados = true }: { soloAsignados?: boolea
           siempre es 1 a 4.
         </Callout>
         <p>
-          Con las calificaciones, la plataforma calcula solo el <strong>porcentaje de avance</strong>{" "}
-          de cada bloque y del nivel completo. Un bloque se <strong>desbloquea</strong> al
-          llegar al porcentaje que define el programa (normalmente <strong>80%</strong>);
-          cuando el participante desbloquea <strong>todos los bloques del nivel</strong>, la
-          plataforma te ofrece el botón para <strong>subirlo al siguiente nivel</strong> (o
-          marcarlo como posible graduado si ya era el último). Con las pestañas de ciclo
-          puedes revisar ciclos anteriores sin alterar el actual.
+          Las dos calificaciones se ven en el expediente, en la boleta, en el historial y en
+          el espacio de la familia. Para pasar al participante al siguiente nivel se cambia su
+          ubicación en <Chip>Nivel por programa</Chip>. Con las pestañas de ciclo puedes
+          revisar ciclos anteriores sin alterar el actual.
         </p>
       </ManualCard>
 
@@ -442,7 +443,7 @@ export function ManualCoordinacion() {
         icon={<PencilRuler weight="fill" className="size-5" />}
         color="var(--brand-purple)"
         title="Coordinación educativa"
-        subtitle="Participantes, inscripciones, actividades y plantillas"
+        subtitle="Participantes, inscripciones y actividades"
       />
 
       <ManualCard where="Participantes" title="Registrar y editar participantes">
@@ -464,7 +465,7 @@ export function ManualCoordinacion() {
         <p>
           Desde el expediente también puedes <strong>editar los datos</strong>, cambiar el{" "}
           <strong>estado</strong> (activo, inactivo, egresado) y capturar o corregir el{" "}
-          <strong>historial médico</strong>. El rol maestra solo consulta.
+          <strong>historial médico</strong>. Los roles terapeuta y lector solo consultan.
         </p>
       </ManualCard>
 
@@ -490,8 +491,8 @@ export function ManualCoordinacion() {
       <ManualCard where="Programas" title="Crear y editar actividades">
         <p>
           Cada programa es una actividad con <strong>horario, cupo, rango de edad, color</strong>{" "}
-          y un <strong>maestro a cargo</strong>. Asignar al maestro importa: define{" "}
-          <strong>qué grupo puede ver y calificar</strong> cada maestra.
+          y una <strong>terapeuta a cargo</strong>. Asignarla importa: define{" "}
+          <strong>qué grupo puede ver y calificar</strong> cada terapeuta.
         </p>
         <p>
           Los <strong>días de clase</strong> (día de la semana y hora de inicio y fin) se
@@ -500,68 +501,6 @@ export function ManualCoordinacion() {
         </p>
       </ManualCard>
 
-      <ManualCard where="Programas · Plantilla" title="Editar la plantilla de un programa">
-        <Steps
-          steps={[
-            <>
-              En <Chip>Programas</Chip>, abre la opción <Chip>Plantilla</Chip> del programa.
-            </>,
-            <>
-              Arma la estructura: <strong>niveles → bloques → temas</strong>. Por ejemplo: Nivel
-              1 → Bloque 1.1 «Sentido numérico y conteo hasta 10» → tema a) «Puedo contar hasta
-              10».
-            </>,
-            <>
-              Define el <strong>porcentaje para pasar de nivel</strong> (80% por defecto).
-            </>,
-          ]}
-        />
-        <p>Hay tres formatos de plantilla según el programa:</p>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>
-            <strong>Bloques</strong> — niveles con bloques numerados (1.1, 1.2…) y temas. Ej.:
-            Matemáticas, Lectura.
-          </li>
-          <li>
-            <strong>Áreas</strong> — niveles con áreas (Receptivo, Expresivo, Social…). Ej.:
-            Lenguaje.
-          </li>
-          <li>
-            <strong>Plano</strong> — un solo formato con secciones, sin niveles. Ej.: Danza,
-            Terapia Ocupacional.
-          </li>
-        </ul>
-        <Callout tone="amber" icon={<Star weight="fill" className="size-4" />}>
-          Los formatos se respetan <strong>tal como los diseñaron las especialistas</strong>. Si
-          algo parece incompleto o «raro», es criterio del formato original: no se rellena ni se
-          corrige por cuenta propia.
-        </Callout>
-      </ManualCard>
-
-      <ManualCard where="Programas · Nuevo" title="Crear un programa a partir de una plantilla">
-        <p>Al crear un programa eliges de dónde parte su plantilla:</p>
-        <ul className="list-disc space-y-1 pl-5">
-          <li>
-            <strong>En blanco</strong> — la armas desde cero.
-          </li>
-          <li>
-            <strong>Copiar de otro programa</strong> — clona los niveles, bloques y temas de un
-            programa existente.
-          </li>
-          <li>
-            <strong>Desde la biblioteca</strong> — parte de una plantilla base guardada.
-          </li>
-        </ul>
-        <p>
-          Cuando una plantilla quede bien armada, guárdala en la biblioteca
-          (<Chip>Guardar como plantilla</Chip>) para reutilizarla en programas futuros.
-        </p>
-        <Callout tone="teal" icon={<Lightbulb weight="fill" className="size-4" />}>
-          Editar la plantilla de un programa no borra calificaciones ya registradas, pero cambia
-          la base sobre la que se calcula el avance. Haz los cambios grandes antes de que
-          arranque el ciclo.
-        </Callout>
-      </ManualCard>
     </section>
   );
 }
@@ -580,16 +519,36 @@ export function ManualDireccion() {
 
       <ManualCard where="Equipo" title="Cuentas del personal">
         <p>
-          En <Chip>Equipo</Chip> creas las cuentas de maestras y coordinación, defines su
-          contraseña inicial, asignas roles y desactivas accesos cuando alguien deja el equipo.
+          En <Chip>Equipo</Chip> creas las cuentas del personal, defines su contraseña
+          inicial, asignas roles y desactivas accesos cuando alguien deja el equipo.
         </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>
+            <strong>Terapeuta</strong> — pasa lista, escribe bitácora y califica en los
+            programas a su cargo.
+          </li>
+          <li>
+            <strong>Gestora de operaciones</strong> — lleva participantes, programas,
+            calendario, donativos, avisos, oficios y reportes. <strong>No califica.</strong>
+          </li>
+          <li>
+            <strong>Coordinador</strong> — coordinación de programas educativos; gestiona y
+            califica.
+          </li>
+          <li>
+            <strong>Lector</strong> — ve toda la plataforma y <strong>no modifica nada</strong>.
+          </li>
+          <li>
+            <strong>Directora</strong> — puede hacer todo.
+          </li>
+        </ul>
       </ManualCard>
 
       <ManualCard where="Programas · Ciclos" title="Ciclos y oferta">
         <p>
           Desde la barra de ciclos activas el <strong>ciclo vigente</strong> (el único donde se
           puede inscribir) y armas la <strong>oferta de cada ciclo</strong> eligiendo qué
-          programas corren en él. El programa sigue siendo uno solo: conserva su plantilla y su
+          programas corren en él. El programa sigue siendo uno solo: conserva sus niveles y su
           historial entre ciclos.
         </p>
       </ManualCard>

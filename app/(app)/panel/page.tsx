@@ -23,18 +23,19 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { TutorialVideo } from "@/components/tutorial-video";
 
 export const metadata = { title: "Panel" };
 
 export default async function PanelPage() {
   const user = await getCurrentUser();
-  const isMaestra = user.role === "MAESTRA";
+  const esTerapeuta = user.role === "TERAPEUTA";
   const [stats, absenceAlerts, reservations] = await Promise.all([
     getDashboardStats(),
-    // La maestra ve las rachas de SUS grupos; dirección y coordinación, todas.
-    getAbsenceAlerts(isMaestra ? user.id : undefined),
-    // Enterado de quién apartó lugar: solo dirección y coordinación.
-    isMaestra ? Promise.resolve([]) : listRecentFamilyReservations(),
+    // La terapeuta ve las rachas de SUS grupos; el resto del equipo, todas.
+    getAbsenceAlerts(esTerapeuta ? user.id : undefined),
+    // Enterado de quién apartó lugar: no le toca a la terapeuta.
+    esTerapeuta ? Promise.resolve([]) : listRecentFamilyReservations(),
   ]);
   const firstName = user.name.split(" ")[0];
   const maxEnroll = Math.max(1, ...stats.programsWithCounts.map((p) => p._count.enrollments));
@@ -52,6 +53,14 @@ export default async function PanelPage() {
             : "Aquí está el resumen de hoy"}
         </h1>
       </div>
+
+      {/* Video tutorial: se abre solo la primera vez y queda siempre a la mano */}
+      <TutorialVideo
+        src="/tutoriales/tutorial-equipo.mp4"
+        title="Video tutorial de la plataforma"
+        description="Cómo usar Gigi's paso a paso. Dura unos minutos y puedes volver a verlo cuando quieras."
+        autoOpen={user.tutorialSeenAt === null}
+      />
 
       {/* Estadísticas */}
       <StatBar

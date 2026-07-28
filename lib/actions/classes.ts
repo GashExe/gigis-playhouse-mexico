@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, requireGraderForProgram } from "@/lib/dal";
+import { getCurrentUser, requireClassManagerForProgram } from "@/lib/dal";
 import { isDateKey } from "@/lib/schedule";
 
 /**
  * Acciones del panel de clase (calendario): asistencia, bitácora de la sesión y
- * anotaciones sobre los alumnos. Escriben quienes pueden calificar el programa:
- * dirección y coordinación en cualquiera; la maestra solo en los suyos.
+ * anotaciones sobre los alumnos. Escriben quienes llevan el programa: dirección,
+ * coordinación y operación en cualquiera; la terapeuta solo en los suyos.
  */
 
 const STATUSES = ["PRESENTE", "AUSENTE", "JUSTIFICADO", "RETARDO"] as const;
@@ -39,7 +39,7 @@ export async function setAttendance(
 ) {
   if (!isDateKey(dateKey)) return;
   if (!(STATUSES as readonly string[]).includes(status)) return;
-  await requireGraderForProgram(programId);
+  await requireClassManagerForProgram(programId);
 
   // Solo alumnos realmente inscritos al programa: evita colar asistencia ajena.
   const enrolled = await prisma.enrollment.findFirst({
@@ -65,7 +65,7 @@ export async function setAttendanceNote(
   formData: FormData,
 ) {
   if (!isDateKey(dateKey)) return;
-  await requireGraderForProgram(programId);
+  await requireClassManagerForProgram(programId);
   const note = String(formData.get("note") ?? "").trim() || null;
 
   const session = await upsertSession(programId, dateKey);
@@ -88,7 +88,7 @@ export async function setClassCanceled(
   formData: FormData,
 ) {
   if (!isDateKey(dateKey)) return;
-  await requireGraderForProgram(programId);
+  await requireClassManagerForProgram(programId);
   const reason = String(formData.get("reason") ?? "").trim() || null;
 
   const date = sessionDate(dateKey);
@@ -109,7 +109,7 @@ export async function saveClassNotes(
   formData: FormData,
 ) {
   if (!isDateKey(dateKey)) return;
-  await requireGraderForProgram(programId);
+  await requireClassManagerForProgram(programId);
   const notes = String(formData.get("notes") ?? "").trim() || null;
 
   const date = sessionDate(dateKey);
@@ -126,7 +126,7 @@ export async function saveClassNotes(
  * familia", aparece en Mi espacio del alumno; si no, queda interna del equipo.
  */
 export async function addStudentNote(programId: string, formData: FormData) {
-  const user = await requireGraderForProgram(programId);
+  const user = await requireClassManagerForProgram(programId);
   const studentId = String(formData.get("studentId") ?? "");
   const body = String(formData.get("body") ?? "").trim();
   if (!studentId || !body) return;
@@ -146,7 +146,7 @@ export async function addStudentNote(programId: string, formData: FormData) {
 }
 
 /**
- * Borra una anotación. La maestra solo las suyas; dirección y coordinación
+ * Borra una anotación. La terapeuta solo las suyas; dirección, coordinación y operación
  * cualquiera (por si hay que retirar algo que la familia no debería ver).
  */
 export async function deleteStudentNote(noteId: string) {
@@ -157,7 +157,7 @@ export async function deleteStudentNote(noteId: string) {
     select: { authorId: true, programId: true, studentId: true },
   });
   if (!note) return;
-  if (user.role === "MAESTRA" && note.authorId !== user.id) return;
+  if (user.role === "TERAPEUTA" && note.authorId !== user.id) return;
 
   await prisma.studentNote.delete({ where: { id: noteId } });
   if (note.programId) revalidatePath(`/calendario/${note.programId}`);
