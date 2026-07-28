@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { isDateKey } from "@/lib/schedule";
 
 /**
@@ -29,7 +29,7 @@ export async function saveCalendarEvent(
   _prev: EventState,
   formData: FormData,
 ): Promise<EventState> {
-  const user = await requireRole("DIRECTORA", "COORDINADOR");
+  const user = await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
 
   const id = String(formData.get("id") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
@@ -65,7 +65,7 @@ export async function saveCalendarEvent(
 }
 
 export async function deleteCalendarEvent(id: string) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   await prisma.calendarEvent.delete({ where: { id } });
   revalidatePath("/calendario");
 }

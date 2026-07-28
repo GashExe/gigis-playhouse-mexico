@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 
 export type ContinuityState =
@@ -30,7 +30,7 @@ export async function carryOverStudents(
   /// siguiente del programa (concluyó el nivel en el ciclo que termina).
   advanceKeys: string[] = [],
 ): Promise<ContinuityState> {
-  await requireRole("DIRECTORA");
+  await requireWriter("DIRECTORA");
   if (!fromCycleId || !toCycleId || fromCycleId === toCycleId) {
     return { error: "Elige un ciclo de origen y uno de destino distintos." };
   }

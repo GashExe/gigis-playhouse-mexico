@@ -9,14 +9,14 @@ const PLACEMENTS = ["REGULAR", "PROBATORIO", "POSIBLE_GRADUADO"] as const;
 type Placement = (typeof PLACEMENTS)[number];
 
 /**
- * Registra/actualiza la UBICACIÓN de nivel de un alumno en un programa, para un
- * ciclo. Es la "calificación por programa" con historial por ciclo. El nivel debe
- * pertenecer al programa. Único por (alumno, programa, ciclo).
+ * Registra/actualiza la UBICACIÓN de nivel de un alumno en un programa, para un ciclo.
+ * Es el paso previo a calificar: sobre esta ubicación cuelgan la calificación inicial
+ * y la final. El nivel debe pertenecer al programa. Único por (alumno, programa, ciclo).
  */
 export async function setLevelRecord(studentId: string, formData: FormData) {
   const programId = String(formData.get("programId") ?? "");
   if (!programId) return;
-  // La maestra solo puede ubicar/calificar en los programas a su cargo.
+  // La terapeuta solo puede ubicar/calificar en los programas a su cargo.
   await requireGraderForProgram(programId);
   const cycleId = String(formData.get("cycleId") ?? "");
   const programLevelId = String(formData.get("programLevelId") ?? "");
@@ -51,108 +51,65 @@ export async function setLevelRecord(studentId: string, formData: FormData) {
 }
 
 /**
- * Sube al alumno al siguiente nivel del programa cuando DESBLOQUEÓ TODOS los
- * bloques de su nivel actual (cada bloque al umbral del programa). Si ya está
- * en el último nivel, lo marca como posible graduado. La regla se re-verifica
- * aquí: el botón del cliente no es la autoridad.
+ * Registra la calificación del ciclo que pone la terapeuta: la INICIAL (cómo llegó
+ * el participante) o la FINAL (cómo cerró). Escala 1–4 — la regla de la casa es que
+ * la calificación más alta es 4, nunca mayor. Un `score` nulo la borra (para deshacer
+ * un dedazo sin tener que quitar la ubicación de nivel completa).
+ *
+ * Exige que el alumno YA esté ubicado en un nivel de ese programa en ese ciclo: la
+ * calificación cuelga de esa ubicación, no vive suelta.
  */
-export async function promoteToNextLevel(
-  studentId: string,
-  programId: string,
-  cycleId: string,
-) {
+export async function setProgramScore(args: {
+  studentId: string;
+  programId: string;
+  cycleId: string;
+  kind: "inicial" | "final";
+  score: number | null;
+}) {
+  const { studentId, programId, cycleId, kind, score } = args;
+  if (!studentId || !programId || !cycleId) return;
+  if (score !== null && (!Number.isInteger(score) || score < 1 || score > 4)) return;
   await requireGraderForProgram(programId);
-  if (!studentId || !cycleId) return;
 
   const record = await prisma.levelRecord.findUnique({
     where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
     select: {
       id: true,
-      note: true,
-      level: { select: { id: true, name: true, order: true } },
-      program: { select: { passThreshold: true, name: true } },
+      initialScore: true,
+      finalScore: true,
+      level: { select: { name: true } },
+      program: { select: { name: true } },
     },
   });
   if (!record) return;
 
-  // ¿Todos los bloques del nivel actual están desbloqueados?
-  const blocks = await prisma.evalBlock.findMany({
-    where: { levelId: record.level.id },
-    select: {
-      items: { select: { id: true } },
+  const previo = kind === "inicial" ? record.initialScore : record.finalScore;
+  if (previo === score) return; // nada que registrar (evita ruido al repintar)
+
+  await prisma.levelRecord.update({
+    where: { id: record.id },
+    data: {
+      ...(kind === "inicial" ? { initialScore: score } : { finalScore: score }),
+      gradedAt: new Date(),
     },
   });
-  if (blocks.length === 0) return;
-  const itemIds = blocks.flatMap((b) => b.items.map((i) => i.id));
-  const scores = await prisma.itemScore.findMany({
-    where: { studentId, cycleId, itemId: { in: itemIds } },
-    select: { itemId: true, score: true },
-  });
-  const scoreByItem = new Map(scores.map((s) => [s.itemId, s.score]));
-  const threshold = record.program.passThreshold;
-  const allUnlocked = blocks.every((b) => {
-    if (b.items.length === 0) return true;
-    const sum = b.items.reduce(
-      (acc, i) => acc + (scoreByItem.get(i.id) ?? 0) / 4,
-      0,
-    );
-    return Math.round((sum / b.items.length) * 100) >= threshold;
-  });
-  if (!allUnlocked) return;
 
-  const nextLevel = await prisma.programLevel.findFirst({
-    where: { programId, order: { gt: record.level.order } },
-    orderBy: { order: "asc" },
-    select: { id: true, name: true },
+  const cual = kind === "inicial" ? "inicial" : "final";
+  await logAudit({
+    action: `calificacion.${cual}`,
+    summary:
+      score === null
+        ? `Borró la calificación ${cual} de ${record.program.name} (${record.level.name})`
+        : previo === null
+          ? `Calificación ${cual} de ${record.program.name}: ${score} (${record.level.name})`
+          : `Cambió la calificación ${cual} de ${record.program.name} de ${previo} a ${score}`,
+    entityType: "LevelRecord",
+    entityId: programId,
+    studentId,
   });
 
-  const stamp = new Date().toLocaleDateString("es-MX");
-  if (nextLevel) {
-    await prisma.levelRecord.update({
-      where: { id: record.id },
-      data: {
-        programLevelId: nextLevel.id,
-        placement: "REGULAR",
-        gradedAt: new Date(),
-        note: [
-          record.note,
-          `Subió de «${record.level.name}» a «${nextLevel.name}» al desbloquear todos los bloques (${stamp}).`,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      },
-    });
-    await logAudit({
-      action: "nivel.promover",
-      summary: `Subió de «${record.level.name}» a «${nextLevel.name}» en ${record.program.name}`,
-      entityType: "LevelRecord",
-      entityId: programId,
-      studentId,
-    });
-  } else {
-    // Último nivel completo: candidato a concluir el programa.
-    await prisma.levelRecord.update({
-      where: { id: record.id },
-      data: {
-        placement: "POSIBLE_GRADUADO",
-        gradedAt: new Date(),
-        note: [
-          record.note,
-          `Desbloqueó todos los bloques del último nivel «${record.level.name}» (${stamp}).`,
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      },
-    });
-    await logAudit({
-      action: "nivel.promover",
-      summary: `Marcó posible graduado en ${record.program.name} (último nivel «${record.level.name}»)`,
-      entityType: "LevelRecord",
-      entityId: programId,
-      studentId,
-    });
-  }
   revalidatePath(`/estudiantes/${studentId}`);
+  revalidatePath(`/estudiantes/${studentId}/calificar/${programId}`);
   revalidatePath(`/calendario/${programId}`);
 }
 

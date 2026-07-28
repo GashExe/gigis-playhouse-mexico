@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Trash } from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
+import { isReadOnly } from "@/lib/roles";
 import { getOficio, nextOficioFolio, zonaLabel } from "@/lib/queries";
 import { deleteOficio } from "@/lib/actions/oficios";
 import { OficioEditor } from "@/components/oficio-editor";
@@ -13,7 +14,8 @@ export default async function OficioDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const me = await requireRole("DIRECTORA", "COORDINADOR");
+  const me = await requireRole("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
+  const soloLectura = isReadOnly(me.role);
   const { id } = await params;
   const oficio = await getOficio(id);
   if (!oficio) notFound();
@@ -37,7 +39,7 @@ export default async function OficioDetailPage({
           <span className="text-xs font-semibold text-subtle">
             Zona {zonaLabel(oficio.zona)}
           </span>
-          {oficio.status === "BORRADOR" && (
+          {oficio.status === "BORRADOR" && !soloLectura && (
             <form action={deleteOficio.bind(null, oficio.id)}>
               <button
                 type="submit"
@@ -65,6 +67,7 @@ export default async function OficioDetailPage({
         }}
         proximoFolio={{ DIRECCION: proximoDireccion, OPERACION: proximoOperacion }}
         canApprove={me.role === "DIRECTORA"}
+        readOnly={soloLectura}
       />
     </div>
   );

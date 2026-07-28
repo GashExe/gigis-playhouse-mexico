@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/dal";
+import { isReadOnly } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { listAnnouncements } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
@@ -8,7 +9,8 @@ export const metadata = { title: "Avisos" };
 
 export default async function AvisosPage() {
   // Los avisos a las familias son voz de la dirección.
-  await requireRole("DIRECTORA");
+  const me = await requireRole("DIRECTORA", "GESTORA_OPERACIONES");
+  const soloLectura = isReadOnly(me.role);
 
   const [students, announcements] = await Promise.all([
     prisma.student.findMany({
@@ -26,6 +28,7 @@ export default async function AvisosPage() {
         subtitle="Publica anuncios para todos los participantes activos o solo para quien elijas. Aparecen en el espacio de cada familia."
       />
       <AnnouncementsManager
+        readOnly={soloLectura}
         students={students}
         announcements={announcements.map((a) => ({
           id: a.id,

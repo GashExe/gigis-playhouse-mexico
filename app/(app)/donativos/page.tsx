@@ -9,6 +9,7 @@ import {
   ArrowCounterClockwise,
 } from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
+import { isReadOnly } from "@/lib/roles";
 import { listCampaigns } from "@/lib/queries";
 import { createCampaign, setCampaignActive, deleteCampaign } from "@/lib/actions/donations";
 import { PageHeader } from "@/components/ui/page-header";
@@ -30,7 +31,9 @@ const pesos = (n: number) =>
 
 export default async function DonativosPage() {
   // Las campañas de donativos las administra la dirección.
-  await requireRole("DIRECTORA");
+  const me = await requireRole("DIRECTORA", "GESTORA_OPERACIONES");
+  // El rol Lector ve las campañas y su avance; no crea, cierra ni borra ninguna.
+  const soloLectura = isReadOnly(me.role);
   const campaigns = await listCampaigns();
 
   return (
@@ -40,8 +43,9 @@ export default async function DonativosPage() {
         subtitle="Arma campañas para las familias. Las que marques como obligatorias restringen inscribir clases a quien no cumpla, hasta que cumpla o le des una prórroga."
       />
 
-      <div className="grid gap-5 lg:grid-cols-5">
+      <div className={`grid gap-5 ${soloLectura ? "" : "lg:grid-cols-5"}`}>
         {/* Nueva campaña */}
+        {!soloLectura && (
         <Card className="self-start p-5 lg:col-span-2">
           <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
             <HandHeart weight="fill" className="size-4 text-primary" />
@@ -107,9 +111,10 @@ export default async function DonativosPage() {
             </div>
           </form>
         </Card>
+        )}
 
         {/* Campañas */}
-        <div className="space-y-3 lg:col-span-3">
+        <div className={`space-y-3 ${soloLectura ? "" : "lg:col-span-3"}`}>
           {campaigns.length === 0 ? (
             <EmptyState
               icon={<HandHeart weight="fill" className="size-6" />}
@@ -157,6 +162,7 @@ export default async function DonativosPage() {
                       >
                         <CaretRight className="size-4" />
                       </Link>
+                      {!soloLectura && (
                       <form action={setCampaignActive}>
                         <input type="hidden" name="id" value={c.id} />
                         <input type="hidden" name="active" value={c.active ? "false" : "true"} />
@@ -172,6 +178,8 @@ export default async function DonativosPage() {
                           )}
                         </button>
                       </form>
+                      )}
+                      {!soloLectura && (
                       <form action={deleteCampaign}>
                         <input type="hidden" name="id" value={c.id} />
                         <button
@@ -182,6 +190,7 @@ export default async function DonativosPage() {
                           <Trash className="size-4" />
                         </button>
                       </form>
+                      )}
                     </div>
                   </div>
                 </Card>

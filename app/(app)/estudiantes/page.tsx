@@ -7,6 +7,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { listStudents, countStudentsByStatus } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/dal";
+import { canManage } from "@/lib/roles";
 import { StudentStatusSchema } from "@/lib/validators";
 import { edadLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
@@ -38,7 +39,7 @@ export default async function StudentsPage({
     ? { ACTIVO: "activos", INACTIVO: "inactivos", EGRESADO: "egresados" }[status.data]
     : "";
   const isDirectora = me.role === "DIRECTORA";
-  const canManage = me.role !== "MAESTRA"; // la maestra solo consulta el padrón
+  const puedeGestionar = canManage(me.role); // terapeutas y lectores solo consultan
 
   return (
     <div>
@@ -57,7 +58,7 @@ export default async function StudentsPage({
                 Descargar credenciales
               </a>
             )}
-            {canManage && (
+            {puedeGestionar && (
               <Button href="/estudiantes/nuevo">
                 <UserPlus weight="bold" className="size-4" />
                 Nuevo participante
@@ -84,7 +85,7 @@ export default async function StudentsPage({
               : "Registra al primer participante para empezar a llevar su historial."
           }
           action={
-            !filtrando && canManage && (
+            !filtrando && puedeGestionar && (
               <Button href="/estudiantes/nuevo">
                 <UserPlus weight="bold" className="size-4" />
                 Nuevo participante

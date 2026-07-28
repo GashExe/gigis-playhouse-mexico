@@ -13,9 +13,9 @@ import { getSession } from "@/lib/session";
  * de bitácora que impedir guardar una calificación).
  */
 export type AuditAction =
-  | "calificacion.tema"
+  | "calificacion.inicial"
+  | "calificacion.final"
   | "nivel.ubicar"
-  | "nivel.promover"
   | "nivel.quitar"
   | "inscripcion.alta"
   | "inscripcion.estado"

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { getLegalConfig } from "@/lib/legal";
 
@@ -26,7 +26,7 @@ export async function updateLegalConfig(
   _prev: LegalConfigState,
   formData: FormData,
 ): Promise<LegalConfigState> {
-  const user = await requireRole("DIRECTORA");
+  const user = await requireWriter("DIRECTORA");
 
   const avisoPrivacidad = String(formData.get("avisoPrivacidad") ?? "").trim();
   const reglamento = String(formData.get("reglamento") ?? "").trim();

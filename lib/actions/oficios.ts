@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 
 function parseZona(value: FormDataEntryValue | null | undefined): "DIRECCION" | "OPERACION" {
@@ -16,7 +16,7 @@ function parseZona(value: FormDataEntryValue | null | undefined): "DIRECCION" | 
  * consumen número.
  */
 export async function createOficio(formData: FormData) {
-  const me = await requireRole("DIRECTORA", "COORDINADOR");
+  const me = await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const zona = parseZona(formData.get("zona"));
   const oficio = await prisma.oficio.create({
     data: { zona, year: new Date().getFullYear(), createdById: me.id },
@@ -35,7 +35,7 @@ export async function saveOficio(
     firmante: string;
   },
 ) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const oficio = await prisma.oficio.findUnique({ where: { id }, select: { status: true } });
   if (!oficio || oficio.status === "APROBADO") return;
 
@@ -59,7 +59,7 @@ export async function saveOficio(
  * aprobaciones seguidas no tomen el mismo número, y habilita imprimir/descargar.
  */
 export async function approveOficio(id: string) {
-  const me = await requireRole("DIRECTORA");
+  const me = await requireWriter("DIRECTORA");
   await prisma.$transaction(async (tx) => {
     const oficio = await tx.oficio.findUnique({
       where: { id },
@@ -89,7 +89,7 @@ export async function approveOficio(id: string) {
 
 /** Elimina un borrador. Un oficio aprobado no se borra: conserva el folio emitido. */
 export async function deleteOficio(id: string) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const oficio = await prisma.oficio.findUnique({ where: { id }, select: { status: true } });
   if (!oficio || oficio.status === "APROBADO") return;
   await prisma.oficio.delete({ where: { id } });

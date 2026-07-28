@@ -54,7 +54,7 @@ export default async function ReportesPage({
 }: {
   searchParams: Promise<{ programa?: string; ciclo?: string }>;
 }) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireRole("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const { programa, ciclo } = await searchParams;
   const [programs, cycles, activeCycle] = await Promise.all([
     listPrograms(),

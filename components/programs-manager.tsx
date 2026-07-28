@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Plus,
   Books,
@@ -12,9 +11,7 @@ import {
   UsersThree,
   Clock,
   ChalkboardTeacher,
-  ListChecks,
 } from "@phosphor-icons/react";
-import { TemplateSource, type CopySource, type PresetSource } from "@/components/template-source";
 import {
   createProgram,
   updateProgram,
@@ -70,19 +67,12 @@ const SWATCHES = [
 export function ProgramsManager({
   programs,
   teachers,
-  copySources = [],
-  presets = [],
   cycleLabel,
-  canEditTemplate = false,
   canManage = true,
 }: {
   programs: Program[];
   teachers: Teacher[];
-  copySources?: CopySource[];
-  presets?: PresetSource[];
-  /** Quién puede abrir el editor de plantillas (directora o coordinador). */
-  canEditTemplate?: boolean;
-  /** Quién crea/edita/activa programas (dirección y coordinación); la maestra solo mira. */
+  /** Quién crea/edita/activa programas (dirección, coordinación y operación). */
   canManage?: boolean;
   /** Ciclo que se está viendo. Si la lista sale vacía es por su oferta, no porque
    *  no existan programas: sin este matiz el vacío invita a crear un duplicado. */
@@ -108,8 +98,6 @@ export function ProgramsManager({
           onClose={() => setCreating(false)}
           title="Nuevo programa"
           teachers={teachers}
-          copySources={copySources}
-          presets={presets}
         />
       )}
 
@@ -157,7 +145,6 @@ export function ProgramsManager({
                 key={p.id}
                 program={p}
                 onEdit={() => setEditingId(p.id)}
-                canEditTemplate={canEditTemplate}
                 canManage={canManage}
               />
             ),
@@ -171,12 +158,10 @@ export function ProgramsManager({
 function ProgramCard({
   program: p,
   onEdit,
-  canEditTemplate,
   canManage,
 }: {
   program: Program;
   onEdit: () => void;
-  canEditTemplate: boolean;
   canManage: boolean;
 }) {
   const color = p.color ?? "var(--primary)";
@@ -259,9 +244,9 @@ function ProgramCard({
           <ChalkboardTeacher className="size-4 shrink-0 text-subtle" />
           <span>
             {p.teacher ? (
-              <>Maestro: <span className="font-medium text-ink">{p.teacher.name}</span></>
+              <>Terapeuta: <span className="font-medium text-ink">{p.teacher.name}</span></>
             ) : (
-              <span className="italic">Sin maestro asignado</span>
+              <span className="italic">Sin terapeuta asignada</span>
             )}
           </span>
         </div>
@@ -274,18 +259,6 @@ function ProgramCard({
           <span>/ {p.studentCapacity} cupos</span>
         </span>
         <div className="ml-auto flex items-center gap-1">
-          {/* Con texto y no solo el icono: era la ÚNICA puerta a las plantillas y
-              nadie la encontraba (no hay entrada en el menú). Oculta a quien la
-              compuerta rebotaría al panel: un enlace que no lleva a ningún lado. */}
-          {canEditTemplate && (
-            <Link
-              href={`/programas/${p.id}/plantilla`}
-              className="flex h-8 items-center gap-1.5 rounded-[var(--radius-input)] px-2 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-            >
-              <ListChecks className="size-[1.05rem]" />
-              Plantilla
-            </Link>
-          )}
           {canManage && (
             <>
               <form action={toggleProgram.bind(null, p.id, !p.active)}>
@@ -433,17 +406,12 @@ function ProgramForm({
   title,
   defaults,
   teachers,
-  copySources,
-  presets,
 }: {
   action: (prev: ProgramFormState, fd: FormData) => Promise<ProgramFormState>;
   onClose: () => void;
   title: string;
   defaults?: Partial<Program>;
   teachers: Teacher[];
-  /** Solo al crear: de dónde sacar la evaluación. Al editar no aplica. */
-  copySources?: CopySource[];
-  presets?: PresetSource[];
 }) {
   const [state, formAction, pending] = useActionState<ProgramFormState, FormData>(
     action,
@@ -471,10 +439,6 @@ function ProgramForm({
             <X className="size-4" />
           </button>
         </div>
-
-        {copySources && presets && (
-          <TemplateSource programs={copySources} presets={presets} />
-        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Nombre" htmlFor="name" required error={err.name?.[0]}>
@@ -533,7 +497,7 @@ function ProgramForm({
           </Field>
         </div>
 
-        <Field label="Maestro a cargo" htmlFor="teacherId">
+        <Field label="Terapeuta a cargo" htmlFor="teacherId">
           <Select id="teacherId" name="teacherId" defaultValue={defaults?.teacherId ?? ""}>
             <option value="">Sin asignar</option>
             {teachers.map((t) => (

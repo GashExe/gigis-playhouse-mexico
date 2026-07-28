@@ -4,7 +4,7 @@ import { ArrowLeft, ClockCounterClockwise, Sparkle } from "@phosphor-icons/react
 import { requireStaff } from "@/lib/dal";
 import { getStudent, getStudentGradeHistory } from "@/lib/queries";
 import { fechaDia } from "@/lib/format";
-import { ProgressBar, BlockList } from "@/components/grade-report";
+import { ScorePair, ScoreProgress } from "@/components/grade-report";
 
 const PLACEMENT_LABEL: Record<string, { text: string; cls: string }> = {
   REGULAR: { text: "En curso", cls: "bg-info-weak text-info" },
@@ -52,7 +52,7 @@ export default async function StudentHistoryPage({
             Historial de calificaciones
           </h1>
           <p className="text-sm text-muted">
-            Todo el avance de {student.firstName}, ciclo por ciclo, con nivel, bloques y fechas.
+            Todo el avance de {student.firstName}, ciclo por ciclo: nivel, calificación inicial y final.
           </p>
         </div>
       </div>
@@ -105,25 +105,22 @@ export default async function StudentHistoryPage({
                               Ciclo {e.cycle.label} · Calificado el {fechaDia(e.gradedAt)}
                             </p>
                           </div>
-                          <span className="shrink-0 text-right">
-                            <span className="block text-lg font-extrabold text-ink">
-                              {e.overall}%
-                            </span>
-                            <span className="text-[0.7rem] font-semibold text-subtle">
-                              del nivel
-                            </span>
-                          </span>
+                          <ScorePair
+                            initialScore={e.initialScore}
+                            finalScore={e.finalScore}
+                          />
                         </div>
 
                         <div className="mt-3">
-                          <ProgressBar percent={e.overall} color={color} />
+                          <ScoreProgress
+                            initialScore={e.initialScore}
+                            finalScore={e.finalScore}
+                          />
                         </div>
-
-                        <BlockList blocks={e.blocks} color={color} />
 
                         {e.note && (
                           <p className="mt-3 rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-xs text-muted">
-                            Nota del maestro: {e.note}
+                            Nota de la terapeuta: {e.note}
                           </p>
                         )}
                       </div>

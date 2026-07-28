@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Select, Input } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { fecha } from "@/lib/format";
+import { ScorePair } from "@/components/grade-report";
 
 type Placement = "REGULAR" | "PROBATORIO" | "POSIBLE_GRADUADO";
 
@@ -37,6 +38,8 @@ type RecordItem = {
   placement: Placement;
   note: string | null;
   gradedAt: Date;
+  initialScore: number | null;
+  finalScore: number | null;
   program: { id: string; name: string; color: string | null; area: string | null };
   level: { id: string; name: string; order: number };
 };
@@ -55,7 +58,7 @@ export function LevelRecordsPanel({
   programs: ProgramWithLevels[];
   cycles: Cycle[];
   selectedCycleId: string;
-  /** Programas donde quien mira puede ubicar/calificar (la maestra: solo los suyos). */
+  /** Programas donde quien mira puede ubicar/calificar (la terapeuta: solo los suyos). */
   gradableProgramIds: string[];
 }) {
   const router = useRouter();
@@ -190,12 +193,13 @@ function LevelRow({
             {r.note ? ` · ${r.note}` : ""} · {fecha(r.gradedAt)}
           </p>
         </div>
+        <ScorePair initialScore={r.initialScore} finalScore={r.finalScore} />
         <PlacementBadge placement={r.placement} />
         {canGrade && (
         <Link
           href={`/estudiantes/${studentId}/calificar/${r.program.id}?ciclo=${cycleId}`}
-          aria-label="Calificar"
-          title="Calificar"
+          aria-label="Poner calificación"
+          title="Calificación inicial y final"
           className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ListChecks className="size-4" />

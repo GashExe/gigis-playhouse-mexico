@@ -75,10 +75,13 @@ export function CampaignFamilies({
   campaignId,
   mandatory,
   families,
+  readOnly = false,
 }: {
   campaignId: string;
   mandatory: boolean;
   families: Family[];
+  /** Solo lectura (rol Lector): se ve el avance, no se marca ni se da prórroga. */
+  readOnly?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -144,18 +147,20 @@ export function CampaignFamilies({
                   </p>
                 </div>
                 <StatusBadge f={f} mandatory={mandatory} />
-                <button
-                  type="button"
-                  onClick={() => setOpenId(open ? null : f.id)}
-                  aria-label="Gestionar donativo"
-                  aria-expanded={open}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
-                >
-                  <PencilSimple className="size-4" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenId(open ? null : f.id)}
+                    aria-label="Gestionar donativo"
+                    aria-expanded={open}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                  >
+                    <PencilSimple className="size-4" />
+                  </button>
+                )}
               </div>
 
-              {open && (
+              {open && !readOnly && (
                 <div className="mt-3 space-y-3 rounded-[var(--radius-control)] border border-border bg-surface-2 p-3">
                   {/* Marcar cumplido (con monto/nota opcionales; el donativo puede ser
                       en especie, tiempo o dinero, sin obligar a especificar cuál) */}

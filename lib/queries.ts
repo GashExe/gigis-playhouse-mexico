@@ -251,10 +251,10 @@ export async function listPrograms(cycleId?: string) {
   });
 }
 
-/** Personal disponible para asignar como maestro de un programa. */
+/** Personal disponible para poner a cargo de un programa (quien puede calificarlo). */
 export async function listTeachers() {
   return prisma.user.findMany({
-    where: { role: { in: ["DIRECTORA", "MAESTRA"] }, active: true },
+    where: { role: { in: ["DIRECTORA", "COORDINADOR", "TERAPEUTA"] }, active: true },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
@@ -446,9 +446,9 @@ export async function getStudentLevels(studentId: string, cycleId: string) {
 
 /**
  * Línea de tiempo del participante: su historia entre ciclos, programa por programa.
- * Para cada ciclo dice en qué nivel estuvo, con qué % lo cerró y si subió de nivel
- * respecto al ciclo anterior. El dato ya vive en LevelRecord/ItemScore; esto solo lo
- * cuenta como historia (ordenado del ciclo más reciente al más antiguo).
+ * Para cada ciclo dice en qué nivel estuvo, con qué calificación empezó y cerró, y si
+ * subió de nivel respecto al ciclo anterior. El dato ya vive en LevelRecord; esto solo
+ * lo cuenta como historia (ordenado del ciclo más reciente al más antiguo).
  */
 export async function getStudentTimeline(studentId: string) {
   const records = await prisma.levelRecord.findMany({
@@ -457,32 +457,14 @@ export async function getStudentTimeline(studentId: string) {
       id: true,
       placement: true,
       gradedAt: true,
-      program: { select: { id: true, name: true, color: true, passThreshold: true } },
-      level: {
-        select: {
-          id: true,
-          name: true,
-          order: true,
-          blocks: { select: { items: { select: { id: true } } } },
-        },
-      },
+      initialScore: true,
+      finalScore: true,
+      program: { select: { id: true, name: true, color: true } },
+      level: { select: { id: true, name: true, order: true } },
       cycle: { select: { id: true, label: true, year: true, season: true } },
     },
   });
   if (records.length === 0) return [];
-
-  // Calificaciones del alumno en los temas de los niveles que aparecen, por ciclo.
-  const itemIds = [
-    ...new Set(records.flatMap((r) => r.level.blocks.flatMap((b) => b.items.map((i) => i.id)))),
-  ];
-  const scores = itemIds.length
-    ? await prisma.itemScore.findMany({
-        where: { studentId, itemId: { in: itemIds } },
-        select: { itemId: true, cycleId: true, score: true },
-      })
-    : [];
-  // Clave (ciclo:tema) → calificación, para calcular el % de un nivel en su ciclo.
-  const scoreByKey = new Map(scores.map((s) => [`${s.cycleId}:${s.itemId}`, s.score]));
 
   // Orden cronológico del ciclo: año + temporada (ENE_JUN < JUL_AGO < SEP_DIC).
   const cycleRank = (year: number, season: string) =>
@@ -494,7 +476,8 @@ export async function getStudentTimeline(studentId: string) {
     levelName: string;
     levelOrder: number;
     placement: string;
-    percent: number;
+    initialScore: number | null;
+    finalScore: number | null;
     gradedAt: Date;
     leveledUp: boolean;
     rank: number;
@@ -507,19 +490,6 @@ export async function getStudentTimeline(studentId: string) {
   >();
 
   for (const r of records) {
-    const items = r.level.blocks.flatMap((b) => b.items.map((i) => i.id));
-    const percent =
-      items.length === 0
-        ? 0
-        : Math.round(
-            (items.reduce((acc, id) => {
-              const s = scoreByKey.get(`${r.cycle.id}:${id}`);
-              return acc + (s ? s / 4 : 0);
-            }, 0) /
-              items.length) *
-              100,
-          );
-
     let group = byProgram.get(r.program.id);
     if (!group) {
       group = { program: { id: r.program.id, name: r.program.name, color: r.program.color }, entries: [] };
@@ -531,7 +501,8 @@ export async function getStudentTimeline(studentId: string) {
       levelName: r.level.name,
       levelOrder: r.level.order,
       placement: r.placement,
-      percent,
+      initialScore: r.initialScore,
+      finalScore: r.finalScore,
       gradedAt: r.gradedAt,
       leveledUp: false,
       rank: cycleRank(r.cycle.year, r.cycle.season),
@@ -558,10 +529,10 @@ export async function getStudentTimeline(studentId: string) {
 
 /**
  * Historial COMPLETO de calificaciones de un alumno, ciclo por ciclo: en cada ciclo,
- * su nivel en cada programa y el detalle bloque por bloque (con % y si lo logró),
- * más la fecha en que se calificó. Es el mismo dato de LevelRecord/ItemScore que el
- * "proceso", pero abierto a TODOS los ciclos (no solo el activo). Con `programId` se
- * acota a una asignatura. Ordenado del ciclo más reciente al más antiguo.
+ * su nivel en cada programa, con qué calificación empezó y con cuál cerró, y la fecha
+ * del registro. Es el mismo dato de LevelRecord que el "proceso", pero abierto a TODOS
+ * los ciclos (no solo el activo). Con `programId` se acota a una asignatura. Ordenado
+ * del ciclo más reciente al más antiguo.
  */
 export async function getStudentGradeHistory(studentId: string, programId?: string) {
   const records = await prisma.levelRecord.findMany({
@@ -571,50 +542,17 @@ export async function getStudentGradeHistory(studentId: string, programId?: stri
       placement: true,
       gradedAt: true,
       note: true,
-      program: { select: { id: true, name: true, color: true, passThreshold: true } },
+      initialScore: true,
+      finalScore: true,
+      program: { select: { id: true, name: true, color: true } },
       cycle: { select: { id: true, label: true, year: true, season: true } },
-      level: {
-        select: {
-          id: true,
-          name: true,
-          order: true,
-          description: true,
-          blocks: {
-            orderBy: { order: "asc" },
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              items: { select: { id: true } },
-            },
-          },
-        },
-      },
+      level: { select: { id: true, name: true, order: true, description: true } },
     },
   });
   if (records.length === 0) return [];
 
-  const itemIds = [
-    ...new Set(records.flatMap((r) => r.level.blocks.flatMap((b) => b.items.map((i) => i.id)))),
-  ];
-  const scores = itemIds.length
-    ? await prisma.itemScore.findMany({
-        where: { studentId, itemId: { in: itemIds } },
-        select: { itemId: true, cycleId: true, score: true },
-      })
-    : [];
-  const scoreByKey = new Map(scores.map((s) => [`${s.cycleId}:${s.itemId}`, s.score]));
-
   const cycleRank = (year: number, season: string) =>
     year * 10 + (season === "ENE_JUN" ? 1 : season === "JUL_AGO" ? 2 : 3);
-  const pct = (cycleId: string, ids: string[]) =>
-    ids.length === 0
-      ? 0
-      : Math.round(
-          (ids.reduce((acc, id) => acc + (scoreByKey.get(`${cycleId}:${id}`) ?? 0) / 4, 0) /
-            ids.length) *
-            100,
-        );
 
   type Entry = {
     recordId: string;
@@ -624,16 +562,9 @@ export async function getStudentGradeHistory(studentId: string, programId?: stri
     placement: string;
     gradedAt: Date;
     note: string | null;
-    overall: number;
+    initialScore: number | null;
+    finalScore: number | null;
     rank: number;
-    blocks: {
-      id: string;
-      code: string | null;
-      name: string;
-      percent: number;
-      achieved: boolean;
-      hasItems: boolean;
-    }[];
   };
 
   const byProgram = new Map<
@@ -642,21 +573,6 @@ export async function getStudentGradeHistory(studentId: string, programId?: stri
   >();
 
   for (const r of records) {
-    const threshold = r.program.passThreshold;
-    const blocks = r.level.blocks.map((b) => {
-      const ids = b.items.map((i) => i.id);
-      const percent = pct(r.cycle.id, ids);
-      return {
-        id: b.id,
-        code: b.code,
-        name: b.name,
-        percent,
-        achieved: ids.length > 0 && percent >= threshold,
-        hasItems: ids.length > 0,
-      };
-    });
-    const allIds = r.level.blocks.flatMap((b) => b.items.map((i) => i.id));
-
     let group = byProgram.get(r.program.id);
     if (!group) {
       group = {
@@ -673,9 +589,9 @@ export async function getStudentGradeHistory(studentId: string, programId?: stri
       placement: r.placement,
       gradedAt: r.gradedAt,
       note: r.note,
-      overall: pct(r.cycle.id, allIds),
+      initialScore: r.initialScore,
+      finalScore: r.finalScore,
       rank: cycleRank(r.cycle.year, r.cycle.season),
-      blocks,
     });
   }
 
@@ -684,132 +600,33 @@ export async function getStudentGradeHistory(studentId: string, programId?: stri
     .sort((a, b) => a.program.name.localeCompare(b.program.name));
 }
 
-/**
- * Programas que YA tienen plantilla, con sus totales. Son los únicos de los que tiene
- * sentido copiar al crear un programa nuevo.
- */
-export async function listTemplateSources() {
-  const programs = await prisma.program.findMany({
-    where: { levels: { some: { blocks: { some: {} } } } },
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      levels: {
-        select: { _count: { select: { blocks: true } }, blocks: { select: { _count: { select: { items: true } } } } },
-      },
-    },
-  });
-  return programs.map((p) => ({
-    id: p.id,
-    name: p.name,
-    levels: p.levels.length,
-    items: p.levels.reduce((a, l) => a + l.blocks.reduce((b, x) => b + x._count.items, 0), 0),
-  }));
-}
-
-/** Plantilla completa de evaluación de un programa: niveles → bloques → temas. */
-export async function getProgramTemplate(programId: string) {
-  return prisma.program.findUnique({
-    where: { id: programId },
-    select: {
-      id: true,
-      name: true,
-      color: true,
-      evalFormat: true,
-      passThreshold: true,
-      levels: {
-        orderBy: { order: "asc" },
-        select: {
-          id: true,
-          name: true,
-          order: true,
-          description: true,
-          blocks: {
-            orderBy: { order: "asc" },
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              order: true,
-              items: {
-                orderBy: { order: "asc" },
-                select: { id: true, code: true, text: true, order: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
 /** Datos básicos de un programa (para la vista de calificación). */
 export async function getProgramBasics(programId: string) {
   return prisma.program.findUnique({
     where: { id: programId },
-    select: { id: true, name: true, color: true, passThreshold: true, evalFormat: true },
+    select: { id: true, name: true, color: true },
   });
 }
 
 /**
- * Datos para calificar por bloques: el nivel en el que está ubicado el alumno en un
- * programa/ciclo, con sus bloques y temas, y la calificación (1–4) que ya tenga el
- * alumno en ese ciclo. Devuelve null si no está ubicado en un nivel todavía.
+ * Datos para calificar: en qué nivel está ubicado el alumno en ese programa/ciclo y
+ * qué calificación (inicial y final, 1–4) lleva registrada. Devuelve null si todavía
+ * no está ubicado en un nivel: primero se ubica, luego se califica.
  */
 export async function getGradingData(studentId: string, programId: string, cycleId: string) {
   const record = await prisma.levelRecord.findUnique({
     where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
-    select: { level: { select: { id: true, name: true, order: true, description: true } } },
-  });
-  if (!record) return null;
-
-  // El nivel que sigue, para ofrecer "subir de nivel" al desbloquear los bloques.
-  const nextLevel = await prisma.programLevel.findFirst({
-    where: { programId, order: { gt: record.level.order } },
-    orderBy: { order: "asc" },
-    select: { name: true },
-  });
-
-  const blocks = await prisma.evalBlock.findMany({
-    where: { levelId: record.level.id },
-    orderBy: { order: "asc" },
     select: {
-      id: true,
-      code: true,
-      name: true,
-      order: true,
-      items: {
-        orderBy: { order: "asc" },
-        select: { id: true, code: true, text: true, order: true },
-      },
+      initialScore: true,
+      finalScore: true,
+      note: true,
+      placement: true,
+      gradedAt: true,
+      level: { select: { id: true, name: true, order: true, description: true } },
     },
   });
-
-  const itemIds = blocks.flatMap((b) => b.items.map((i) => i.id));
-  const scores = itemIds.length
-    ? await prisma.itemScore.findMany({
-        where: { studentId, cycleId, itemId: { in: itemIds } },
-        select: { itemId: true, score: true },
-      })
-    : [];
-  const scoreByItem = new Map(scores.map((s) => [s.itemId, s.score]));
-
-  return {
-    level: record.level,
-    nextLevelName: nextLevel?.name ?? null,
-    blocks: blocks.map((b) => ({
-      id: b.id,
-      code: b.code,
-      name: b.name,
-      items: b.items.map((i) => ({
-        id: i.id,
-        code: i.code,
-        text: i.text,
-        score: scoreByItem.get(i.id) ?? null,
-      })),
-    })),
-  };
+  if (!record) return null;
+  return record;
 }
 
 /** Programas que tienen niveles definidos, con su lista de niveles ordenada. */
@@ -822,7 +639,7 @@ export async function listProgramsWithLevels() {
       name: true,
       color: true,
       area: true,
-      teacherId: true, // para acotar a la maestra a los programas a su cargo
+      teacherId: true, // para acotar a la terapeuta a los programas a su cargo
       levels: { orderBy: { order: "asc" }, select: { id: true, name: true, order: true, description: true } },
     },
   });
@@ -830,7 +647,7 @@ export async function listProgramsWithLevels() {
 
 /**
  * Programas para el calendario del equipo: activos, de la oferta del ciclo y con
- * su horario estructurado. Si se pasa teacherId se acota a los de esa maestra.
+ * su horario estructurado. Si se pasa teacherId se acota a los de esa terapeuta.
  */
 export async function listCalendarPrograms(cycleId?: string, teacherId?: string) {
   return prisma.program.findMany({
@@ -881,7 +698,6 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
         color: true,
         area: true,
         schedule: true,
-        passThreshold: true,
         teacher: { select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
@@ -1031,7 +847,7 @@ export async function listRecentFamilyReservations(limit = 8) {
  * Alumnos con AUSENCIAS SEGUIDAS (3+) en un programa, mirando las últimas
  * sesiones registradas. Las sesiones donde no se les marcó nada no rompen la
  * racha (una lista sin pasar no es una asistencia). Si se da teacherId, se
- * acota a los programas de esa maestra.
+ * acota a los programas de esa terapeuta.
  */
 export async function getAbsenceAlerts(teacherId?: string) {
   const since = new Date();
@@ -1233,7 +1049,7 @@ export async function listUsers() {
   return prisma.user.findMany({
     // Solo cuentas del equipo. Las cuentas de alumno se administran desde
     // el módulo de estudiantes (son cientos y tienen otro flujo).
-    where: { role: { in: ["DIRECTORA", "COORDINADOR", "MAESTRA"] } },
+    where: { role: { not: "ALUMNO" } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -1243,6 +1059,9 @@ export async function listUsers() {
       role: true,
       active: true,
       createdAt: true,
+      // Contraseña inicial de la cuenta, para poder entregarla. Confidencial: la
+      // pantalla solo se la pasa al componente cuando quien mira es la directora.
+      initialPassword: true,
       _count: { select: { evaluations: true } },
     },
   });
@@ -1543,10 +1362,9 @@ export async function getCampaign(id: string) {
 }
 
 /**
- * El "proceso" del niño que ve la familia: por cada programa inscrito en el ciclo,
- * en qué nivel va y qué tanto lleva avanzado bloque por bloque. Se calcula de las
- * calificaciones por tema (1–4) ya registradas; un bloque se muestra "logrado" al
- * llegar al umbral del programa.
+ * El "proceso" del niño que ve la familia: por cada programa inscrito en el ciclo, en
+ * qué nivel va y qué calificación le puso la terapeuta al empezar y al cerrar el ciclo
+ * (1–4). Mientras no haya calificación final, la familia ve solo con qué empezó.
  */
 export async function getFamilyProgress(studentId: string, cycleId: string) {
   const records = await prisma.levelRecord.findMany({
@@ -1554,70 +1372,20 @@ export async function getFamilyProgress(studentId: string, cycleId: string) {
     orderBy: { program: { name: "asc" } },
     select: {
       placement: true,
-      program: {
-        select: { id: true, name: true, color: true, area: true, passThreshold: true },
-      },
-      level: {
-        select: {
-          id: true,
-          name: true,
-          order: true,
-          blocks: {
-            orderBy: { order: "asc" },
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              items: { select: { id: true } },
-            },
-          },
-        },
-      },
+      initialScore: true,
+      finalScore: true,
+      program: { select: { id: true, name: true, color: true, area: true } },
+      level: { select: { id: true, name: true, order: true } },
     },
   });
-  if (records.length === 0) return [];
 
-  const itemIds = [
-    ...new Set(records.flatMap((r) => r.level.blocks.flatMap((b) => b.items.map((i) => i.id)))),
-  ];
-  const scores = itemIds.length
-    ? await prisma.itemScore.findMany({
-        where: { studentId, cycleId, itemId: { in: itemIds } },
-        select: { itemId: true, score: true },
-      })
-    : [];
-  const scoreByItem = new Map(scores.map((s) => [s.itemId, s.score]));
-
-  const pct = (ids: string[]) =>
-    ids.length === 0
-      ? 0
-      : Math.round(
-          (ids.reduce((acc, id) => acc + (scoreByItem.get(id) ?? 0) / 4, 0) / ids.length) * 100,
-        );
-
-  return records.map((r) => {
-    const threshold = r.program.passThreshold;
-    const blocks = r.level.blocks.map((b) => {
-      const ids = b.items.map((i) => i.id);
-      const percent = pct(ids);
-      return {
-        id: b.id,
-        code: b.code,
-        name: b.name,
-        percent,
-        achieved: ids.length > 0 && percent >= threshold,
-        hasItems: ids.length > 0,
-      };
-    });
-    const allIds = r.level.blocks.flatMap((b) => b.items.map((i) => i.id));
-    return {
-      program: r.program,
-      placement: r.placement,
-      levelName: r.level.name,
-      overall: pct(allIds),
-      blocks,
-    };
-  });
+  return records.map((r) => ({
+    program: r.program,
+    placement: r.placement,
+    levelName: r.level.name,
+    initialScore: r.initialScore,
+    finalScore: r.finalScore,
+  }));
 }
 
 // ── Oficios ─────────────────────────────────────────────────────────────────

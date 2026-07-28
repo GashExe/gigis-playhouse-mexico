@@ -34,7 +34,7 @@ export function EnrollmentsPanel({
   studentId: string;
   enrollments: EnrollmentItem[];
   allPrograms: ProgramOption[];
-  /** Dirección/coordinación inscriben y modifican; la maestra solo consulta. */
+  /** Dirección, coordinación y operación inscriben; terapeutas y lectores solo consultan. */
   canManage?: boolean;
 }) {
   const [adding, setAdding] = useState(false);

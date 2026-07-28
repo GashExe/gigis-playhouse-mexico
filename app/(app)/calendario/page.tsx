@@ -10,6 +10,7 @@ import {
   Info,
 } from "@phosphor-icons/react/dist/ssr";
 import { requireStaff } from "@/lib/dal";
+import { canManage } from "@/lib/roles";
 import {
   getActiveCycle,
   listCalendarPrograms,
@@ -39,8 +40,8 @@ export default async function CalendarioPage({
   const me = await requireStaff();
   const cycle = await getActiveCycle();
 
-  // La maestra ve sus clases; dirección y coordinación ven todo el calendario.
-  const onlyMine = me.role === "MAESTRA";
+  // La terapeuta ve sus clases; el resto del equipo ve todo el calendario.
+  const onlyMine = me.role === "TERAPEUTA";
   const programs = await listCalendarPrograms(
     cycle?.id,
     onlyMine ? me.id : undefined,
@@ -54,7 +55,8 @@ export default async function CalendarioPage({
   // ve; solo dirección y coordinación los capturan. Se piden de lunes a domingo
   // aunque la semana se pinte más corta: hace falta saber si hay algo en domingo
   // antes de decidir cuántos días caben.
-  const canManageEvents = me.role === "DIRECTORA" || me.role === "COORDINADOR";
+  // Los eventos internos los captura quien gestiona; terapeutas y lectores los leen.
+  const canManageEvents = canManage(me.role);
   const events = await listCalendarEvents(
     toDateKey(monday),
     toDateKey(addDays(monday, 6)),
@@ -260,7 +262,7 @@ export default async function CalendarioPage({
             <span className="font-semibold text-ink">
               {withoutSlots.map((p) => p.name).join(", ")}
             </span>
-            {me.role === "MAESTRA" ? (
+            {me.role === "TERAPEUTA" ? (
               <> — pide a dirección capturar su horario para verlos aquí.</>
             ) : (
               <>

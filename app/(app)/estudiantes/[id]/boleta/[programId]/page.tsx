@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/dal";
 import { getStudent, getStudentGradeHistory } from "@/lib/queries";
 import { edadLabel } from "@/lib/utils";
 import { fechaDia, fechaDiaLarga } from "@/lib/format";
-import { ProgressBar, BlockList } from "@/components/grade-report";
+import { ScorePair, ScoreProgress, SCORE_MEANING } from "@/components/grade-report";
 import { PrintButton } from "@/components/print-button";
 
 const GENDER_LABEL: Record<string, string> = {
@@ -50,7 +50,6 @@ export default async function BoletaPage({
   const entries = group?.entries ?? [];
   // Ciclo elegido: el de la URL si existe, si no el más reciente.
   const entry = entries.find((e) => e.cycle.id === ciclo) ?? entries[0] ?? null;
-  const color = group?.program.color ?? "var(--brand-teal)";
   const edad = edadLabel(student.birthDate);
 
   return (
@@ -136,39 +135,31 @@ export default async function BoletaPage({
             </dl>
           </header>
 
-          {/* Nivel y avance general */}
+          {/* Nivel y calificación del ciclo */}
           <section className="mt-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
                 <p className="text-xs text-subtle">Nivel</p>
                 <p className="text-lg font-bold text-ink">{entry.levelName}</p>
                 {entry.levelDescription && (
                   <p className="text-xs text-muted">{entry.levelDescription}</p>
                 )}
               </div>
-              <div className="text-right">
-                <p className="text-2xl font-extrabold text-ink">{entry.overall}%</p>
-                <p className="text-xs text-subtle">avance del nivel</p>
-              </div>
+              <ScorePair
+                initialScore={entry.initialScore}
+                finalScore={entry.finalScore}
+                size="lg"
+              />
             </div>
             <div className="mt-3">
-              <ProgressBar percent={entry.overall} color={color} />
+              <ScoreProgress
+                initialScore={entry.initialScore}
+                finalScore={entry.finalScore}
+              />
             </div>
             <p className="mt-2 text-xs text-muted">
               Situación: {PLACEMENT_LABEL[entry.placement] ?? entry.placement}
             </p>
-          </section>
-
-          {/* Detalle por bloque */}
-          <section className="mt-5">
-            <h2 className="text-sm font-bold text-ink">Avance por bloque</h2>
-            {entry.blocks.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">
-                Este nivel aún no tiene bloques capturados en la plantilla.
-              </p>
-            ) : (
-              <BlockList blocks={entry.blocks} color={color} />
-            )}
           </section>
 
           {entry.note && (
@@ -179,7 +170,7 @@ export default async function BoletaPage({
           )}
 
           <footer className="mt-8 border-t border-border pt-4 text-xs text-subtle">
-            Escala 1–4 (4 = dominado). Documento generado el {fechaDia(new Date())}.
+            {`Escala 1–4: 1 ${SCORE_MEANING[1].toLowerCase()}, 2 ${SCORE_MEANING[2].toLowerCase()}, 3 ${SCORE_MEANING[3].toLowerCase()}, 4 ${SCORE_MEANING[4].toLowerCase()}. Documento generado el ${fechaDia(new Date())}.`}
           </footer>
         </article>
       )}

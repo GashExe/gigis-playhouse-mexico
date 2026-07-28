@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Lock, HandHeart } from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
+import { isReadOnly } from "@/lib/roles";
 import { getCampaign } from "@/lib/queries";
 import { updateCampaign } from "@/lib/actions/donations";
 import { PageHeader } from "@/components/ui/page-header";
@@ -19,7 +20,8 @@ export default async function CampaignDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("DIRECTORA");
+  const me = await requireRole("DIRECTORA", "GESTORA_OPERACIONES");
+  const soloLectura = isReadOnly(me.role);
   const { id } = await params;
   const data = await getCampaign(id);
   if (!data) notFound();
@@ -54,8 +56,9 @@ export default async function CampaignDetailPage({
         }
       />
 
-      <div className="grid gap-5 lg:grid-cols-5">
+      <div className={`grid gap-5 ${soloLectura ? "" : "lg:grid-cols-5"}`}>
         {/* Editar campaña */}
+        {!soloLectura && (
         <Card className="self-start p-5 lg:col-span-2">
           <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
             <HandHeart weight="fill" className="size-4 text-primary" />
@@ -115,12 +118,14 @@ export default async function CampaignDetailPage({
             </div>
           </form>
         </Card>
+        )}
 
         {/* Familias */}
-        <div className="lg:col-span-3">
+        <div className={soloLectura ? "" : "lg:col-span-3"}>
           <CampaignFamilies
             campaignId={campaign.id}
             mandatory={campaign.mandatory}
+            readOnly={soloLectura}
             families={families.map((f) => ({
               ...f,
               graceUntil: f.graceUntil ? new Date(f.graceUntil).toISOString() : null,

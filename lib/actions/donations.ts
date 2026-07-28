@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 
 /**
@@ -39,7 +39,7 @@ function fields(formData: FormData) {
 }
 
 export async function createCampaign(formData: FormData) {
-  await requireRole(); // solo DIRECTORA
+  await requireWriter("GESTORA_OPERACIONES"); // dirección y operación
   const data = fields(formData);
   if (!data.title) return;
   const campaign = await prisma.donationCampaign.create({ data });
@@ -54,7 +54,7 @@ export async function createCampaign(formData: FormData) {
 }
 
 export async function updateCampaign(formData: FormData) {
-  await requireRole();
+  await requireWriter("GESTORA_OPERACIONES");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const data = fields(formData);
@@ -71,7 +71,7 @@ export async function updateCampaign(formData: FormData) {
 }
 
 export async function setCampaignActive(formData: FormData) {
-  await requireRole();
+  await requireWriter("GESTORA_OPERACIONES");
   const id = String(formData.get("id") ?? "");
   const active = String(formData.get("active") ?? "") === "true";
   if (!id) return;
@@ -91,7 +91,7 @@ export async function setCampaignActive(formData: FormData) {
 }
 
 export async function deleteCampaign(formData: FormData) {
-  await requireRole();
+  await requireWriter("GESTORA_OPERACIONES");
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const campaign = await prisma.donationCampaign.delete({
@@ -112,7 +112,7 @@ export async function deleteCampaign(formData: FormData) {
 
 /** Marca el donativo de una familia como CUMPLIDO (registra monto/nota si los dio). */
 export async function markContributionDone(formData: FormData) {
-  await requireRole();
+  await requireWriter("GESTORA_OPERACIONES");
   const campaignId = String(formData.get("campaignId") ?? "");
   const studentId = String(formData.get("studentId") ?? "");
   if (!campaignId || !studentId) return;
@@ -138,7 +138,7 @@ export async function markContributionDone(formData: FormData) {
 
 /** Da una prórroga (tiempo de gracia) a la familia hasta cierta fecha. */
 export async function grantContributionGrace(formData: FormData) {
-  await requireRole();
+  await requireWriter("GESTORA_OPERACIONES");
   const campaignId = String(formData.get("campaignId") ?? "");
   const studentId = String(formData.get("studentId") ?? "");
   const graceUntil = parseDateInput(formData.get("graceUntil"));
@@ -163,7 +163,7 @@ export async function grantContributionGrace(formData: FormData) {
 
 /** Reabre el donativo de la familia (vuelve a PENDIENTE, quita la prórroga). */
 export async function resetContribution(formData: FormData) {
-  await requireRole();
+  await requireWriter("GESTORA_OPERACIONES");
   const campaignId = String(formData.get("campaignId") ?? "");
   const studentId = String(formData.get("studentId") ?? "");
   if (!campaignId || !studentId) return;

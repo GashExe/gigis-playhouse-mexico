@@ -12,7 +12,7 @@ import { logAudit } from "@/lib/audit";
  *   • Si NO tiene historial, se le coloca en el nivel más bajo del programa.
  *
  * No pisa nada: si ya existe una ubicación para ese alumno/programa/ciclo (porque
- * el maestro ya lo ubicó a mano), se respeta. Programas sin niveles se saltan.
+ * la terapeuta ya lo ubicó a mano), se respeta. Programas sin niveles se saltan.
  *
  * Devuelve el LevelRecord creado (o null si no hubo nada que hacer) para que el
  * llamador pueda incluirlo en su transacción/bitácora.

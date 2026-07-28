@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardText, LockOpen, Lock } from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
+import { isReadOnly } from "@/lib/roles";
 import { getLegalConfig } from "@/lib/legal";
 import { listCycles, getActiveCycle } from "@/lib/queries";
 import { getSurveyConfig, getSurveyResults } from "@/lib/survey";
@@ -19,7 +20,9 @@ export default async function ConfiguracionPage({
   searchParams: Promise<{ ciclo?: string }>;
 }) {
   // Ajustes de la plataforma: textos legales y encuesta. Solo la dirección.
-  await requireRole("DIRECTORA");
+  const me = await requireRole("DIRECTORA");
+  // El rol Lector puede leer los textos y las preguntas; no guardarlos.
+  const soloLectura = isReadOnly(me.role);
   const { ciclo } = await searchParams;
   const [legal, survey, cycles, activeCycle] = await Promise.all([
     getLegalConfig(),
@@ -47,6 +50,7 @@ export default async function ConfiguracionPage({
           reglamento={legal.reglamento}
           version={legal.version}
           updatedAt={legal.updatedAt.toISOString()}
+          readOnly={soloLectura}
         />
       </div>
 
@@ -70,7 +74,7 @@ export default async function ConfiguracionPage({
         {/* Preguntas */}
         <Card className="p-5">
           <h3 className="mb-3 text-sm font-bold text-ink">Preguntas</h3>
-          <SurveyConfigForm initial={survey.questions} />
+          <SurveyConfigForm initial={survey.questions} readOnly={soloLectura} />
         </Card>
 
         {/* Abrir / cerrar por ciclo */}
@@ -95,6 +99,7 @@ export default async function ConfiguracionPage({
                     </span>
                   )}
                 </span>
+                {!soloLectura && (
                 <form action={setCycleSurveyOpen.bind(null, c.id, !c.surveyOpen)}>
                   <button
                     type="submit"
@@ -117,6 +122,7 @@ export default async function ConfiguracionPage({
                     )}
                   </button>
                 </form>
+                )}
               </li>
             ))}
           </ul>

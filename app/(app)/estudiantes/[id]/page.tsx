@@ -12,6 +12,7 @@ import {
   ClockCounterClockwise,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
+import { canGrade, canManage } from "@/lib/roles";
 import {
   getStudent,
   listActivePrograms,
@@ -77,12 +78,15 @@ export default async function StudentDetailPage({
     ]);
   if (!student) notFound();
 
-  // La maestra solo consulta: sin editar expediente, estado, salud ni inscripciones.
-  const canManage = me.role !== "MAESTRA";
-  // Y solo califica (ubicar nivel / temas) en los programas a su cargo.
-  const gradableProgramIds = canManage
-    ? programsWithLevels.map((p) => p.id)
-    : programsWithLevels.filter((p) => p.teacherId === me.id).map((p) => p.id);
+  // Terapeutas y lectores solo consultan: sin editar expediente, estado, salud ni inscripciones.
+  const puedeGestionar = canManage(me.role);
+  // Calificar es otra cosa que gestionar: la gestora de operaciones administra el
+  // expediente pero NO califica, y la terapeuta solo en los programas a su cargo.
+  const gradableProgramIds = !canGrade(me.role)
+    ? []
+    : me.role === "TERAPEUTA"
+      ? programsWithLevels.filter((p) => p.teacherId === me.id).map((p) => p.id)
+      : programsWithLevels.map((p) => p.id);
 
   // Ciclo seleccionado: el de la URL si es válido, si no el activo.
   const validCiclo = ciclo && cycles.some((c) => c.id === ciclo) ? ciclo : null;
@@ -118,7 +122,7 @@ export default async function StudentDetailPage({
               <h1 className="text-2xl font-extrabold tracking-tight text-ink text-balance">
                 {student.firstName} {student.lastName}
               </h1>
-              {canManage ? (
+              {puedeGestionar ? (
                 <StudentStatusControl studentId={student.id} status={student.status} />
               ) : (
                 <StudentStatusBadge status={student.status} />
@@ -131,7 +135,7 @@ export default async function StudentDetailPage({
             </p>
           </div>
         </div>
-        {canManage && (
+        {puedeGestionar && (
           <StudentActions
             studentId={student.id}
             studentName={`${student.firstName} ${student.lastName}`}
@@ -170,7 +174,7 @@ export default async function StudentDetailPage({
               },
             }))}
             allPrograms={programs.map((p) => ({ id: p.id, name: p.name }))}
-            canManage={canManage}
+            canManage={puedeGestionar}
           />
           {cycles.length > 0 && (
             <LevelRecordsPanel
@@ -180,6 +184,8 @@ export default async function StudentDetailPage({
                 placement: r.placement,
                 note: r.note,
                 gradedAt: r.gradedAt,
+                initialScore: r.initialScore,
+                finalScore: r.finalScore,
                 program: r.program,
                 level: r.level,
               }))}
@@ -303,7 +309,7 @@ export default async function StudentDetailPage({
             </div>
           )}
 
-          <HealthPanel studentId={student.id} health={student.health} canEdit={canManage} />
+          <HealthPanel studentId={student.id} health={student.health} canEdit={puedeGestionar} />
 
           {student.notes && (
             <Card className="p-5">

@@ -62,17 +62,41 @@ const NAV: NavItem[] = [
   { href: "/estudiantes", label: "Participantes", icon: UsersThree },
   { href: "/programas", label: "Programas", icon: Books },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
-  { href: "/avisos", label: "Avisos", icon: Megaphone, roles: ["DIRECTORA"] },
-  { href: "/donativos", label: "Donativos", icon: HandHeart, roles: ["DIRECTORA"] },
-  { href: "/reportes", label: "Reportes", icon: ChartBar, roles: ["DIRECTORA", "COORDINADOR"] },
-  { href: "/oficios", label: "Oficios", icon: FileText, roles: ["DIRECTORA", "COORDINADOR"] },
+  {
+    href: "/avisos",
+    label: "Avisos",
+    icon: Megaphone,
+    roles: ["DIRECTORA", "GESTORA_OPERACIONES"],
+  },
+  {
+    href: "/donativos",
+    label: "Donativos",
+    icon: HandHeart,
+    roles: ["DIRECTORA", "GESTORA_OPERACIONES"],
+  },
+  {
+    href: "/reportes",
+    label: "Reportes",
+    icon: ChartBar,
+    roles: ["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES"],
+  },
+  {
+    href: "/oficios",
+    label: "Oficios",
+    icon: FileText,
+    roles: ["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES"],
+  },
   { href: "/bitacora", label: "Bitácora", icon: ClockCounterClockwise, roles: ["DIRECTORA"] },
   { href: "/configuracion", label: "Configuración", icon: GearSix, roles: ["DIRECTORA"] },
   { href: "/manual", label: "Manual", icon: BookOpenText },
 ];
 
+/**
+ * Qué destinos ve cada rol. El LECTOR los ve TODOS: su encargo es ver la plataforma
+ * completa (lo que no puede es escribir, y de eso se encarga el servidor).
+ */
 function useVisibleNav(role: Role) {
-  return NAV.filter((i) => !i.roles || i.roles.includes(role));
+  return NAV.filter((i) => !i.roles || role === "LECTOR" || i.roles.includes(role));
 }
 
 function isActive(pathname: string, href: string) {

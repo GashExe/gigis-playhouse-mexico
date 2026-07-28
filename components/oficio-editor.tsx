@@ -59,15 +59,19 @@ export function OficioEditor({
   oficio,
   proximoFolio,
   canApprove,
+  readOnly = false,
 }: {
   oficio: Oficio;
   /** Folio que tomaría en cada zona al aprobarse (mayor emitido + 1). */
   proximoFolio: Record<Zona, number>;
   /** Solo la dirección (Eva) puede aprobar. */
   canApprove: boolean;
+  /** Solo lectura (rol Lector): el oficio se lee, no se edita ni se aprueba. */
+  readOnly?: boolean;
 }) {
   const hoy = new Date();
-  const aprobado = oficio.status === "APROBADO";
+  // La hoja se bloquea igual que un oficio ya aprobado: se lee, no se escribe.
+  const aprobado = oficio.status === "APROBADO" || readOnly;
   const [zoom, setZoom] = useState(1);
   const [zona, setZona] = useState<Zona>(oficio.zona);
   const [guardado, setGuardado] = useState(false);
@@ -194,12 +198,13 @@ export function OficioEditor({
           </>
         )}
 
-        {aprobado ? (
+        {oficio.status === "APROBADO" ? (
           <Button onClick={imprimir}>
             <Printer weight="fill" className="size-4" />
             Imprimir o guardar PDF
           </Button>
         ) : (
+
           <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-input)] border border-warning bg-warning-weak/40 px-3 py-2 text-xs font-semibold text-warning-strong">
             <Lock weight="fill" className="size-4" />
             La impresión se habilita cuando la dirección lo apruebe

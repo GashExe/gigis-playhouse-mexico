@@ -40,8 +40,8 @@ async function main() {
           name: m.name,
           username: m.username,
           email: m.email,
-          passwordHash: await hash("Maestra2026!"),
-          role: "MAESTRA",
+          passwordHash: await hash("Terapeuta2026!"),
+          role: "TERAPEUTA",
         },
       }),
     ),
@@ -150,7 +150,7 @@ async function main() {
   };
   console.log("✅ Listo:", counts);
   console.log(`\n   Directora: usuario "${directora.username}"  /  Gigis2026!`);
-  console.log(`   Maestra:   usuario "renata"  /  Maestra2026!\n`);
+  console.log(`   Terapeuta: usuario "renata"  /  Terapeuta2026!\n`);
 }
 
 main()

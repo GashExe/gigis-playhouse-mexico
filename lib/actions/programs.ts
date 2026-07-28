@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/dal";
+import { requireWriter } from "@/lib/dal";
 import { ProgramSchema, ScheduleSlotsSchema } from "@/lib/validators";
 import { getActiveCycle } from "@/lib/queries";
-import { readStructure, writeStructure, StructureSchema } from "@/lib/templates";
 
 export type ProgramFormState =
   | { errors?: Record<string, string[]>; ok?: boolean }
@@ -71,7 +70,7 @@ export async function createProgram(
   _prev: ProgramFormState,
   formData: FormData,
 ): Promise<ProgramFormState> {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const parsed = parseProgramForm(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -106,68 +105,10 @@ export async function createProgram(
     });
   }
 
-  // De dónde sale su evaluación: en blanco, copiada de otro programa, o de una
-  // plantilla base. Si algo falla, el programa igual queda creado y su plantilla se
-  // arma a mano desde el editor: no vale perder el programa por esto.
-  const source = String(formData.get("templateSource") ?? "");
-  try {
-    if (source.startsWith("copy:")) {
-      const from = source.slice(5);
-      await writeStructure(program.id, await readStructure(from));
-    } else if (source.startsWith("preset:")) {
-      const preset = await prisma.templatePreset.findUnique({
-        where: { id: source.slice(7) },
-        select: { structure: true, evalFormat: true },
-      });
-      if (preset) {
-        const parsed = StructureSchema.safeParse(preset.structure);
-        if (parsed.success) await writeStructure(program.id, parsed.data);
-        await prisma.program.update({
-          where: { id: program.id },
-          data: { evalFormat: preset.evalFormat },
-        });
-      }
-    }
-  } catch (e) {
-    console.error("No se pudo copiar la plantilla al programa nuevo:", e);
-  }
 
   revalidatePath("/programas");
   revalidatePath("/panel");
   return { ok: true };
-}
-
-/**
- * Guarda la plantilla de un programa en la biblioteca, para reutilizarla al crear
- * otros. Sin esto la biblioteca nace vacía y no hay forma de llenarla.
- */
-export async function saveAsPreset(programId: string, formData: FormData) {
-  await requireRole("DIRECTORA", "COORDINADOR");
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
-  const program = await prisma.program.findUnique({
-    where: { id: programId },
-    select: { evalFormat: true },
-  });
-  if (!program) return;
-  const structure = await readStructure(programId);
-  if (structure.length === 0) return;
-
-  await prisma.templatePreset.create({
-    data: {
-      name,
-      description: String(formData.get("description") ?? "").trim() || null,
-      evalFormat: program.evalFormat,
-      structure,
-    },
-  });
-  revalidatePath("/programas");
-}
-
-export async function deletePreset(id: string) {
-  await requireRole("DIRECTORA", "COORDINADOR");
-  await prisma.templatePreset.delete({ where: { id } });
-  revalidatePath("/programas");
 }
 
 export async function updateProgram(
@@ -175,7 +116,7 @@ export async function updateProgram(
   _prev: ProgramFormState,
   formData: FormData,
 ): Promise<ProgramFormState> {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const parsed = parseProgramForm(formData);
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
@@ -228,7 +169,7 @@ export async function updateProgram(
 }
 
 export async function toggleProgram(id: string, active: boolean) {
-  await requireRole("DIRECTORA", "COORDINADOR");
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   await prisma.program.update({ where: { id }, data: { active } });
   revalidatePath("/programas");
   revalidatePath("/panel");
@@ -240,7 +181,7 @@ export async function toggleProgram(id: string, active: boolean) {
  * Solo la directora arma el calendario escolar.
  */
 export async function activateCycle(cycleId: string) {
-  await requireRole("DIRECTORA");
+  await requireWriter("DIRECTORA");
   await prisma.$transaction([
     prisma.cycle.updateMany({ where: { active: true }, data: { active: false } }),
     prisma.cycle.update({ where: { id: cycleId }, data: { active: true } }),
@@ -255,7 +196,7 @@ export async function setProgramInCycle(
   cycleId: string,
   offered: boolean,
 ) {
-  await requireRole("DIRECTORA");
+  await requireWriter("DIRECTORA");
   await prisma.program.update({
     where: { id: programId },
     data: {

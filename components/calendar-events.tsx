@@ -55,7 +55,7 @@ export function NewEventButton({ defaultDateKey }: { defaultDateKey: string }) {
 
 /**
  * Tarjetita del evento dentro del día. Dirección y coordinación la tocan para
- * editar; la maestra solo la lee (el detalle le sale como tooltip).
+ * editar; quien no gestiona solo la lee (el detalle le sale como tooltip).
  */
 export function EventChip({
   event,

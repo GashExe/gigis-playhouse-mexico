@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { fecha } from "@/lib/format";
-import { initials, roleLabel, roleTone } from "@/lib/utils";
+import { initials, roleDescription, roleLabel, roleTone } from "@/lib/utils";
 import type { Role } from "@/lib/generated/prisma/client";
 
 type UserRow = {
@@ -30,15 +30,20 @@ type UserRow = {
   role: Role;
   active: boolean;
   createdAt: Date;
+  /** Contraseña inicial sin usar todavía. Solo llega llena para la directora. */
+  initialPassword?: string | null;
   _count: { evaluations: number };
 };
 
 export function UsersManager({
   users,
   currentUserId,
+  canManage = true,
 }: {
   users: UserRow[];
   currentUserId: string;
+  /** Falso para quien solo mira: la lista se ve, no se toca. */
+  canManage?: boolean;
 }) {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,7 +51,7 @@ export function UsersManager({
   return (
     <div className="space-y-5">
       <div className="flex justify-end">
-        {!creating && (
+        {canManage && !creating && (
           <Button onClick={() => setCreating(true)}>
             <Plus weight="bold" className="size-4" />
             Nueva cuenta
@@ -65,7 +70,7 @@ export function UsersManager({
       <Card className="overflow-visible p-0">
         <ul className="divide-y divide-border">
           {users.map((u) =>
-            editingId === u.id ? (
+            canManage && editingId === u.id ? (
               <li key={u.id} className="p-4">
                 <UserForm
                   action={updateUser.bind(null, u.id)}
@@ -99,12 +104,21 @@ export function UsersManager({
                     <span className="font-medium text-ink">@{u.username}</span>
                     {u.email ? ` · ${u.email}` : ""}
                   </p>
+                  {u.initialPassword && (
+                    <p className="text-xs text-muted">
+                      Contraseña inicial:{" "}
+                      <span className="select-all font-mono font-semibold text-ink">
+                        {u.initialPassword}
+                      </span>{" "}
+                      · confidencial, se borra cuando la cambie
+                    </p>
+                  )}
                 </div>
                 <div className="hidden text-right text-xs text-muted sm:block">
                   <p className="tnum font-semibold text-ink">{u._count.evaluations}</p>
                   <p>evaluaciones</p>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className={`flex items-center gap-1 ${canManage ? "" : "hidden"}`}>
                   <button
                     onClick={() => setEditingId(u.id)}
                     aria-label="Editar cuenta"
@@ -159,6 +173,8 @@ function UserForm({
     undefined,
   );
   const err = state?.errors ?? {};
+  // El rol vive en estado para poder explicar, ahí mismo, qué alcance tiene el elegido.
+  const [role, setRole] = useState<Role>(defaults?.role ?? "TERAPEUTA");
 
   useEffect(() => {
     if (state?.ok) onClose();
@@ -205,10 +221,17 @@ function UserForm({
           <Field label="Correo electrónico" htmlFor="email" error={err.email?.[0]} hint="Opcional.">
             <Input id="email" name="email" type="email" defaultValue={defaults?.email ?? ""} />
           </Field>
-          <Field label="Rol" htmlFor="role">
-            <Select id="role" name="role" defaultValue={defaults?.role ?? "MAESTRA"}>
-              <option value="MAESTRA">Maestra</option>
-              <option value="COORDINADOR">Coordinador (arma plantillas de evaluación)</option>
+          <Field label="Rol" htmlFor="role" hint={roleDescription(role)}>
+            <Select
+              id="role"
+              name="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as Role)}
+            >
+              <option value="TERAPEUTA">Terapeuta</option>
+              <option value="GESTORA_OPERACIONES">Gestora de operaciones</option>
+              <option value="COORDINADOR">Coordinador</option>
+              <option value="LECTOR">Lector</option>
               <option value="DIRECTORA">Directora</option>
             </Select>
           </Field>

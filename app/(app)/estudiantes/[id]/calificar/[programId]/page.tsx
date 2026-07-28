@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Stack } from "@phosphor-icons/react/dist/ssr";
-import { requireGraderForProgram } from "@/lib/dal";
+import { canGradeProgram } from "@/lib/dal";
 import {
   getStudent,
   getProgramBasics,
@@ -11,7 +11,7 @@ import {
 } from "@/lib/queries";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { GradingPanel } from "@/components/grading-panel";
+import { ScorePanel } from "@/components/score-panel";
 
 export async function generateMetadata({
   params,
@@ -31,8 +31,9 @@ export default async function GradePage({
   searchParams: Promise<{ ciclo?: string }>;
 }) {
   const { id, programId } = await params;
-  // La maestra solo entra a calificar los programas a su cargo.
-  await requireGraderForProgram(programId);
+  // La terapeuta solo entra a calificar los programas a su cargo; operación y lectura,
+  // a ninguno. Aquí se redirige (no se lanza): es una pantalla, no una acción.
+  if (!(await canGradeProgram(programId))) redirect("/panel");
   const { ciclo } = await searchParams;
 
   const [student, program, cycles, activeCycle] = await Promise.all([
@@ -50,14 +51,6 @@ export default async function GradePage({
     : null;
 
   const backHref = `/estudiantes/${id}${selectedCycleId ? `?ciclo=${selectedCycleId}` : ""}`;
-
-  // El subtítulo se adapta al formato de la plantilla del programa.
-  const formatSubtitle =
-    program.evalFormat === "AREAS"
-      ? "Calificación por áreas"
-      : program.evalFormat === "PLANO"
-        ? "Calificación por secciones"
-        : "Calificación por bloques";
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -82,7 +75,7 @@ export default async function GradePage({
           </span>
           <div>
             <h1 className="text-xl font-extrabold tracking-tight text-ink">{program.name}</h1>
-            <p className="text-sm text-muted">{formatSubtitle}</p>
+            <p className="text-sm text-muted">Calificación inicial y final del ciclo</p>
           </div>
         </div>
 
@@ -126,25 +119,15 @@ export default async function GradePage({
             }
           />
         </Card>
-      ) : data.blocks.length === 0 ? (
-        <Card className="p-4">
-          <EmptyState
-            icon={<Stack weight="fill" className="size-6" />}
-            title="Este nivel aún no tiene plantilla"
-            description={`El nivel "${data.level.name}" de ${program.name} no tiene una plantilla de evaluación cargada todavía.`}
-          />
-        </Card>
       ) : (
-        <GradingPanel
-          key={data.level.id}
+        <ScorePanel
+          key={`${data.level.id}:${selectedCycleId}`}
           studentId={id}
           programId={programId}
           cycleId={selectedCycleId}
-          format={program.evalFormat}
           levelName={data.level.name}
-          nextLevelName={data.nextLevelName}
-          passThreshold={program.passThreshold}
-          blocks={data.blocks}
+          initialScore={data.initialScore}
+          finalScore={data.finalScore}
         />
       )}
     </div>
