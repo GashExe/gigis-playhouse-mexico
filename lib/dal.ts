@@ -45,6 +45,8 @@ export const getCurrentUser = cache(async () => {
       active: true,
       studentId: true,
       tutorialSeenAt: true,
+      // Hasta cuándo leyó sus mensajes la familia: lo posterior se le marca nuevo.
+      messagesSeenAt: true,
     },
   });
   if (!user || !user.active) {

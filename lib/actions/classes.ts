@@ -143,6 +143,12 @@ export async function addStudentNote(programId: string, formData: FormData) {
   });
   revalidatePath(`/calendario/${programId}`);
   revalidatePath(`/estudiantes/${studentId}`);
+  // La anotación visible es un mensaje para la familia: sin esto tardaba en
+  // aparecerle en Mi espacio.
+  if (visibleToFamily) {
+    revalidatePath("/mi-espacio");
+    revalidatePath("/mi-espacio/mensajes");
+  }
 }
 
 /**
@@ -162,4 +168,8 @@ export async function deleteStudentNote(noteId: string) {
   await prisma.studentNote.delete({ where: { id: noteId } });
   if (note.programId) revalidatePath(`/calendario/${note.programId}`);
   revalidatePath(`/estudiantes/${note.studentId}`);
+  // Retirar algo que la familia no debería ver tiene que desaparecerlo de su
+  // bandeja de inmediato, no cuando caduque la caché.
+  revalidatePath("/mi-espacio");
+  revalidatePath("/mi-espacio/mensajes");
 }
