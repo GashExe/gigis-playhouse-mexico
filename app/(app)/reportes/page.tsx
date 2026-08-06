@@ -1,5 +1,13 @@
-import { FileXls, UsersThree, CheckCircle, Clock } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
+import {
+  ChartBar,
+  FileXls,
+  UsersThree,
+  CheckCircle,
+  Clock,
+} from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
+import { coversProgram } from "@/lib/roles";
 import {
   listPrograms,
   listCycles,
@@ -54,13 +62,16 @@ export default async function ReportesPage({
 }: {
   searchParams: Promise<{ programa?: string; ciclo?: string }>;
 }) {
-  await requireRole("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
+  const me = await requireRole("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const { programa, ciclo } = await searchParams;
-  const [programs, cycles, activeCycle] = await Promise.all([
+  const [allPrograms, cycles, activeCycle] = await Promise.all([
     listPrograms(),
     listCycles(),
     getActiveCycle(),
   ]);
+  // La coordinación con área asignada solo reporta sobre lo de la suya: si no, el
+  // selector le ofrecería grupos ajenos y bastaría cambiar el id en la URL.
+  const programs = allPrograms.filter((p) => coversProgram(me, p));
 
   const selectedProgramId =
     (programa && programs.some((p) => p.id === programa) ? programa : null) ??
@@ -92,7 +103,17 @@ export default async function ReportesPage({
           subtitle="Participantes con edad y sexo, y el estado de su donativo. Descárgalo a Excel o imprímelo."
         />
         {report && report.totals.total > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* El otro reporte del mismo grupo: calificaciones y asistencia. Vive en
+                el calendario porque ahí la compuerta es por programa (la terapeuta
+                entra solo a los suyos). */}
+            <Link
+              href={`/calendario/${selectedProgramId}/reporte?ciclo=${selectedCycleId}`}
+              className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm font-bold text-ink transition-colors hover:border-primary"
+            >
+              <ChartBar weight="fill" className="size-4 text-primary" />
+              Calificaciones y asistencia
+            </Link>
             <a
               href={`/api/reportes?programa=${selectedProgramId}&ciclo=${selectedCycleId}`}
               className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm font-bold text-ink transition-colors hover:border-primary"

@@ -38,6 +38,7 @@ function parseProgramForm(formData: FormData) {
     // "1". Se lee la ÚLTIMA entrada porque `get()` devuelve la primera, y así
     // apagar la casilla sí llega al servidor.
     allowFamilyEnroll: String(formData.getAll("allowFamilyEnroll").at(-1) ?? "1"),
+    coordination: formData.get("coordination") ?? "",
   });
 }
 
@@ -67,6 +68,7 @@ function activityData(d: ReturnType<typeof ProgramSchema.parse>) {
     studentCapacity: toInt(d.studentCapacity) ?? 7,
     collaboratorCapacity: toInt(d.collaboratorCapacity),
     allowFamilyEnroll: d.allowFamilyEnroll !== "0",
+    coordination: d.coordination || null,
     teacherId: d.teacherId || null,
   };
 }

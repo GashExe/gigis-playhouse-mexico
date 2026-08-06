@@ -31,6 +31,7 @@ export async function createUser(
     username: formData.get("username"),
     email: formData.get("email"),
     role: (formData.get("role") as string) || "TERAPEUTA",
+    coordination: formData.get("coordination") ?? "",
     password: formData.get("password") ?? "",
   });
   if (!parsed.success) {
@@ -57,6 +58,9 @@ export async function createUser(
       username,
       email,
       role: d.role,
+      // La coordinación solo tiene sentido en un coordinador: en cualquier otro rol
+      // se guarda vacía para que no quede un dato mintiendo si cambia de puesto.
+      coordination: d.role === "COORDINADOR" ? d.coordination || null : null,
       passwordHash: await bcrypt.hash(d.password, 10),
     },
   });
@@ -75,6 +79,7 @@ export async function updateUser(
     username: formData.get("username"),
     email: formData.get("email"),
     role: (formData.get("role") as string) || "TERAPEUTA",
+    coordination: formData.get("coordination") ?? "",
     password: formData.get("password") ?? "",
   });
   if (!parsed.success) {
@@ -106,6 +111,7 @@ export async function updateUser(
       username,
       email,
       role: d.role,
+      coordination: d.role === "COORDINADOR" ? d.coordination || null : null,
       ...(d.password ? { passwordHash: await bcrypt.hash(d.password, 10) } : {}),
     },
   });

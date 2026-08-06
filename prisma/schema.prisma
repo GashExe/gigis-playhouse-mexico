@@ -13,15 +13,18 @@ datasource db {
 
 /// Cuentas del sistema: la directora administra todo; las terapeutas consultan y registran.
 model User {
-  id           String   @id @default(cuid())
+  id           String  @id @default(cuid())
   name         String
-  username     String   @unique // Identificador de acceso (usuario). Para alumnos: su matrícula.
-  email        String?  @unique // Opcional: dato de contacto, ya no se usa para entrar
+  username     String  @unique // Identificador de acceso (usuario). Para alumnos: su matrícula.
+  email        String? @unique // Opcional: dato de contacto, ya no se usa para entrar
   passwordHash String
-  role         Role     @default(TERAPEUTA)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         Role    @default(TERAPEUTA)
+  active       Boolean @default(true)
+
+  /// Solo para COORDINADOR: de qué coordinación es. null = coordina todo.
+  coordination Coordination?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   // Contraseña inicial autogenerada (texto). Visible SOLO para la directora, para
   // poder entregársela/reimprimirla a la familia. No se expone al cliente en general.
@@ -41,6 +44,7 @@ model User {
   announcements       Announcement[]    @relation("AutorAnuncios") // Anuncios que ha publicado
   reservationsDecided Reservation[]     @relation("DecideReservas") // Reservas que resolvió
   waitlistDecided     WaitlistRequest[] @relation("DecideListaEspera") // Solicitudes de espera que resolvió
+  orgNodes            OrgNode[]         @relation("OrgCuenta") // Su caja en el organigrama
   calendarEvents      CalendarEvent[]   @relation("AutorEventos") // Eventos del calendario interno
   auditLogs           AuditLog[]        @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
   legalEdits          LegalConfig[]     @relation("ConfigEditor") // Ediciones de los textos legales
@@ -49,6 +53,15 @@ model User {
   surveyEdits         SurveyConfig[]    @relation("SurveyEditor") // Ediciones de la encuesta
 
   @@index([role])
+}
+
+/// De qué coordina un coordinador, y a qué coordinación pertenece un programa.
+/// No son roles aparte: el rol COORDINADOR ya existe con sus permisos, lo que
+/// faltaba era DE QUÉ. Un coordinador sin coordinación coordina todo, como hasta
+/// ahora; con una puesta, ve y gestiona solo lo suyo.
+enum Coordination {
+  EDUCACIONAL // Matemáticas, lectura, escritura, prerrequisitos…
+  LENGUAJE // Terapias de lenguaje y comunicación
 }
 
 enum Role {
@@ -148,9 +161,14 @@ model Program {
   id          String  @id @default(cuid())
   name        String
   description String?
-  area        String? // Área o categoría del programa
+  area        String? // Área o categoría del programa (texto libre, descriptivo)
   color       String? // Color para identificarlo visualmente
   active      Boolean @default(true)
+
+  /// Qué coordinación lo supervisa. null = ninguna en particular (lo ven todas las
+  /// coordinaciones). El `area` de arriba es texto libre y descriptivo; esto es lo
+  /// que decide quién manda.
+  coordination Coordination?
 
   // Datos de la actividad (todos editables)
   schedule             String? // Horario (ej. "Lunes y miércoles 10:00–11:00")
@@ -443,6 +461,34 @@ model Reservation {
   @@unique([studentId, programId, cycleId])
   @@index([status])
   @@index([programId, cycleId])
+}
+
+/// Una caja del organigrama. Se arma a mano porque en la casa hay gente que no
+/// tiene cuenta en la plataforma —patronato, voluntariado, administración— y un
+/// árbol sacado solo de las cuentas los dejaría fuera. Cuando la caja SÍ es una
+/// cuenta se liga con `userId`, y así el organigrama muestra su rol al día.
+model OrgNode {
+  id    String  @id @default(cuid())
+  name  String // Nombre de la persona o del área
+  title String? // Cargo (ej. "Directora general", "Patronato")
+  notes String? // Nota breve visible en la caja
+
+  /// De quién cuelga. null = está hasta arriba.
+  parent   OrgNode?  @relation("OrgJerarquia", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId String?
+  children OrgNode[] @relation("OrgJerarquia")
+
+  /// Cuenta de la plataforma, si la tiene.
+  user   User?   @relation("OrgCuenta", fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+
+  /// Orden entre hermanos.
+  order Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([parentId, order])
 }
 
 /// Una familia formada esperando lugar en una actividad. Es una PETICIÓN, no una

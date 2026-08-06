@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/dal";
-import { isReadOnly } from "@/lib/roles";
+import { coordinationScope, isReadOnly } from "@/lib/roles";
 import { getActiveCycle, listWaitlistByProgram } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { WaitlistBoard } from "@/components/waitlist-board";
@@ -15,7 +15,9 @@ export default async function ListaEsperaPage() {
   const soloLectura = isReadOnly(me.role);
 
   const cycle = await getActiveCycle();
-  const groups = cycle ? await listWaitlistByProgram(cycle.id) : [];
+  const groups = cycle
+    ? await listWaitlistByProgram(cycle.id, coordinationScope(me))
+    : [];
   const total = groups.reduce((n, g) => n + g.requests.length, 0);
 
   return (

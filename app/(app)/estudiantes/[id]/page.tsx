@@ -12,7 +12,7 @@ import {
   ClockCounterClockwise,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
-import { canGrade, canManage } from "@/lib/roles";
+import { canGrade, canManage, coversProgram } from "@/lib/roles";
 import {
   getStudent,
   listActivePrograms,
@@ -87,12 +87,16 @@ export default async function StudentDetailPage({
   // Terapeutas y lectores solo consultan: sin editar expediente, estado, salud ni inscripciones.
   const puedeGestionar = canManage(me.role);
   // Calificar es otra cosa que gestionar: la gestora de operaciones administra el
-  // expediente pero NO califica, y la terapeuta solo en los programas a su cargo.
+  // expediente pero NO califica, la terapeuta solo en los programas a su cargo y la
+  // coordinación con área asignada solo en los de su coordinación.
   const gradableProgramIds = !canGrade(me.role)
     ? []
-    : me.role === "TERAPEUTA"
-      ? programsWithLevels.filter((p) => p.teacherId === me.id).map((p) => p.id)
-      : programsWithLevels.map((p) => p.id);
+    : (me.role === "TERAPEUTA"
+        ? programsWithLevels.filter((p) => p.teacherId === me.id)
+        : programsWithLevels
+      )
+        .filter((p) => coversProgram(me, p))
+        .map((p) => p.id);
 
   // Ciclo seleccionado: el de la URL si es válido, si no el activo.
   const validCiclo = ciclo && cycles.some((c) => c.id === ciclo) ? ciclo : null;

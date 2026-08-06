@@ -62,6 +62,63 @@ export function findSlotClash(slots: Slot[], others: Slot[]): Slot | null {
   return null;
 }
 
+/**
+ * Reparte al grupo en las HOJAS de asistencia de un día: una por horario, porque
+ * la sesión de clase es única por programa+fecha y no sabe de horas.
+ *
+ * Dos horarios iguales el mismo día son la misma clase (se juntan). Cuando el
+ * horario es propio de un nivel, a esa hoja solo van los alumnos ubicados en ese
+ * nivel; los horarios compartidos llevan a todo el grupo. Si ese día no toca
+ * clase sale una sola hoja sin hora: la casa reprograma, y negarse a dar la hoja
+ * porque el horario dice otra cosa la volvería inservible.
+ *
+ * Vive aquí, aparte de la consulta, porque es la única parte con reglas y así se
+ * puede razonar (y probar) sin base de datos.
+ */
+export function buildAttendanceSheets<T extends { levelId: string | null }>(
+  daySlots: (Slot & { levelName?: string | null })[],
+  students: T[],
+): {
+  key: string;
+  startTime: string | null;
+  endTime: string | null;
+  levelId: string | null;
+  levelName: string | null;
+  students: T[];
+}[] {
+  const bloques = new Map<
+    string,
+    { key: string; startTime: string | null; endTime: string | null; levelId: string | null; levelName: string | null }
+  >();
+  for (const s of daySlots) {
+    const key = `${s.startTime}-${s.endTime}-${s.programLevelId ?? ""}`;
+    if (!bloques.has(key)) {
+      bloques.set(key, {
+        key,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        levelId: s.programLevelId ?? null,
+        levelName: s.levelName ?? null,
+      });
+    }
+  }
+  if (bloques.size === 0) {
+    bloques.set("sin-horario", {
+      key: "sin-horario",
+      startTime: null,
+      endTime: null,
+      levelId: null,
+      levelName: null,
+    });
+  }
+  return [...bloques.values()]
+    .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""))
+    .map((b) => ({
+      ...b,
+      students: b.levelId ? students.filter((a) => a.levelId === b.levelId) : students,
+    }));
+}
+
 /** Orden lunes-primero para pintar la semana (la casa trabaja de lunes a sábado). */
 export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 

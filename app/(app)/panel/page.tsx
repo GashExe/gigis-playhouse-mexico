@@ -7,14 +7,18 @@ import {
   ArrowRight,
   Star,
   CalendarCheck,
+  Printer,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
 import {
+  getActiveCycle,
   getDashboardStats,
   getAbsenceAlerts,
+  listFullPrograms,
   listRecentFamilyReservations,
 } from "@/lib/queries";
+import { addDays, toDateKey, type Slot } from "@/lib/schedule";
 import { saludo, haceTiempo } from "@/lib/format";
 import { edadLabel } from "@/lib/utils";
 import { StatBar } from "@/components/ui/stat-bar";
@@ -27,15 +31,32 @@ import { TutorialVideo } from "@/components/tutorial-video";
 
 export const metadata = { title: "Panel" };
 
+/**
+ * Próximo día de clase según el horario, para que el enlace de imprimir caiga en la
+ * hoja que se va a usar. Sin horario capturado, hoy.
+ */
+function proximaClase(slots: Slot[]): Date {
+  const hoy = new Date();
+  if (slots.length === 0) return hoy;
+  const dias = new Set(slots.map((s) => s.weekday));
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(hoy, i);
+    if (dias.has(d.getDay())) return d;
+  }
+  return hoy;
+}
+
 export default async function PanelPage() {
   const user = await getCurrentUser();
   const esTerapeuta = user.role === "TERAPEUTA";
-  const [stats, absenceAlerts, reservations] = await Promise.all([
+  const cycle = await getActiveCycle();
+  const [stats, absenceAlerts, reservations, fullPrograms] = await Promise.all([
     getDashboardStats(),
     // La terapeuta ve las rachas de SUS grupos; el resto del equipo, todas.
     getAbsenceAlerts(esTerapeuta ? user.id : undefined),
     // Enterado de quién apartó lugar: no le toca a la terapeuta.
     esTerapeuta ? Promise.resolve([]) : listRecentFamilyReservations(),
+    cycle ? listFullPrograms(cycle.id) : Promise.resolve([]),
   ]);
   const firstName = user.name.split(" ")[0];
   const maxEnroll = Math.max(1, ...stats.programsWithCounts.map((p) => p._count.enrollments));
@@ -134,6 +155,60 @@ export default async function PanelPage() {
                 </li>
               );
             })}
+          </ul>
+        </Card>
+      )}
+
+      {/* Grupos completos: el aviso de que ya se puede cerrar la lista del grupo.
+          No frena nada — la lista se puede imprimir cualquier día — pero es el
+          momento en que la casa quiere tenerla en papel. */}
+      {fullPrograms.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <span className="flex items-center gap-2">
+                <UsersThree weight="fill" className="size-4 text-primary" />
+                Grupos completos
+                <Badge tone="warning">{fullPrograms.length}</Badge>
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <ul className="divide-y divide-border px-5 pb-4">
+            {fullPrograms.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-3 py-3">
+                <span
+                  aria-hidden
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: p.color ?? "var(--primary)" }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink">{p.name}</p>
+                  <p className="text-xs text-muted">
+                    <span className="tnum font-semibold">
+                      {p.occupied}/{p.studentCapacity} cupos
+                    </span>
+                    {" · cupo lleno"}
+                    {p.waiting > 0 && (
+                      <>
+                        {" · "}
+                        <Link href="/lista-espera" className="font-semibold hover:underline">
+                          {p.waiting === 1
+                            ? "1 en lista de espera"
+                            : `${p.waiting} en lista de espera`}
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <Link
+                  href={`/calendario/${p.id}/lista?fecha=${toDateKey(proximaClase(p.scheduleSlots))}`}
+                  className="flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-border px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  <Printer className="size-4" />
+                  Imprimir lista
+                </Link>
+              </li>
+            ))}
           </ul>
         </Card>
       )}

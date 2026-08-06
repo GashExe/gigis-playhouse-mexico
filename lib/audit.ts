@@ -40,6 +40,7 @@ export type AuditAction =
   | "donativo.gracia"
   | "donativo.reabrir"
   | "oficio.aprobado"
+  | "organigrama.editar"
   | "config.legal.editar"
   | "config.encuesta.editar";
 

@@ -10,7 +10,7 @@ import {
   Info,
 } from "@phosphor-icons/react/dist/ssr";
 import { requireStaff } from "@/lib/dal";
-import { canManage } from "@/lib/roles";
+import { canManage, coordinationScope } from "@/lib/roles";
 import {
   getActiveCycle,
   listCalendarPrograms,
@@ -40,11 +40,13 @@ export default async function CalendarioPage({
   const me = await requireStaff();
   const cycle = await getActiveCycle();
 
-  // La terapeuta ve sus clases; el resto del equipo ve todo el calendario.
+  // La terapeuta ve sus clases; la coordinación con área asignada, las de su
+  // coordinación; el resto del equipo ve todo el calendario.
   const onlyMine = me.role === "TERAPEUTA";
   const programs = await listCalendarPrograms(
     cycle?.id,
     onlyMine ? me.id : undefined,
+    coordinationScope(me),
   );
 
   const today = new Date();

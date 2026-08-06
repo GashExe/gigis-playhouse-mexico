@@ -3,8 +3,14 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession, type SessionPayload } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { canGrade, canRunClasses, isReadOnly } from "@/lib/roles";
-import type { Role } from "@/lib/generated/prisma/client";
+import {
+  canGrade,
+  canRunClasses,
+  coordinationScope,
+  coversProgram,
+  isReadOnly,
+} from "@/lib/roles";
+import type { Coordination, Role } from "@/lib/generated/prisma/client";
 
 /**
  * Capa de acceso a datos (DAL). Centraliza la verificación de sesión y autorización.
@@ -34,6 +40,8 @@ export const getCurrentUser = cache(async () => {
       name: true,
       email: true,
       role: true,
+      // De qué coordina (solo COORDINADOR). Acota lo que ve y lo que puede tocar.
+      coordination: true,
       active: true,
       studentId: true,
       tutorialSeenAt: true,
@@ -115,8 +123,12 @@ export async function requireGraderForProgram(programId: string) {
   if (!canGrade(user.role)) {
     throw new Error("No autorizado");
   }
-  if (user.role !== "TERAPEUTA") return user; // DIRECTORA y COORDINADOR pasan
-  await requireOwnProgram(user.id, programId);
+  if (user.role === "TERAPEUTA") {
+    await requireOwnProgram(user.id, programId);
+    return user;
+  }
+  // Un coordinador con coordinación asignada, solo en los programas de la suya.
+  await requireCoordination(user, programId);
   return user;
 }
 
@@ -130,8 +142,11 @@ export async function requireClassManagerForProgram(programId: string) {
   if (!canRunClasses(user.role)) {
     throw new Error("No autorizado");
   }
-  if (user.role !== "TERAPEUTA") return user;
-  await requireOwnProgram(user.id, programId);
+  if (user.role === "TERAPEUTA") {
+    await requireOwnProgram(user.id, programId);
+    return user;
+  }
+  await requireCoordination(user, programId);
   return user;
 }
 
@@ -142,12 +157,31 @@ export async function requireClassManagerForProgram(programId: string) {
 export async function canGradeProgram(programId: string): Promise<boolean> {
   const user = await getCurrentUser();
   if (!canGrade(user.role)) return false;
-  if (user.role !== "TERAPEUTA") return true;
-  const own = await prisma.program.findFirst({
-    where: { id: programId, teacherId: user.id },
-    select: { id: true },
+  if (user.role === "TERAPEUTA") {
+    const own = await prisma.program.findFirst({
+      where: { id: programId, teacherId: user.id },
+      select: { id: true },
+    });
+    return Boolean(own);
+  }
+  return coversProgramId(user, programId);
+}
+
+/**
+ * ¿La coordinación de esta cuenta abarca ese programa? Para decidir qué mostrar.
+ * Quien no está acotado (dirección, lector, coordinación sin coordinación puesta)
+ * siempre da true sin ir a la base.
+ */
+export async function coversProgramId(
+  user: { role: Role; coordination?: Coordination | null },
+  programId: string,
+): Promise<boolean> {
+  if (!coordinationScope(user)) return true;
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    select: { coordination: true },
   });
-  return Boolean(own);
+  return program != null && coversProgram(user, program);
 }
 
 /** El programa debe estar a cargo de esa terapeuta. */
@@ -157,4 +191,12 @@ async function requireOwnProgram(userId: string, programId: string) {
     select: { id: true },
   });
   if (!own) throw new Error("No autorizado");
+}
+
+/** El programa debe ser de la coordinación de esa cuenta (si tiene una). */
+async function requireCoordination(
+  user: { role: Role; coordination?: Coordination | null },
+  programId: string,
+) {
+  if (!(await coversProgramId(user, programId))) throw new Error("No autorizado");
 }
