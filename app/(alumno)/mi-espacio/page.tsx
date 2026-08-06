@@ -23,7 +23,7 @@ import {
   getStudentSpace,
   getActiveCycle,
   getFamilyOffer,
-  listAnnouncementsFor,
+  listFamilyMessages,
   listUpcomingSuspensionsFor,
   listFamilyCampaigns,
 } from "@/lib/queries";
@@ -63,12 +63,13 @@ export default async function MiEspacioPage() {
     (student?.levelRecords ?? []).map((r) => [r.programId, r.programLevelId]),
   );
 
-  const [offer, announcements, suspensions, campaigns] = user.studentId
+  const [offer, messages, suspensions, campaigns] = user.studentId
     ? await Promise.all([
         cycle
           ? getFamilyOffer(user.studentId, cycle.id)
           : Promise.resolve(null),
-        listAnnouncementsFor(user.studentId),
+        // Una sola bandeja: avisos de dirección y anotaciones del equipo juntos.
+        listFamilyMessages(user.studentId),
         listUpcomingSuspensionsFor(user.studentId),
         listFamilyCampaigns(user.studentId),
       ])
@@ -76,8 +77,12 @@ export default async function MiEspacioPage() {
 
   const firstName = (student?.firstName ?? user.name).split(" ")[0];
   const programs = student?.enrollments ?? [];
-  const teamNotes = student?.studentNotes ?? [];
   const attendance = student?.attendance ?? [];
+  // En la pantalla va solo el último; el resto está en el historial.
+  const ultimoMensaje = messages[0] ?? null;
+  const sinLeer = user.messagesSeenAt
+    ? messages.filter((m) => m.createdAt > user.messagesSeenAt!).length
+    : messages.length;
   // Compuerta de donativos: una campaña obligatoria sin cumplir bloquea apartar clases.
   const blockingCampaigns = campaigns.filter((c) => c.blocking);
   const donationBlocked = blockingCampaigns.length > 0;
@@ -227,36 +232,72 @@ export default async function MiEspacioPage() {
         </section>
       )}
 
-      {/* Anuncios de la dirección */}
-      {announcements.length > 0 && (
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Megaphone weight="fill" className="size-5 text-primary" />
-            <h2 className="text-base font-extrabold tracking-tight text-ink">
-              Avisos de Gigi&apos;s
-            </h2>
-          </div>
-          <ul className="space-y-3">
-            {announcements.map((a) => (
-              <li
-                key={a.id}
-                className="rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="font-bold text-ink">{a.title}</h3>
-                  <span className="text-xs text-subtle">{fecha(a.createdAt)}</span>
-                </div>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-muted">
-                  {a.body}
-                </p>
-                {/* Los avisos van firmados por la institución, no por la persona
-                    que los escribió: para la familia el remitente es la casa. */}
-                <p className="mt-1.5 text-xs text-subtle">— Dirección Gigi&apos;s</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* Mensajes: una sola bandeja con los avisos de la dirección y las
+          anotaciones del equipo. Se enseña el último y el resto queda en el
+          historial; antes se volcaban los diez avisos y las veinte anotaciones
+          completas, y lo importante se perdía en el scroll. */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <ChatCircleText weight="fill" className="size-5 text-primary" />
+          <h2 className="text-base font-extrabold tracking-tight text-ink">
+            Mensajes de Gigi&apos;s
+          </h2>
+          {sinLeer > 0 && (
+            <span className="rounded-full bg-success-weak px-2 py-0.5 text-[0.7rem] font-bold text-success-strong">
+              {sinLeer === 1 ? "1 nuevo" : `${sinLeer} nuevos`}
+            </span>
+          )}
+        </div>
+
+        {ultimoMensaje ? (
+          <article className="rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]">
+            <div className="flex flex-wrap items-center gap-2">
+              {ultimoMensaje.kind === "AVISO" ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary-weak px-2 py-0.5 text-[0.7rem] font-bold text-primary-strong">
+                  <Megaphone weight="fill" className="size-3" />
+                  Aviso
+                </span>
+              ) : (
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-[0.7rem] font-bold text-white"
+                  style={{
+                    backgroundColor: ultimoMensaje.program?.color ?? "var(--brand-teal)",
+                  }}
+                >
+                  {ultimoMensaje.program?.name ?? "Anotación"}
+                </span>
+              )}
+              <span className="ml-auto text-xs text-subtle">
+                {fecha(ultimoMensaje.createdAt)}
+              </span>
+            </div>
+            {ultimoMensaje.title && (
+              <h3 className="mt-1.5 font-bold text-ink">{ultimoMensaje.title}</h3>
+            )}
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-ink">
+              {ultimoMensaje.body}
+            </p>
+            <p className="mt-1.5 text-xs text-subtle">— {ultimoMensaje.author}</p>
+          </article>
+        ) : (
+          <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-sm text-muted">
+            {`Aquí verás los avisos de Gigi's y lo que el equipo comparta sobre ${firstName}.`}
+          </p>
+        )}
+
+        {messages.length > 1 && (
+          <Link
+            href="/mi-espacio/mensajes"
+            className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-border bg-surface px-4 py-3 transition-colors hover:border-primary"
+          >
+            <span className="flex-1 text-sm font-bold text-ink">
+              Ver historial de mensajes
+            </span>
+            <span className="text-xs text-muted">{messages.length} en total</span>
+            <CaretRight className="size-5 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+          </Link>
+        )}
+      </section>
 
       {/* Clases suspendidas próximas */}
       {suspensions.length > 0 && (
@@ -505,48 +546,6 @@ export default async function MiEspacioPage() {
                 </li>
               );
             })}
-          </ul>
-        )}
-      </section>
-
-      {/* Anotaciones del equipo para la familia */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <ChatCircleText weight="fill" className="size-5 text-primary" />
-          <h2 className="text-base font-extrabold tracking-tight text-ink">
-            Anotaciones del equipo
-          </h2>
-        </div>
-        {teamNotes.length === 0 ? (
-          <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-sm text-muted">
-            Aquí verás los avisos y avances que el equipo comparta sobre {firstName}.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {teamNotes.map((n) => (
-              <li
-                key={n.id}
-                className="rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {n.program && (
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white"
-                      style={{ backgroundColor: n.program.color ?? "var(--brand-teal)" }}
-                    >
-                      {n.program.name}
-                    </span>
-                  )}
-                  <span className="text-xs text-subtle">{fecha(n.createdAt)}</span>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                  {n.body}
-                </p>
-                {n.author && (
-                  <p className="mt-1.5 text-xs text-subtle">— {n.author.name}</p>
-                )}
-              </li>
-            ))}
           </ul>
         )}
       </section>

@@ -34,6 +34,11 @@ model User {
   // el tutorial se abre solo al entrar (después queda a la mano desde el inicio).
   tutorialSeenAt DateTime?
 
+  // Última vez que la familia abrió su historial de mensajes. Sirve para marcarle
+  // lo que llegó desde entonces. Vive en la cuenta y no en el navegador: si abre
+  // desde el celular y luego desde otra computadora, ya los leyó ella.
+  messagesSeenAt DateTime?
+
   // Cuenta ligada a un participante (solo para role ALUMNO).
   studentId String?  @unique
   student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)

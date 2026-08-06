@@ -186,19 +186,8 @@ export async function getStudentSpace(studentId: string, activeCycleId?: string)
           },
         },
       },
-      // Lo que el equipo quiere que la familia sepa: solo lo marcado visible.
-      studentNotes: {
-        where: { visibleToFamily: true },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        select: {
-          id: true,
-          body: true,
-          createdAt: true,
-          author: { select: { name: true } },
-          program: { select: { name: true, color: true } },
-        },
-      },
+      // Las anotaciones visibles ya no salen de aquí: viven en la bandeja de
+      // mensajes (listFamilyMessages), junto con los avisos de la dirección.
       attendance: {
         orderBy: { session: { date: "desc" } },
         take: 12,
@@ -994,6 +983,88 @@ export async function listAnnouncementsFor(studentId: string) {
       author: { select: { name: true } },
     },
   });
+}
+
+export type FamilyMessage = {
+  id: string;
+  /** De dónde viene: la dirección o la terapeuta de un programa. */
+  kind: "AVISO" | "ANOTACION";
+  title: string | null;
+  body: string;
+  createdAt: Date;
+  /** Quién firma. Los avisos van firmados por la casa, no por quien los escribió. */
+  author: string;
+  program: { name: string; color: string | null } | null;
+};
+
+/**
+ * TODOS los mensajes que le han llegado a una familia, en una sola bandeja: los
+ * avisos de la dirección y las anotaciones que el equipo marcó como visibles.
+ *
+ * Van juntos porque para la familia son lo mismo —cosas que Gigi's le dijo— y
+ * tenerlos en dos listas obligaba a revisar dos lugares para saber si hay algo
+ * nuevo. Se mezclan en memoria: son dos consultas acotadas, no vale la pena una
+ * tabla de por medio.
+ */
+export async function listFamilyMessages(
+  studentId: string,
+  opts?: { take?: number },
+): Promise<FamilyMessage[]> {
+  const take = opts?.take ?? 100;
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { status: true },
+  });
+  const [announcements, notes] = await Promise.all([
+    prisma.announcement.findMany({
+      where: {
+        OR: [
+          ...(student?.status === "ACTIVO" ? [{ toAllActive: true }] : []),
+          { recipients: { some: { studentId } } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: { id: true, title: true, body: true, createdAt: true },
+    }),
+    prisma.studentNote.findMany({
+      where: { studentId, visibleToFamily: true },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        author: { select: { name: true } },
+        program: { select: { name: true, color: true } },
+      },
+    }),
+  ]);
+
+  const mensajes: FamilyMessage[] = [
+    ...announcements.map((a) => ({
+      id: `aviso-${a.id}`,
+      kind: "AVISO" as const,
+      title: a.title,
+      body: a.body,
+      createdAt: a.createdAt,
+      // Para la familia el remitente es la casa, no la persona que lo escribió.
+      author: "Dirección Gigi's",
+      program: null,
+    })),
+    ...notes.map((n) => ({
+      id: `nota-${n.id}`,
+      kind: "ANOTACION" as const,
+      title: null,
+      body: n.body,
+      createdAt: n.createdAt,
+      author: n.author?.name ?? "Equipo Gigi's",
+      program: n.program,
+    })),
+  ];
+  return mensajes
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, take);
 }
 
 /** Próximas clases suspendidas de los programas donde el alumno está inscrito. */
