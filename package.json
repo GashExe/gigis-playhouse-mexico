@@ -14,6 +14,7 @@
     "db:seed-lectores": "tsx prisma/seed-lectores.ts",
     "db:migrar-roles": "tsx prisma/migrar-roles.ts",
     "db:seed-niveles": "tsx prisma/seed-niveles.ts",
+    "db:seed-organigrama": "tsx --env-file=.env prisma/seed-organigrama.ts",
     "db:import-niveles": "tsx prisma/import-niveles.ts",
     "db:regen-usuarios": "tsx prisma/regen-usuarios-alumnos.ts",
     "db:reset": "prisma migrate reset --force",
