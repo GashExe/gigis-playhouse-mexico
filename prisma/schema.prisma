@@ -35,17 +35,18 @@ model User {
   studentId String?  @unique
   student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
-  evaluations         Evaluation[]    @relation("EvaluadorEvaluaciones")
-  programs            Program[]       @relation("MaestroPrograma") // Programas/actividades a su cargo
-  studentNotes        StudentNote[]   @relation("AutorAnotaciones") // Anotaciones que ha escrito
-  announcements       Announcement[]  @relation("AutorAnuncios") // Anuncios que ha publicado
-  reservationsDecided Reservation[]   @relation("DecideReservas") // Reservas que resolvió
-  calendarEvents      CalendarEvent[] @relation("AutorEventos") // Eventos del calendario interno
-  auditLogs           AuditLog[]      @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
-  legalEdits          LegalConfig[]   @relation("ConfigEditor") // Ediciones de los textos legales
-  oficiosCreados      Oficio[]        @relation("OficioAutor") // Oficios que redactó
-  oficiosAprobados    Oficio[]        @relation("OficioAprobador") // Oficios que aprobó (Eva)
-  surveyEdits         SurveyConfig[]  @relation("SurveyEditor") // Ediciones de la encuesta
+  evaluations         Evaluation[]      @relation("EvaluadorEvaluaciones")
+  programs            Program[]         @relation("MaestroPrograma") // Programas/actividades a su cargo
+  studentNotes        StudentNote[]     @relation("AutorAnotaciones") // Anotaciones que ha escrito
+  announcements       Announcement[]    @relation("AutorAnuncios") // Anuncios que ha publicado
+  reservationsDecided Reservation[]     @relation("DecideReservas") // Reservas que resolvió
+  waitlistDecided     WaitlistRequest[] @relation("DecideListaEspera") // Solicitudes de espera que resolvió
+  calendarEvents      CalendarEvent[]   @relation("AutorEventos") // Eventos del calendario interno
+  auditLogs           AuditLog[]        @relation("ActorAuditoria") // Movimientos registrados por esta cuenta
+  legalEdits          LegalConfig[]     @relation("ConfigEditor") // Ediciones de los textos legales
+  oficiosCreados      Oficio[]          @relation("OficioAutor") // Oficios que redactó
+  oficiosAprobados    Oficio[]          @relation("OficioAprobador") // Oficios que aprobó (Eva)
+  surveyEdits         SurveyConfig[]    @relation("SurveyEditor") // Ediciones de la encuesta
 
   @@index([role])
 }
@@ -95,6 +96,7 @@ model Student {
   attendance       AttendanceRecord[] // Asistencia por clase
   studentNotes     StudentNote[] // Anotaciones del equipo sobre el participante
   reservations     Reservation[] // Reservas de actividades pedidas por la familia
+  waitlistRequests WaitlistRequest[] // Actividades donde la familia se formó a esperar lugar
   donations        DonationContribution[] // Aportes de la familia a las campañas de donativos
   surveyResponses  SurveyResponse[] // Respuestas de la familia a la encuesta de fin de ciclo
   announcementsFor AnnouncementRecipient[] // Anuncios dirigidos específicamente a él
@@ -158,6 +160,11 @@ model Program {
   studentCapacity      Int     @default(7) // Cupo de alumnos
   collaboratorCapacity Int? // Cupo de colaboradores
 
+  // ¿La familia puede inscribirse sola desde Mi espacio? Apagada = grupo de lista
+  // preestablecida: lo arma dirección y la familia solo puede pedir lista de espera.
+  // Solo cierra la puerta de la familia; dirección inscribe igual.
+  allowFamilyEnroll Boolean @default(true)
+
   // Terapeuta a cargo del programa/actividad
   teacher   User?   @relation("MaestroPrograma", fields: [teacherId], references: [id], onDelete: SetNull)
   teacherId String?
@@ -165,18 +172,19 @@ model Program {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  enrollments   Enrollment[]
-  evaluations   Evaluation[]
-  levels        ProgramLevel[] // Niveles propios de este programa (ordenados)
-  levelRecords  LevelRecord[]
-  scheduleSlots ScheduleSlot[] // Horario estructurado (día + horas); alimenta el calendario
-  classSessions ClassSession[] // Bitácora y asistencia por fecha de clase
-  studentNotes  StudentNote[] // Anotaciones ligadas a este programa
-  reservations  Reservation[] // Reservas de lugar pedidas por las familias
+  enrollments      Enrollment[]
+  evaluations      Evaluation[]
+  levels           ProgramLevel[] // Niveles propios de este programa (ordenados)
+  levelRecords     LevelRecord[]
+  scheduleSlots    ScheduleSlot[] // Horario estructurado (día + horas); alimenta el calendario
+  classSessions    ClassSession[] // Bitácora y asistencia por fecha de clase
+  studentNotes     StudentNote[] // Anotaciones ligadas a este programa
+  reservations     Reservation[] // Reservas de lugar pedidas por las familias
+  waitlistRequests WaitlistRequest[] // Familias formadas esperando lugar
   // En qué ciclos se ofrece. La directora arma la oferta de cada ciclo eligiendo de
   // los programas que ya existen (ej. que en Sep–Dic solo corran 7). El programa
   // sigue siendo uno solo: conserva su plantilla, sus niveles y su historial.
-  cycles        Cycle[]        @relation("ProgramasDelCiclo")
+  cycles           Cycle[]           @relation("ProgramasDelCiclo")
 
   @@index([active])
   @@index([teacherId])
@@ -215,11 +223,22 @@ model Cycle {
   // familias deben contestarla para seguir usando Mi espacio (compuerta de acceso).
   surveyOpen Boolean     @default(false)
 
-  records         LevelRecord[]
-  enrollments     Enrollment[] // Inscripciones de este ciclo
-  programs        Program[]        @relation("ProgramasDelCiclo") // Qué programas se ofrecen en este ciclo
-  reservations    Reservation[] // Reservas pedidas para este ciclo
-  surveyResponses SurveyResponse[] // Respuestas a la encuesta de este ciclo
+  // Ventana de fechas del ciclo. Sirve para saber QUÉ CLASES son de este ciclo: la
+  // sesión de clase cuelga del programa y de una fecha, no del ciclo, así que sin
+  // esto la asistencia "del ciclo" no se puede contar. Nulas = ciclo sin acotar.
+  startDate DateTime? @db.Date
+  endDate   DateTime? @db.Date
+
+  // Tope de actividades por participante en el ciclo. La dirección lo pone según
+  // la carga que aguanta la casa. null = sin tope.
+  maxEnrollments Int?
+
+  records          LevelRecord[]
+  enrollments      Enrollment[] // Inscripciones de este ciclo
+  programs         Program[]         @relation("ProgramasDelCiclo") // Qué programas se ofrecen en este ciclo
+  reservations     Reservation[] // Reservas pedidas para este ciclo
+  surveyResponses  SurveyResponse[] // Respuestas a la encuesta de este ciclo
+  waitlistRequests WaitlistRequest[] // Solicitudes de lista de espera de este ciclo
 
   createdAt DateTime @default(now())
 
@@ -424,6 +443,51 @@ model Reservation {
   @@unique([studentId, programId, cycleId])
   @@index([status])
   @@index([programId, cycleId])
+}
+
+/// Una familia formada esperando lugar en una actividad. Es una PETICIÓN, no una
+/// inscripción: la familia se forma en lo que quiera (aunque haya lugares, aunque
+/// no sea para su edad, aunque el programa no permita que ella se inscriba sola) y
+/// coordinación decide. Aceptar inscribe en el mismo movimiento.
+///
+/// Va aparte de `Reservation` a propósito: allá RECHAZADA significa "dirección lo
+/// dio de baja", y rechazar aquí sobre esa misma fila le cerraría a la familia esa
+/// actividad para todo el ciclo. Son dos cosas distintas y se guardan aparte.
+model WaitlistRequest {
+  id        String  @id @default(cuid())
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+  program   Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId String
+  cycle     Cycle   @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId   String
+
+  status  WaitlistStatus @default(EN_ESPERA)
+  message String? // Lo que la familia quiera decir al formarse
+
+  /// El lugar en la fila: quien pidió antes, va antes. Se REFRESCA si la familia
+  /// vuelve a pedir después de cancelar — salirse de la fila cuesta el lugar, que
+  /// es la regla honesta y la que se le puede explicar a un papá.
+  requestedAt DateTime @default(now())
+
+  decidedAt    DateTime?
+  decidedBy    User?     @relation("DecideListaEspera", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedById  String?
+  decisionNote String? // Por qué se aceptó o rechazó
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, programId, cycleId])
+  @@index([programId, cycleId, status])
+  @@index([cycleId, status, requestedAt])
+}
+
+enum WaitlistStatus {
+  EN_ESPERA
+  ACEPTADA // Coordinación le dio lugar (y con eso quedó inscrito)
+  RECHAZADA // Coordinación no le dio lugar
+  CANCELADA // La familia se salió de la fila
 }
 
 enum ReservationStatus {

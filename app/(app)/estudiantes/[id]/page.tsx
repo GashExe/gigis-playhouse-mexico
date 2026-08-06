@@ -24,7 +24,11 @@ import {
   listAuditLog,
   meetsAgeRequirement,
 } from "@/lib/queries";
-import { findScheduleClashes, type ScheduleClash } from "@/lib/enrollment-rules";
+import {
+  checkEnrollmentLoad,
+  findScheduleClashes,
+  type ScheduleClash,
+} from "@/lib/enrollment-rules";
 import { edadLabel, ageFrom } from "@/lib/utils";
 import { fechaDiaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
@@ -107,6 +111,14 @@ export default async function StudentDetailPage({
         programs.map((p) => p.id),
       )
     : new Map<string, ScheduleClash>();
+  // Tope de actividades del ciclo: es del participante, no de la actividad.
+  const load = activeCycle
+    ? await checkEnrollmentLoad(student.id, activeCycle.id)
+    : null;
+  const loadWarning =
+    load?.full && load.max != null
+      ? `Ya lleva ${load.current} de ${load.max} actividades del ciclo`
+      : null;
   const studentAge = ageFrom(student.birthDate);
   const programOptions = programs.map((p) => {
     const clash = clashes.get(p.id);
@@ -202,6 +214,7 @@ export default async function StudentDetailPage({
               },
             }))}
             allPrograms={programOptions}
+            loadWarning={loadWarning}
             canManage={puedeGestionar}
           />
           {cycles.length > 0 && (

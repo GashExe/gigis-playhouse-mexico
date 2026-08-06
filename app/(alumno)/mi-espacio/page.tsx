@@ -14,6 +14,7 @@ import {
   ChartLineUp,
   CaretRight,
   HandHeart,
+  Hourglass,
   Lock,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -297,6 +298,23 @@ export default async function MiEspacioPage() {
           <p className="-mt-2 text-sm text-muted">
             {`Inscribe a ${firstName} en las actividades del ciclo. Mientras haya lugares queda inscrito al momento.`}
           </p>
+
+          {/* Tope de actividades del ciclo: la dirección decide cuánta carga aguanta
+              la casa. Se avisa arriba de la reja para que no parezca que el botón
+              está descompuesto. */}
+          {offer.load.max != null && (
+            <p
+              className={`rounded-[var(--radius-control)] px-3 py-2 text-sm ${
+                offer.load.full
+                  ? "border border-warning bg-warning-weak/40 font-semibold text-warning-strong"
+                  : "text-muted"
+              }`}
+            >
+              {offer.load.full
+                ? `${firstName} ya lleva ${offer.load.current} de ${offer.load.max} actividades de este ciclo. Si necesitas otra, háblalo con la dirección.`
+                : `Lleva ${offer.load.current} de ${offer.load.max} actividades que se pueden inscribir en este ciclo.`}
+            </p>
+          )}
           {(() => {
             const noInscritas = offer.programs.filter(
               (p) => !offer.enrolledProgramIds.has(p.id),
@@ -370,9 +388,19 @@ export default async function MiEspacioPage() {
                             La dirección dio de baja esta actividad. Si quieres volver a
                             inscribirla, háblalo con la dirección.
                           </p>
+                        ) : !p.allowFamilyEnroll ? (
+                          // Grupo de lista preestablecida: lo arma la dirección.
+                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
+                            A esta actividad entra por lista de la dirección. Puedes pedir
+                            lugar en la lista de espera.
+                          </p>
                         ) : p.clash ? (
                           <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
                             {`Se empalma con ${p.clash.programName} (${p.clash.label}). No se pueden llevar las dos a la misma hora.`}
+                          </p>
+                        ) : offer.load.full ? (
+                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
+                            {`Ya llegaste al tope de ${offer.load.max} actividades de este ciclo.`}
                           </p>
                         ) : (
                           <form action={requestReservation}>
@@ -393,6 +421,26 @@ export default async function MiEspacioPage() {
               </ul>
             );
           })()}
+
+          {/* Lo que no puede inscribir sola (lleno, de lista de dirección o fuera de
+              su edad) no desaparece: se pide por lista de espera. */}
+          <Link
+            href="/mi-espacio/lista-espera"
+            className="group flex items-center gap-3 rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2/40 p-4 transition-colors hover:border-primary"
+          >
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-weak text-primary-strong">
+              <Hourglass weight="fill" className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-ink">
+                ¿No aparece lo que buscas, o el cupo está lleno?
+              </span>
+              <span className="block text-xs text-muted">
+                Mira todas las actividades del ciclo y pide lugar en lista de espera.
+              </span>
+            </span>
+            <CaretRight className="size-5 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+          </Link>
         </section>
       )}
 

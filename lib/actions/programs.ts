@@ -34,6 +34,10 @@ function parseProgramForm(formData: FormData) {
     studentCapacity: formData.get("studentCapacity") ?? "",
     collaboratorCapacity: formData.get("collaboratorCapacity") ?? "",
     teacherId: formData.get("teacherId") ?? "",
+    // Casilla: el formulario manda un hidden "0" y, si está palomeada, además un
+    // "1". Se lee la ÚLTIMA entrada porque `get()` devuelve la primera, y así
+    // apagar la casilla sí llega al servidor.
+    allowFamilyEnroll: String(formData.getAll("allowFamilyEnroll").at(-1) ?? "1"),
   });
 }
 
@@ -62,6 +66,7 @@ function activityData(d: ReturnType<typeof ProgramSchema.parse>) {
     ageMax: toInt(d.ageMax),
     studentCapacity: toInt(d.studentCapacity) ?? 7,
     collaboratorCapacity: toInt(d.collaboratorCapacity),
+    allowFamilyEnroll: d.allowFamilyEnroll !== "0",
     teacherId: d.teacherId || null,
   };
 }

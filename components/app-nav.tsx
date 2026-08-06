@@ -14,6 +14,7 @@ import {
   ClockCounterClockwise,
   FileText,
   HandHeart,
+  Hourglass,
   ChartBar,
   GearSix,
   MagnifyingGlass,
@@ -61,6 +62,13 @@ const NAV: NavItem[] = [
   { href: "/calendario", label: "Calendario", icon: CalendarDots },
   { href: "/estudiantes", label: "Participantes", icon: UsersThree },
   { href: "/programas", label: "Programas", icon: Books },
+  {
+    // La directora se nombra aparte: aquí, a diferencia de requireRole, no está exenta.
+    href: "/lista-espera",
+    label: "Lista de espera",
+    icon: Hourglass,
+    roles: ["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES"],
+  },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
   {
     href: "/avisos",
@@ -189,7 +197,7 @@ function MexNodusCredit() {
 
 /**
  * Cuántas pestañas caben cómodas en la barra flotante. Pasando de aquí las etiquetas
- * se enciman y la barra se desborda (a la directora le tocan 8 destinos), así que el
+ * se enciman y la barra se desborda (a la directora le tocan 13 destinos), así que el
  * excedente se va a una hoja "Más".
  */
 const MAX_TABS = 5;

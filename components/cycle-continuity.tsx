@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -193,6 +194,33 @@ export function CycleContinuity({
           {result.copied.advanced > 0
             ? `, ${result.copied.advanced} subieron de nivel.`
             : "."}
+        </div>
+      )}
+      {/* Quienes se pasaban del tope del ciclo destino. No se aborta la corrida por
+          ellos: se copia lo que cabe y aquí se dice qué quedó fuera, para que
+          dirección lo resuelva a mano en el expediente (donde sí puede autorizarlo). */}
+      {result?.ok && result.skipped && result.skipped.length > 0 && (
+        <div className="rounded-[var(--radius-card)] border border-warning/50 bg-warning-weak/40 px-4 py-3 text-sm text-ink">
+          <p className="flex items-center gap-2 font-bold text-warning-strong">
+            <Warning weight="fill" className="size-5 shrink-0" />
+            Quedaron fuera por el tope de actividades del ciclo
+          </p>
+          <ul className="mt-2 space-y-1">
+            {result.skipped.map((s) => (
+              <li key={s.studentId}>
+                <Link
+                  href={`/estudiantes/${s.studentId}`}
+                  className="font-semibold underline-offset-2 hover:underline"
+                >
+                  {s.studentName}
+                </Link>
+                {`: ${s.programNames.join(", ")}`}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted">
+            Si alguno debe llevarlas de todos modos, inscríbelo desde su expediente.
+          </p>
         </div>
       )}
       {result?.error && (

@@ -42,19 +42,29 @@ export function EnrollmentsPanel({
   enrollments,
   allPrograms,
   canManage = true,
+  loadWarning = null,
 }: {
   studentId: string;
   enrollments: EnrollmentItem[];
   allPrograms: ProgramOption[];
   /** Dirección, coordinación y operación inscriben; terapeutas y lectores solo consultan. */
   canManage?: boolean;
+  /**
+   * Ya llegó al tope de actividades del ciclo. Es un reparo del participante, no de
+   * la actividad, por eso viene aquí y no en cada opción.
+   */
+  loadWarning?: string | null;
 }) {
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState("");
   const enrolledIds = new Set(enrollments.map((e) => e.program.id));
   const available = allPrograms.filter((p) => !enrolledIds.has(p.id));
   const selected = available.find((p) => p.id === selectedId);
-  const warnings = [selected?.ageWarning, selected?.clashWarning].filter(Boolean) as string[];
+  const warnings = [
+    selected?.ageWarning,
+    selected?.clashWarning,
+    selected ? loadWarning : null,
+  ].filter(Boolean) as string[];
 
   function startAdding() {
     setSelectedId("");

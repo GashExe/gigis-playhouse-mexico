@@ -46,6 +46,7 @@ type Program = {
   ageMax: number | null;
   studentCapacity: number;
   collaboratorCapacity: number | null;
+  allowFamilyEnroll: boolean;
   teacherId: string | null;
   teacher: { id: string; name: string } | null;
   _count: { enrollments: number; evaluations: number };
@@ -252,12 +253,18 @@ function ProgramCard({
         </div>
       </dl>
 
-      <div className="mt-4 flex items-center gap-4 border-t border-border pt-3 text-sm text-muted">
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-sm text-muted">
         <span className="flex items-center gap-1.5">
           <UsersThree className="size-4" />
           <span className="tnum font-semibold text-ink">{p._count.enrollments}</span>
           <span>/ {p.studentCapacity} cupos</span>
         </span>
+        {/* Se ve sin abrir el formulario: es lo que cambia quién puede inscribir. */}
+        {!p.allowFamilyEnroll && (
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.7rem] font-bold text-muted">
+            Solo dirección inscribe
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-1">
           {canManage && (
             <>
@@ -507,6 +514,29 @@ function ProgramForm({
             ))}
           </Select>
         </Field>
+
+        {/* El hidden va PRIMERO y el checkbox después: un checkbox desmarcado no
+            envía nada, así que sin el hidden apagar la casilla nunca llegaría al
+            servidor. La acción lee la última entrada de las dos. */}
+        <div className="rounded-[var(--radius-control)] border border-border bg-surface-2/50 p-3">
+          <input type="hidden" name="allowFamilyEnroll" value="0" />
+          <label className="flex items-start gap-2.5 text-sm font-semibold text-ink">
+            <input
+              type="checkbox"
+              name="allowFamilyEnroll"
+              value="1"
+              defaultChecked={defaults?.allowFamilyEnroll ?? true}
+              className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+            />
+            <span>
+              Permitir que las familias se inscriban solas
+              <span className="mt-0.5 block text-xs font-normal text-muted">
+                Apágalo si el grupo lo arma la dirección. Las familias podrán pedir
+                lugar en la lista de espera, pero no inscribirse desde Mi espacio.
+              </span>
+            </span>
+          </label>
+        </div>
 
         <div>
           <span className="mb-1.5 block text-sm font-semibold text-ink">Color</span>

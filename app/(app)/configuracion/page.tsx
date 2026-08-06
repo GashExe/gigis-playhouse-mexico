@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardText, LockOpen, Lock } from "@phosphor-icons/react/dist/ssr";
+import { CalendarDots, ClipboardText, LockOpen, Lock } from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
 import { isReadOnly } from "@/lib/roles";
 import { getLegalConfig } from "@/lib/legal";
@@ -8,6 +8,7 @@ import { getSurveyConfig, getSurveyResults } from "@/lib/survey";
 import { setCycleSurveyOpen } from "@/lib/actions/survey";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
+import { CycleManager } from "@/components/cycle-manager";
 import { LegalConfigForm } from "@/components/legal-config-form";
 import { SurveyConfigForm } from "@/components/survey-config-form";
 import { SurveyResults } from "@/components/survey-results";
@@ -53,6 +54,38 @@ export default async function ConfiguracionPage({
           readOnly={soloLectura}
         />
       </div>
+
+      {/* Ciclos: alta, fechas y tope de actividades */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="flex size-9 items-center justify-center rounded-[var(--radius-input)] bg-primary-weak text-primary">
+            <CalendarDots weight="fill" className="size-5" />
+          </span>
+          <div>
+            <h2 className="text-lg font-extrabold tracking-tight text-ink">
+              Ciclos escolares
+            </h2>
+            <p className="text-sm text-muted">
+              Abre el ciclo que viene, ponle sus fechas y decide cuántas actividades
+              puede llevar cada participante en él.
+            </p>
+          </div>
+        </div>
+        <CycleManager
+          readOnly={soloLectura}
+          cycles={cycles.map((c) => ({
+            id: c.id,
+            label: c.label,
+            season: c.season,
+            year: c.year,
+            active: c.active,
+            startDate: c.startDate ? c.startDate.toISOString() : null,
+            endDate: c.endDate ? c.endDate.toISOString() : null,
+            maxEnrollments: c.maxEnrollments,
+            programCount: c._count.programs,
+          }))}
+        />
+      </section>
 
       {/* Encuesta de satisfacción */}
       <section className="space-y-4">
