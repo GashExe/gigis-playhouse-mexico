@@ -70,6 +70,27 @@ export const ProgramSchema = z.object({
   studentCapacity: z.string().trim().optional().or(z.literal("")),
   collaboratorCapacity: z.string().trim().optional().or(z.literal("")),
   teacherId: z.string().trim().optional().or(z.literal("")),
+  // Checkbox: llega "1" o "0" (ver parseProgramForm, que lee la última entrada).
+  allowFamilyEnroll: z.string().trim().optional().or(z.literal("")),
+});
+
+/**
+ * Alta y edición de un ciclo. La etiqueta NO se recibe del formulario: se calcula
+ * de temporada + año (lib/cycles → cycleLabel), para que no haya dos ciclos que se
+ * llamen distinto siendo lo mismo.
+ */
+export const CycleSchema = z.object({
+  season: z.enum(["ENE_JUN", "JUL_AGO", "SEP_DIC"], {
+    message: "Elige la temporada del ciclo.",
+  }),
+  year: z.coerce
+    .number({ message: "Escribe el año del ciclo." })
+    .int()
+    .min(2000, { message: "El año no parece válido." })
+    .max(2100, { message: "El año no parece válido." }),
+  startDate: z.string().trim().optional().or(z.literal("")),
+  endDate: z.string().trim().optional().or(z.literal("")),
+  maxEnrollments: z.string().trim().optional().or(z.literal("")),
 });
 
 /**

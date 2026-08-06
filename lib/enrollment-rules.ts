@@ -4,7 +4,7 @@ import { resolvePlacement } from "@/lib/placement";
 import { findSlotClash, slotsForLevel, slotsLabel, type Slot } from "@/lib/schedule";
 
 /**
- * Las tres reglas de quién puede inscribirse a qué. Viven juntas porque las dos
+ * Las cuatro reglas de quién puede inscribirse a qué. Viven juntas porque las dos
  * puertas de inscripción —la familia desde Mi espacio y dirección desde el
  * expediente— tienen que juzgar con el mismo criterio; si cada una lo resolviera
  * por su lado, la pantalla ofrecería lo que la acción rechaza (o al revés).
@@ -14,6 +14,9 @@ import { findSlotClash, slotsForLevel, slotsLabel, type Slot } from "@/lib/sched
  *      familia no puede volver a meterse sola; solo dirección la reabre.
  *   3. EDAD: la actividad ni siquiera se le ofrece a la familia fuera de su rango;
  *      dirección sí puede pasar por encima, a propósito y dejando constancia.
+ *   4. CARGA: cada ciclo puede topar cuántas actividades lleva un participante
+ *      (`Cycle.maxEnrollments`). Es la carga que aguanta la casa, no un dato del
+ *      programa, por eso vive en el ciclo y la pone la dirección.
  */
 
 export type ScheduleClash = {
@@ -115,6 +118,61 @@ export async function findScheduleClash(
 ): Promise<ScheduleClash | null> {
   const clashes = await findScheduleClashes(studentId, cycleId, [programId]);
   return clashes.get(programId) ?? null;
+}
+
+export type LoadCheck = {
+  /** Cuántas actividades lleva ya en el ciclo (solo inscripciones ACTIVA). */
+  current: number;
+  /** Tope del ciclo. null = sin tope. */
+  max: number | null;
+  /** Ya no le cabe otra. Siempre false cuando el ciclo no tiene tope. */
+  full: boolean;
+  /** Texto listo para pantalla ("Ya lleva 4 de 4 actividades"). null si no hay tope. */
+  label: string | null;
+};
+
+/**
+ * CUARTA regla: cuánta carga lleva el participante en el ciclo y si le cabe otra.
+ *
+ * `max` se pasa cuando quien llama ya tiene el ciclo en la mano (`getActiveCycle`
+ * devuelve la fila completa), para no repetir el viaje a la base.
+ * `excludeProgramId` es para la puerta de dirección, que inscribe con upsert y por
+ * tanto puede estar reinscribiendo algo que el alumno ya lleva: sin excluirlo, la
+ * regla lo contaría a él mismo y frenaría una reinscripción inocente.
+ *
+ * Solo cuentan las inscripciones ACTIVA: una pausada o finalizada no ocupa carga.
+ */
+export async function checkEnrollmentLoad(
+  studentId: string,
+  cycleId: string,
+  opts?: { max?: number | null; excludeProgramId?: string },
+): Promise<LoadCheck> {
+  const max =
+    opts?.max !== undefined
+      ? opts.max
+      : (
+          await prisma.cycle.findUnique({
+            where: { id: cycleId },
+            select: { maxEnrollments: true },
+          })
+        )?.maxEnrollments ?? null;
+
+  const current = await prisma.enrollment.count({
+    where: {
+      studentId,
+      cycleId,
+      status: "ACTIVA",
+      ...(opts?.excludeProgramId ? { programId: { not: opts.excludeProgramId } } : {}),
+    },
+  });
+
+  const full = max != null && current >= max;
+  return {
+    current,
+    max,
+    full,
+    label: max != null ? `Ya lleva ${current} de ${max} actividades del ciclo` : null,
+  };
 }
 
 /**

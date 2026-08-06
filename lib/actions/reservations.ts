@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { getActiveCycle, meetsAgeRequirement, familyDonationHold } from "@/lib/queries";
-import { logAudit } from "@/lib/audit";
-import { ensurePlacementOnEnroll } from "@/lib/placement";
-import { findScheduleClash, isDroppedByStaff } from "@/lib/enrollment-rules";
+import { enrollStudent, occupiedSeats } from "@/lib/enroll";
+import {
+  checkEnrollmentLoad,
+  findScheduleClash,
+  isDroppedByStaff,
+} from "@/lib/enrollment-rules";
 import { ageFrom } from "@/lib/utils";
 
 /**
@@ -19,13 +22,6 @@ import { ageFrom } from "@/lib/utils";
  * apartó (y cuándo); la inscripción real es la `Enrollment` que nace en el mismo
  * movimiento.
  */
-
-/** Cupo ocupado de un programa en un ciclo (inscripciones activas). */
-async function occupiedSeats(programId: string, cycleId: string) {
-  return prisma.enrollment.count({
-    where: { programId, cycleId, status: "ACTIVA" },
-  });
-}
 
 /** La familia aparta lugar en una actividad del ciclo activo: inscribe de una vez. */
 export async function requestReservation(formData: FormData) {
@@ -43,9 +39,15 @@ export async function requestReservation(formData: FormData) {
   // la libere. La pantalla ya lo avisa; esto cierra la puerta por si entran por URL.
   if ((await familyDonationHold(studentId)).length > 0) return;
 
-  // Solo actividades reales de la oferta del ciclo.
+  // Solo actividades reales de la oferta del ciclo, y de las que la familia puede
+  // inscribir sola: hay grupos de lista preestablecida que arma dirección.
   const program = await prisma.program.findFirst({
-    where: { id: programId, active: true, cycles: { some: { id: cycle.id } } },
+    where: {
+      id: programId,
+      active: true,
+      allowFamilyEnroll: true,
+      cycles: { some: { id: cycle.id } },
+    },
     select: { id: true, name: true, studentCapacity: true, ageMin: true, ageMax: true },
   });
   if (!program) return;
@@ -76,50 +78,44 @@ export async function requestReservation(formData: FormData) {
   });
   if (enrolled) return;
 
+  // Tope de actividades del ciclo. Va después de "ya inscrito" a propósito: así
+  // reinscribir algo que ya lleva nunca tropieza con su propio conteo.
+  const load = await checkEnrollmentLoad(studentId, cycle.id, {
+    max: cycle.maxEnrollments,
+  });
+  if (load.full) return;
+
   // Sin lugares no se inscribe (la pantalla ya lo deshabilita; esto cubre la
   // carrera de dos familias tomando el último lugar).
   if ((await occupiedSeats(programId, cycle.id)) >= program.studentCapacity) return;
 
-  await prisma.$transaction([
-    // Puede existir una inscripción vieja pausada/finalizada de ese mismo ciclo.
-    prisma.enrollment.upsert({
-      where: {
-        studentId_programId_cycleId: { studentId, programId, cycleId: cycle.id },
-      },
-      update: { status: "ACTIVA", endDate: null },
-      create: {
-        studentId,
-        programId,
-        cycleId: cycle.id,
-        notes: "Inscrito por la familia desde Mi espacio",
-      },
-    }),
-    prisma.reservation.upsert({
-      where: {
-        studentId_programId_cycleId: { studentId, programId, cycleId: cycle.id },
-      },
-      update: { status: "APROBADA", decidedAt: new Date() },
-      create: {
-        studentId,
-        programId,
-        cycleId: cycle.id,
-        status: "APROBADA",
-        decidedAt: new Date(),
-      },
-    }),
-  ]);
-
-  await logAudit({
-    action: "inscripcion.alta",
-    summary: `${student.firstName} ${student.lastName} apartó lugar en ${program.name} (${cycle.label})`,
-    entityType: "Program",
-    entityId: program.id,
-    studentId,
+  // Constancia de que fue la familia quien apartó (y cuándo). Va aparte de la
+  // inscripción: el upsert es idempotente, así que no necesita ser atómico con ella.
+  await prisma.reservation.upsert({
+    where: {
+      studentId_programId_cycleId: { studentId, programId, cycleId: cycle.id },
+    },
+    update: { status: "APROBADA", decidedAt: new Date() },
+    create: {
+      studentId,
+      programId,
+      cycleId: cycle.id,
+      status: "APROBADA",
+      decidedAt: new Date(),
+    },
   });
 
-  // Ubicación automática de nivel: recupera su nivel si ya tuvo historial, o lo
-  // coloca en el más bajo si es nuevo en el programa.
-  await ensurePlacementOnEnroll(studentId, programId, cycle.id);
+  await enrollStudent({
+    studentId,
+    programId,
+    cycleId: cycle.id,
+    notes: "Inscrito por la familia desde Mi espacio",
+    audit: {
+      summary: `${student.firstName} ${student.lastName} apartó lugar en ${program.name} (${cycle.label})`,
+      entityType: "Program",
+      entityId: program.id,
+    },
+  });
 
   revalidatePath("/mi-espacio");
   revalidatePath("/panel");

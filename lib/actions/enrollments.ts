@@ -5,8 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { requireWriter } from "@/lib/dal";
 import { getActiveCycle, meetsAgeRequirement } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
-import { ensurePlacementOnEnroll } from "@/lib/placement";
+import { enrollStudent } from "@/lib/enroll";
 import {
+  checkEnrollmentLoad,
   clearStaffDrop,
   findScheduleClash,
   markDroppedByStaff,
@@ -28,8 +29,9 @@ export async function addEnrollment(studentId: string, formData: FormData) {
   await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const programId = String(formData.get("programId") ?? "");
   if (!programId) return;
-  // Dirección puede pasar por encima del rango de edad y del empalme de horario,
-  // pero a propósito: la pantalla se lo advierte y tiene que confirmarlo.
+  // Dirección puede pasar por encima de los reparos —edad, empalme y tope de
+  // actividades del ciclo— pero a propósito: la pantalla se lo advierte y tiene
+  // que confirmarlo.
   const force = String(formData.get("force") ?? "") === "1";
 
   const cycle = await getActiveCycle();
@@ -53,49 +55,36 @@ export async function addEnrollment(studentId: string, formData: FormData) {
     ofertado.ageMax,
   );
   const clash = await findScheduleClash(studentId, cycle.id, programId);
-  if ((!ageOk || clash) && !force) return;
-  const salvedad = !ageOk && clash
-    ? " (fuera del rango de edad y empalmado, autorizado por dirección)"
-    : !ageOk
-      ? " (fuera del rango de edad, autorizado por dirección)"
-      : clash
-        ? ` (empalmado con ${clash.programName}, autorizado por dirección)`
-        : "";
-
-  // Evita duplicados dentro del mismo ciclo: si ya existe, la reactiva.
-  const existing = await prisma.enrollment.findUnique({
-    where: { studentId_programId_cycleId: { studentId, programId, cycleId: cycle.id } },
+  // El tope es del participante, no del programa: se excluye este programa del
+  // conteo porque reinscribir algo que ya lleva no le añade carga.
+  const load = await checkEnrollmentLoad(studentId, cycle.id, {
+    max: cycle.maxEnrollments,
+    excludeProgramId: programId,
   });
-  if (existing) {
-    await prisma.enrollment.update({
-      where: { id: existing.id },
-      data: { status: "ACTIVA", endDate: null },
-    });
-  } else {
-    await prisma.enrollment.create({
-      data: {
-        studentId,
-        programId,
-        cycleId: cycle.id,
-        notes: String(formData.get("notes") ?? "") || null,
-      },
-    });
-  }
-  // Dirección la vuelve a abrir: si estaba dada de baja, la familia recupera el
-  // control de esta actividad en Mi espacio.
-  await clearStaffDrop(studentId, programId, cycle.id);
+  if ((!ageOk || clash || load.full) && !force) return;
 
-  await logAudit({
-    action: "inscripcion.alta",
-    summary: `Inscribió a ${ofertado.name} (${cycle.label})${salvedad}`,
-    entityType: "Enrollment",
-    entityId: programId,
+  // Los reparos van a la bitácora: si dirección pasó por encima, que se sepa de qué.
+  const reparos = [
+    !ageOk && "fuera del rango de edad",
+    clash && `empalmado con ${clash.programName}`,
+    load.full && `ya con ${load.current} de ${load.max} actividades del ciclo`,
+  ].filter(Boolean) as string[];
+  const salvedad =
+    reparos.length > 0 ? ` (${reparos.join(", ")}; autorizado por dirección)` : "";
+
+  // Inscribir es lo mismo entre por donde entre (reactiva si ya existía, reabre la
+  // baja, cierra la lista de espera y ubica el nivel): eso vive en lib/enroll.
+  await enrollStudent({
     studentId,
+    programId,
+    cycleId: cycle.id,
+    notes: String(formData.get("notes") ?? "") || null,
+    audit: { summary: `Inscribió a ${ofertado.name} (${cycle.label})${salvedad}` },
   });
-  // Ubicación automática de nivel: recupera su nivel del historial o lo coloca en
-  // el más bajo si es nuevo en el programa.
-  await ensurePlacementOnEnroll(studentId, programId, cycle.id);
+
   revalidatePath(`/estudiantes/${studentId}`);
+  revalidatePath("/mi-espacio");
+  revalidatePath("/lista-espera");
   revalidatePath("/panel");
 }
 

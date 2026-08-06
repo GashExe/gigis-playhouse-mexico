@@ -418,10 +418,13 @@ export async function getCycleContinuity(fromCycleId: string, toCycleId: string)
   return { copyableCount: targetOffer.size, students };
 }
 
-/** Ciclos por temporada, del más reciente al más antiguo. */
+/** Ciclos por temporada, del más reciente al más antiguo, con el tamaño de su oferta. */
 export async function listCycles() {
   // La temporada es alfabéticamente cronológica: ENE_JUN < JUL_AGO < SEP_DIC.
-  return prisma.cycle.findMany({ orderBy: [{ year: "desc" }, { season: "asc" }] });
+  return prisma.cycle.findMany({
+    orderBy: [{ year: "desc" }, { season: "asc" }],
+    include: { _count: { select: { programs: true } } },
+  });
 }
 
 /** Ciclo vigente para registrar (marcado activo); si no hay, el más reciente. */
@@ -758,12 +761,19 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
  *   • `ageOk`   — cumple el rango de edad (si no, ni se le enseña a la familia).
  *   • `dropped` — dirección lo dio de baja de esta actividad en el ciclo.
  *   • `clash`   — se empalma con una actividad que ya lleva.
+ *   • `allowFamilyEnroll` — si está apagado, el grupo lo arma dirección.
+ * Y `load`, que es del participante y no de la actividad: cuántas lleva de las que
+ * permite el ciclo.
  */
 export async function getFamilyOffer(studentId: string, cycleId: string) {
-  const [student, programs, reservations, enrollments] = await Promise.all([
+  const [student, cycle, programs, reservations, enrollments] = await Promise.all([
     prisma.student.findUnique({
       where: { id: studentId },
       select: { birthDate: true },
+    }),
+    prisma.cycle.findUnique({
+      where: { id: cycleId },
+      select: { maxEnrollments: true },
     }),
     prisma.program.findMany({
       where: { active: true, cycles: { some: { id: cycleId } } },
@@ -776,6 +786,7 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
         ageMin: true,
         ageMax: true,
         studentCapacity: true,
+        allowFamilyEnroll: true,
         teacher: { select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
@@ -807,9 +818,17 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
     reservations.filter((r) => r.status === "RECHAZADA").map((r) => r.programId),
   );
   const age = ageFrom(student?.birthDate);
+  // La carga sale de lo que ya trajimos: `enrollments` son justo las ACTIVA del
+  // ciclo, así que el tope no cuesta ninguna consulta más.
+  const max = cycle?.maxEnrollments ?? null;
 
   return {
     birthDate: student?.birthDate ?? null,
+    load: {
+      current: enrollments.length,
+      max,
+      full: max != null && enrollments.length >= max,
+    },
     programs: programs.map((p) => ({
       ...p,
       ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
@@ -1152,6 +1171,185 @@ export async function familyDonationHold(studentId: string) {
       (c) => deadlineReached(c.dueDate) && !contributionSatisfied(c.contributions[0]),
     )
     .map(({ contributions, ...c }) => c);
+}
+
+// ── Lista de espera ─────────────────────────────────────────────────────────
+
+/**
+ * El tablero de lista de espera como lo ve una familia: TODAS las actividades del
+ * ciclo, sin esconder ninguna. A diferencia de la reja de inscripción —donde lo
+ * que no puede inscribir no se le enseña— aquí ve hasta lo que no es para su edad:
+ * formarse es pedir, y quien juzga es coordinación.
+ *
+ * Las posiciones de la fila salen de UNA consulta y se numeran en memoria.
+ */
+export async function getFamilyWaitlistBoard(studentId: string, cycleId: string) {
+  const [student, cycle, programs, enrollments, requests, filas] = await Promise.all([
+    prisma.student.findUnique({ where: { id: studentId }, select: { birthDate: true } }),
+    prisma.cycle.findUnique({ where: { id: cycleId }, select: { maxEnrollments: true } }),
+    prisma.program.findMany({
+      where: { active: true, cycles: { some: { id: cycleId } } },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        area: true,
+        ageMin: true,
+        ageMax: true,
+        studentCapacity: true,
+        allowFamilyEnroll: true,
+        teacher: { select: { name: true } },
+        scheduleSlots: {
+          orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+          select: { weekday: true, startTime: true, endTime: true, programLevelId: true },
+        },
+        _count: { select: { enrollments: { where: { status: "ACTIVA", cycleId } } } },
+      },
+    }),
+    prisma.enrollment.findMany({
+      where: { studentId, cycleId, status: "ACTIVA" },
+      select: { programId: true },
+    }),
+    prisma.waitlistRequest.findMany({
+      where: { studentId, cycleId },
+      select: { programId: true, status: true, requestedAt: true, decisionNote: true },
+    }),
+    // Toda la fila del ciclo de un jalón, en orden de llegada: de aquí salen las
+    // posiciones de todos los programas sin una consulta por programa.
+    prisma.waitlistRequest.findMany({
+      where: { cycleId, status: "EN_ESPERA" },
+      orderBy: { requestedAt: "asc" },
+      select: { programId: true, studentId: true },
+    }),
+  ]);
+
+  const enrolledIds = new Set(enrollments.map((e) => e.programId));
+  const myRequest = new Map(requests.map((r) => [r.programId, r]));
+  const posiciones = new Map<string, number>(); // programId → mi lugar
+  const esperando = new Map<string, number>(); // programId → cuántos esperan
+  for (const f of filas) {
+    const n = (esperando.get(f.programId) ?? 0) + 1;
+    esperando.set(f.programId, n);
+    if (f.studentId === studentId) posiciones.set(f.programId, n);
+  }
+
+  const age = ageFrom(student?.birthDate);
+  const max = cycle?.maxEnrollments ?? null;
+
+  return {
+    load: {
+      current: enrollments.length,
+      max,
+      full: max != null && enrollments.length >= max,
+    },
+    programs: programs.map((p) => ({
+      ...p,
+      occupied: p._count.enrollments,
+      enrolled: enrolledIds.has(p.id),
+      ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
+      myRequest: myRequest.get(p.id) ?? null,
+      myPosition: posiciones.get(p.id) ?? null,
+      waiting: esperando.get(p.id) ?? 0,
+    })),
+  };
+}
+
+/**
+ * Las solicitudes pendientes agrupadas por actividad, en orden de llegada, con los
+ * reparos que coordinación necesita ver antes de aceptar.
+ *
+ * Cuatro consultas fijas, sin importar cuántas solicitudes haya: la fila puede ser
+ * larga y una consulta por solicitud la volvería lentísima.
+ */
+export async function listWaitlistByProgram(cycleId: string) {
+  const requests = await prisma.waitlistRequest.findMany({
+    where: { cycleId, status: "EN_ESPERA" },
+    orderBy: { requestedAt: "asc" },
+    select: {
+      id: true,
+      requestedAt: true,
+      message: true,
+      student: {
+        select: { id: true, firstName: true, lastName: true, matricula: true, birthDate: true },
+      },
+      program: {
+        select: {
+          id: true,
+          name: true,
+          color: true,
+          area: true,
+          ageMin: true,
+          ageMax: true,
+          studentCapacity: true,
+          allowFamilyEnroll: true,
+        },
+      },
+    },
+  });
+  if (requests.length === 0) return [];
+
+  const studentIds = [...new Set(requests.map((r) => r.student.id))];
+  const programIds = [...new Set(requests.map((r) => r.program.id))];
+  const [cupos, cargas, cycle] = await Promise.all([
+    prisma.enrollment.groupBy({
+      by: ["programId"],
+      where: { cycleId, status: "ACTIVA", programId: { in: programIds } },
+      _count: { _all: true },
+    }),
+    prisma.enrollment.groupBy({
+      by: ["studentId"],
+      where: { cycleId, status: "ACTIVA", studentId: { in: studentIds } },
+      _count: { _all: true },
+    }),
+    prisma.cycle.findUnique({ where: { id: cycleId }, select: { maxEnrollments: true } }),
+  ]);
+  const ocupados = new Map(cupos.map((c) => [c.programId, c._count._all]));
+  const carga = new Map(cargas.map((c) => [c.studentId, c._count._all]));
+  const max = cycle?.maxEnrollments ?? null;
+
+  // Agrupa por programa conservando el orden de llegada dentro de cada uno.
+  const byProgram = new Map<
+    string,
+    {
+      program: (typeof requests)[number]["program"];
+      occupied: number;
+      requests: {
+        id: string;
+        requestedAt: Date;
+        message: string | null;
+        student: (typeof requests)[number]["student"];
+        age: number | null;
+        ageOk: boolean;
+        load: { current: number; max: number | null; full: boolean };
+      }[];
+    }
+  >();
+  for (const r of requests) {
+    let group = byProgram.get(r.program.id);
+    if (!group) {
+      group = {
+        program: r.program,
+        occupied: ocupados.get(r.program.id) ?? 0,
+        requests: [],
+      };
+      byProgram.set(r.program.id, group);
+    }
+    const current = carga.get(r.student.id) ?? 0;
+    const age = ageFrom(r.student.birthDate);
+    group.requests.push({
+      id: r.id,
+      requestedAt: r.requestedAt,
+      message: r.message,
+      student: r.student,
+      age,
+      ageOk: meetsAgeRequirement(age, r.program.ageMin, r.program.ageMax),
+      load: { current, max, full: max != null && current >= max },
+    });
+  }
+  return [...byProgram.values()].sort((a, b) =>
+    a.program.name.localeCompare(b.program.name, "es"),
+  );
 }
 
 // ── Reportes ────────────────────────────────────────────────────────────────
