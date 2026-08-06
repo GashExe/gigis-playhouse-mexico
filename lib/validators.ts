@@ -72,6 +72,8 @@ export const ProgramSchema = z.object({
   teacherId: z.string().trim().optional().or(z.literal("")),
   // Checkbox: llega "1" o "0" (ver parseProgramForm, que lee la última entrada).
   allowFamilyEnroll: z.string().trim().optional().or(z.literal("")),
+  // Coordinación que lo supervisa; vacío = ninguna en particular.
+  coordination: z.enum(["EDUCACIONAL", "LENGUAJE"]).optional().or(z.literal("")),
 });
 
 /**
@@ -187,6 +189,8 @@ export const UserSchema = z.object({
   role: z
     .enum(["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES", "TERAPEUTA", "LECTOR"])
     .default("TERAPEUTA"),
+  // Solo cuenta para COORDINADOR; en los demás roles se ignora al guardar.
+  coordination: z.enum(["EDUCACIONAL", "LENGUAJE"]).optional().or(z.literal("")),
   password: z
     .string()
     .min(8, { message: "La contraseña debe tener al menos 8 caracteres." })

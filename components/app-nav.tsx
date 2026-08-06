@@ -16,6 +16,7 @@ import {
   HandHeart,
   Hourglass,
   ChartBar,
+  TreeStructure,
   GearSix,
   MagnifyingGlass,
   DotsThreeOutline,
@@ -70,6 +71,8 @@ const NAV: NavItem[] = [
     roles: ["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES"],
   },
   { href: "/usuarios", label: "Equipo", icon: UserGear, roles: ["DIRECTORA"] },
+  // El organigrama lo ve todo el equipo; solo la dirección lo arma.
+  { href: "/organigrama", label: "Organigrama", icon: TreeStructure },
   {
     href: "/avisos",
     label: "Avisos",

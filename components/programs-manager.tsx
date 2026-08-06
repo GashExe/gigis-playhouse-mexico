@@ -22,6 +22,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
+import { COORDINATIONS, COORDINATION_LABEL } from "@/lib/roles";
+import type { Coordination } from "@/lib/generated/prisma/client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WEEKDAYS, WEEK_ORDER, slotsLabel, type Slot } from "@/lib/schedule";
 
@@ -47,6 +49,7 @@ type Program = {
   studentCapacity: number;
   collaboratorCapacity: number | null;
   allowFamilyEnroll: boolean;
+  coordination: Coordination | null;
   teacherId: string | null;
   teacher: { id: string; name: string } | null;
   _count: { enrollments: number; evaluations: number };
@@ -263,6 +266,11 @@ function ProgramCard({
         {!p.allowFamilyEnroll && (
           <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.7rem] font-bold text-muted">
             Solo dirección inscribe
+          </span>
+        )}
+        {p.coordination && (
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.7rem] font-bold text-muted">
+            Coord. {COORDINATION_LABEL[p.coordination].toLowerCase()}
           </span>
         )}
         <div className="ml-auto flex items-center gap-1">
@@ -504,16 +512,36 @@ function ProgramForm({
           </Field>
         </div>
 
-        <Field label="Terapeuta a cargo" htmlFor="teacherId">
-          <Select id="teacherId" name="teacherId" defaultValue={defaults?.teacherId ?? ""}>
-            <option value="">Sin asignar</option>
-            {teachers.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Terapeuta a cargo" htmlFor="teacherId">
+            <Select id="teacherId" name="teacherId" defaultValue={defaults?.teacherId ?? ""}>
+              <option value="">Sin asignar</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Coordinación"
+            htmlFor="coordination"
+            hint="Quién lo supervisa. Sin coordinación lo ven todas."
+          >
+            <Select
+              id="coordination"
+              name="coordination"
+              defaultValue={defaults?.coordination ?? ""}
+            >
+              <option value="">Sin coordinación</option>
+              {COORDINATIONS.map((c) => (
+                <option key={c} value={c}>
+                  {COORDINATION_LABEL[c]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
 
         {/* El hidden va PRIMERO y el checkbox después: un checkbox desmarcado no
             envía nada, así que sin el hidden apagar la casilla nunca llegaría al

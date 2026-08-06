@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser, requireWriter } from "@/lib/dal";
+import { coversProgramId, getCurrentUser, requireWriter } from "@/lib/dal";
 import { getActiveCycle, familyDonationHold, meetsAgeRequirement } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
 import { enrollStudent, occupiedSeats } from "@/lib/enroll";
@@ -147,6 +147,14 @@ export async function acceptWaitlist(
 ): Promise<WaitlistDecisionState> {
   const user = await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const force = String(formData.get("force") ?? "") === "1";
+  // Una coordinación con área asignada resuelve solo lo de la suya.
+  const request0 = await prisma.waitlistRequest.findUnique({
+    where: { id: requestId },
+    select: { programId: true },
+  });
+  if (request0 && !(await coversProgramId(user, request0.programId))) {
+    return { error: "Esa actividad es de otra coordinación." };
+  }
 
   const request = await prisma.waitlistRequest.findUnique({
     where: { id: requestId },
@@ -244,6 +252,7 @@ export async function rejectWaitlist(requestId: string, formData: FormData) {
     },
   });
   if (!request || request.status !== "EN_ESPERA") return;
+  if (!(await coversProgramId(user, request.program.id))) return;
 
   await prisma.waitlistRequest.update({
     where: { id: requestId },

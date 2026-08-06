@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowsClockwise, ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
-import { canManage } from "@/lib/roles";
+import { canManage, coversProgram } from "@/lib/roles";
 import { listPrograms, listTeachers, listCycles, getActiveCycle } from "@/lib/queries";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgramsManager } from "@/components/programs-manager";
@@ -35,10 +35,11 @@ export default async function ProgramsPage({
 
   const isDirectora = me.role === "DIRECTORA";
   const puedeGestionar = canManage(me.role);
-  // La terapeuta solo ve los programas a su cargo; gestión ve la oferta completa.
-  const visiblePrograms = puedeGestionar
-    ? programs
-    : programs.filter((prog) => prog.teacherId === me.id);
+  // La terapeuta solo ve los programas a su cargo; la coordinación con área
+  // asignada, los de su coordinación; el resto de gestión, la oferta completa.
+  const visiblePrograms = (
+    puedeGestionar ? programs : programs.filter((prog) => prog.teacherId === me.id)
+  ).filter((prog) => coversProgram(me, prog));
 
   return (
     <div>

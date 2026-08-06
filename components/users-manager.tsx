@@ -20,7 +20,12 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { fecha } from "@/lib/format";
 import { initials, roleDescription, roleLabel, roleTone } from "@/lib/utils";
-import type { Role } from "@/lib/generated/prisma/client";
+import {
+  COORDINATIONS,
+  COORDINATION_LABEL,
+  roleWithCoordination,
+} from "@/lib/roles";
+import type { Coordination, Role } from "@/lib/generated/prisma/client";
 
 type UserRow = {
   id: string;
@@ -28,6 +33,8 @@ type UserRow = {
   username: string;
   email: string | null;
   role: Role;
+  /** De qué coordina (solo COORDINADOR). */
+  coordination: Coordination | null;
   active: boolean;
   createdAt: Date;
   /** Contraseña inicial sin usar todavía. Solo llega llena para la directora. */
@@ -96,7 +103,9 @@ export function UsersManager({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-bold text-ink">{u.name}</p>
-                    <Badge tone={roleTone(u.role)}>{roleLabel(u.role)}</Badge>
+                    <Badge tone={roleTone(u.role)}>
+                      {roleWithCoordination(u.role, u.coordination, roleLabel(u.role))}
+                    </Badge>
                     {!u.active && <Badge tone="neutral">Desactivada</Badge>}
                     {u.id === currentUserId && <Badge tone="neutral">Tú</Badge>}
                   </div>
@@ -235,6 +244,28 @@ function UserForm({
               <option value="DIRECTORA">Directora</option>
             </Select>
           </Field>
+          {/* De qué coordina. Solo se pregunta al coordinador: en los demás roles no
+              significa nada y guardarla dejaría un dato que miente. */}
+          {role === "COORDINADOR" && (
+            <Field
+              label="Coordinación"
+              htmlFor="coordination"
+              hint="Ve y gestiona los programas de su coordinación. Sin elegir, coordina todo."
+            >
+              <Select
+                id="coordination"
+                name="coordination"
+                defaultValue={defaults?.coordination ?? ""}
+              >
+                <option value="">Coordina todo</option>
+                {COORDINATIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {COORDINATION_LABEL[c]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field
             label={isEdit ? "Nueva contraseña" : "Contraseña inicial"}
             htmlFor="password"

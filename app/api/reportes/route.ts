@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { getCurrentUser } from "@/lib/dal";
+import { coversProgramId, getCurrentUser } from "@/lib/dal";
 import type { Role } from "@/lib/generated/prisma/client";
 import { getProgramCycleReport } from "@/lib/queries";
 import { edadLabel } from "@/lib/utils";
@@ -31,6 +31,11 @@ export async function GET(request: Request) {
   const cycleId = url.searchParams.get("ciclo") ?? "";
   if (!programId || !cycleId) {
     return new Response("Faltan parámetros", { status: 400 });
+  }
+  // La pantalla ya acota el selector a la coordinación de quien mira; esto cierra
+  // la puerta de pedir por URL el programa de otra coordinación.
+  if (!(await coversProgramId(me, programId))) {
+    return new Response("No autorizado", { status: 403 });
   }
 
   const report = await getProgramCycleReport(programId, cycleId);

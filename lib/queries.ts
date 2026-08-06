@@ -1,8 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { StudentStatus } from "@/lib/generated/prisma/client";
+import type { Coordination, Role, StudentStatus } from "@/lib/generated/prisma/client";
 import { ageFrom } from "@/lib/utils";
 import { findScheduleClashes } from "@/lib/enrollment-rules";
+import { buildAttendanceSheets, fromDateKey } from "@/lib/schedule";
 
 export async function getDashboardStats() {
   const [
@@ -644,6 +645,7 @@ export async function listProgramsWithLevels() {
       color: true,
       area: true,
       teacherId: true, // para acotar a la terapeuta a los programas a su cargo
+      coordination: true, // y a la coordinación a los de la suya
       levels: { orderBy: { order: "asc" }, select: { id: true, name: true, order: true, description: true } },
     },
   });
@@ -651,14 +653,21 @@ export async function listProgramsWithLevels() {
 
 /**
  * Programas para el calendario del equipo: activos, de la oferta del ciclo y con
- * su horario estructurado. Si se pasa teacherId se acota a los de esa terapeuta.
+ * su horario estructurado. Se puede acotar a los de una terapeuta (teacherId) o a
+ * los de una coordinación —incluyendo siempre los que no tienen ninguna asignada,
+ * para que un campo vacío no deje un programa sin quien lo vea.
  */
-export async function listCalendarPrograms(cycleId?: string, teacherId?: string) {
+export async function listCalendarPrograms(
+  cycleId?: string,
+  teacherId?: string,
+  coordination?: Coordination | null,
+) {
   return prisma.program.findMany({
     where: {
       active: true,
       ...(cycleId ? { cycles: { some: { id: cycleId } } } : {}),
       ...(teacherId ? { teacherId } : {}),
+      ...(coordination ? { OR: [{ coordination }, { coordination: null }] } : {}),
     },
     orderBy: { name: "asc" },
     select: {
@@ -1105,6 +1114,7 @@ export async function listUsers() {
       username: true,
       email: true,
       role: true,
+      coordination: true,
       active: true,
       createdAt: true,
       // Contraseña inicial de la cuenta, para poder entregarla. Confidencial: la
@@ -1171,6 +1181,380 @@ export async function familyDonationHold(studentId: string) {
       (c) => deadlineReached(c.dueDate) && !contributionSatisfied(c.contributions[0]),
     )
     .map(({ contributions, ...c }) => c);
+}
+
+/**
+ * Lista de asistencia para imprimir: un BLOQUE POR HORARIO del día, porque la
+ * sesión de clase es única por programa+fecha y no sabe de horas — la hora sale
+ * del horario del programa (ScheduleSlot), no de la sesión.
+ *
+ * Cuando el horario es propio de un nivel, al bloque solo van los alumnos ubicados
+ * en ese nivel: la lista de las 10:00 no debe traer al grupo de las 12:00.
+ *
+ * Si ese día no toca clase devuelve un bloque sin hora: la casa reprograma, y
+ * negarse a dar la hoja porque el horario dice otra cosa la volvería inservible.
+ */
+export async function getAttendanceSheet(
+  programId: string,
+  dateKey: string,
+  cycleId: string,
+) {
+  const [program, cycle, enrollments, records] = await Promise.all([
+    prisma.program.findUnique({
+      where: { id: programId },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        area: true,
+        teacher: { select: { name: true } },
+        levels: { select: { id: true } },
+        scheduleSlots: {
+          orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+          select: {
+            weekday: true,
+            startTime: true,
+            endTime: true,
+            programLevelId: true,
+            level: { select: { name: true } },
+          },
+        },
+      },
+    }),
+    prisma.cycle.findUnique({ where: { id: cycleId }, select: { label: true } }),
+    prisma.enrollment.findMany({
+      where: { programId, cycleId, status: "ACTIVA" },
+      orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
+      select: {
+        student: { select: { id: true, firstName: true, lastName: true, matricula: true } },
+      },
+    }),
+    prisma.levelRecord.findMany({
+      where: { programId, cycleId },
+      select: {
+        studentId: true,
+        programLevelId: true,
+        level: { select: { name: true } },
+      },
+    }),
+  ]);
+  if (!program || !cycle) return null;
+
+  const date = fromDateKey(dateKey);
+  const nivelDe = new Map(
+    records.map((r) => [r.studentId, { id: r.programLevelId, name: r.level.name }]),
+  );
+  const alumnos = enrollments.map((e) => ({
+    ...e.student,
+    levelId: nivelDe.get(e.student.id)?.id ?? null,
+    levelName: nivelDe.get(e.student.id)?.name ?? null,
+  }));
+
+  const daySlots = program.scheduleSlots.filter((s) => s.weekday === date.getDay());
+
+  return {
+    program,
+    cycle,
+    date,
+    hasLevels: program.levels.length > 0,
+    // Si el día no toca clase se dice, para que quien imprima sepa por qué sale una
+    // sola hoja sin hora.
+    isClassDay: daySlots.length > 0,
+    // El reparto en hojas (una por horario, y por nivel cuando el horario es de un
+    // nivel) vive en lib/schedule: es la única parte con reglas.
+    sheets: buildAttendanceSheets(
+      daySlots.map((s) => ({ ...s, levelName: s.level?.name ?? null })),
+      alumnos,
+    ),
+  };
+}
+
+/**
+ * El grupo entero de una actividad en un ciclo: nivel, calificación (inicial y
+ * final, 1–4), avance y asistencia de cada quien. Es lo que la terapeuta necesita
+ * ver de un jalón para saber cómo va su grupo.
+ *
+ * Dos decisiones de cuenta que conviene tener claras:
+ *
+ *  • El DENOMINADOR de la asistencia son las clases donde SÍ se le marcó algo, no
+ *    el total de sesiones. Una lista que no se pasó no genera registro, y contarla
+ *    como falta le inventaría ausencias a quien sí fue (mismo criterio que ya usan
+ *    las alertas de ausencia). Por eso se devuelven los dos números.
+ *  • El RETARDO cuenta como que asistió (llegó, tarde). El JUSTIFICADO no cuenta
+ *    ni como asistencia ni como falta: va en su propia columna.
+ *
+ * Las clases "del ciclo" salen de la ventana de fechas del ciclo. Si el ciclo no
+ * las tiene puestas se cuentan todas las del programa y se avisa (`ventanaAbierta`),
+ * porque si no el reporte saldría en ceros para los ciclos viejos.
+ */
+export async function getProgramAcademicReport(programId: string, cycleId: string) {
+  const [program, cycle] = await Promise.all([
+    prisma.program.findUnique({
+      where: { id: programId },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        area: true,
+        teacher: { select: { name: true } },
+      },
+    }),
+    prisma.cycle.findUnique({
+      where: { id: cycleId },
+      select: { id: true, label: true, startDate: true, endDate: true },
+    }),
+  ]);
+  if (!program || !cycle) return null;
+
+  const ventanaAbierta = cycle.startDate == null && cycle.endDate == null;
+  const [enrollments, records, sessions] = await Promise.all([
+    prisma.enrollment.findMany({
+      where: { programId, cycleId, status: "ACTIVA" },
+      orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
+      select: {
+        student: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            matricula: true,
+            birthDate: true,
+          },
+        },
+      },
+    }),
+    prisma.levelRecord.findMany({
+      where: { programId, cycleId },
+      select: {
+        studentId: true,
+        placement: true,
+        initialScore: true,
+        finalScore: true,
+        note: true,
+        level: { select: { name: true, order: true } },
+      },
+    }),
+    prisma.classSession.findMany({
+      where: {
+        programId,
+        canceled: false,
+        ...(cycle.startDate ? { date: { gte: cycle.startDate } } : {}),
+        ...(cycle.endDate ? { date: { lte: cycle.endDate } } : {}),
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  const studentIds = enrollments.map((e) => e.student.id);
+  const sessionIds = sessions.map((s) => s.id);
+  // Todos los contadores de asistencia en UNA consulta: una por alumno volvería
+  // lentísimo un grupo grande.
+  const marcas =
+    sessionIds.length > 0 && studentIds.length > 0
+      ? await prisma.attendanceRecord.groupBy({
+          by: ["studentId", "status"],
+          where: { sessionId: { in: sessionIds }, studentId: { in: studentIds } },
+          _count: { _all: true },
+        })
+      : [];
+
+  const conteo = new Map<string, Record<string, number>>();
+  for (const m of marcas) {
+    const row = conteo.get(m.studentId) ?? {};
+    row[m.status] = m._count._all;
+    conteo.set(m.studentId, row);
+  }
+  const recordDe = new Map(records.map((r) => [r.studentId, r]));
+
+  const participants = enrollments.map(({ student }) => {
+    const r = recordDe.get(student.id);
+    const c = conteo.get(student.id) ?? {};
+    const presentes = c.PRESENTE ?? 0;
+    const retardos = c.RETARDO ?? 0;
+    const ausentes = c.AUSENTE ?? 0;
+    const justificadas = c.JUSTIFICADO ?? 0;
+    const marcadas = presentes + retardos + ausentes + justificadas;
+    return {
+      id: student.id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      matricula: student.matricula,
+      age: ageFrom(student.birthDate),
+      levelName: r?.level.name ?? null,
+      levelOrder: r?.level.order ?? null,
+      placement: r?.placement ?? null,
+      note: r?.note ?? null,
+      initialScore: r?.initialScore ?? null,
+      finalScore: r?.finalScore ?? null,
+      avance:
+        r?.initialScore != null && r?.finalScore != null
+          ? r.finalScore - r.initialScore
+          : null,
+      presentes,
+      retardos,
+      ausentes,
+      justificadas,
+      marcadas,
+      // Asistió = estuvo, aunque llegara tarde. Sin lista pasada no hay porcentaje.
+      asistenciaPct: marcadas > 0 ? Math.round(((presentes + retardos) / marcadas) * 100) : null,
+    };
+  });
+
+  const promedio = (nums: (number | null)[]) => {
+    const vals = nums.filter((n): n is number => n != null);
+    return vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+
+  return {
+    program,
+    cycle,
+    ventanaAbierta,
+    totalSessions: sessions.length,
+    participants,
+    totals: {
+      total: participants.length,
+      promedioInicial: promedio(participants.map((p) => p.initialScore)),
+      promedioFinal: promedio(participants.map((p) => p.finalScore)),
+      promedioAvance: promedio(participants.map((p) => p.avance)),
+      asistenciaPromedio: promedio(participants.map((p) => p.asistenciaPct)),
+    },
+  };
+}
+
+/**
+ * Programas del ciclo con el cupo lleno. Un solo groupBy cruzado en memoria: sin
+ * esto habría que contar programa por programa.
+ */
+export async function listFullPrograms(cycleId: string) {
+  const [programs, counts] = await Promise.all([
+    prisma.program.findMany({
+      where: { active: true, cycles: { some: { id: cycleId } } },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        studentCapacity: true,
+        scheduleSlots: {
+          orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+          select: { weekday: true, startTime: true, endTime: true, programLevelId: true },
+        },
+      },
+    }),
+    prisma.enrollment.groupBy({
+      by: ["programId"],
+      where: { cycleId, status: "ACTIVA" },
+      _count: { _all: true },
+    }),
+  ]);
+  const ocupados = new Map(counts.map((c) => [c.programId, c._count._all]));
+  const esperando = await prisma.waitlistRequest.groupBy({
+    by: ["programId"],
+    where: { cycleId, status: "EN_ESPERA" },
+    _count: { _all: true },
+  });
+  const enEspera = new Map(esperando.map((c) => [c.programId, c._count._all]));
+
+  return programs
+    .map((p) => ({
+      ...p,
+      occupied: ocupados.get(p.id) ?? 0,
+      waiting: enEspera.get(p.id) ?? 0,
+    }))
+    .filter((p) => p.occupied >= p.studentCapacity);
+}
+
+// ── Organigrama ─────────────────────────────────────────────────────────────
+
+export type OrgNodeView = {
+  id: string;
+  name: string;
+  title: string | null;
+  notes: string | null;
+  parentId: string | null;
+  order: number;
+  /** Cuenta ligada, si la caja es alguien de la plataforma. */
+  user: {
+    id: string;
+    name: string;
+    role: Role;
+    coordination: Coordination | null;
+    active: boolean;
+  } | null;
+  /** Programas a su cargo, cuando la caja es una cuenta con grupos. */
+  programs: { id: string; name: string; color: string | null }[];
+  children: OrgNodeView[];
+};
+
+/**
+ * El organigrama como árbol. Se arma a mano (hay gente sin cuenta: patronato,
+ * voluntariado), pero las cajas ligadas a una cuenta muestran su rol y sus
+ * programas al día, para que no haya que actualizarlos por separado.
+ */
+export async function getOrgChart(): Promise<OrgNodeView[]> {
+  const [nodes, cycle] = await Promise.all([
+    prisma.orgNode.findMany({
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        title: true,
+        notes: true,
+        parentId: true,
+        order: true,
+        user: {
+          select: { id: true, name: true, role: true, coordination: true, active: true },
+        },
+      },
+    }),
+    getActiveCycle(),
+  ]);
+  if (nodes.length === 0) return [];
+
+  // Programas a cargo de cada cuenta ligada, en el ciclo vigente.
+  const userIds = nodes.map((n) => n.user?.id).filter((id): id is string => !!id);
+  const programs =
+    userIds.length > 0
+      ? await prisma.program.findMany({
+          where: {
+            teacherId: { in: userIds },
+            active: true,
+            ...(cycle ? { cycles: { some: { id: cycle.id } } } : {}),
+          },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, color: true, teacherId: true },
+        })
+      : [];
+  const porTerapeuta = new Map<string, { id: string; name: string; color: string | null }[]>();
+  for (const p of programs) {
+    if (!p.teacherId) continue;
+    const list = porTerapeuta.get(p.teacherId) ?? [];
+    list.push({ id: p.id, name: p.name, color: p.color });
+    porTerapeuta.set(p.teacherId, list);
+  }
+
+  const view = new Map<string, OrgNodeView>(
+    nodes.map((n) => [
+      n.id,
+      { ...n, programs: n.user ? porTerapeuta.get(n.user.id) ?? [] : [], children: [] },
+    ]),
+  );
+  const raices: OrgNodeView[] = [];
+  for (const n of view.values()) {
+    // Un padre que ya no existe no debe desaparecer a su gente: sube a la raíz.
+    const padre = n.parentId ? view.get(n.parentId) : undefined;
+    if (padre) padre.children.push(n);
+    else raices.push(n);
+  }
+  return raices;
+}
+
+/** Las cajas en lista plana, para el selector de "depende de". */
+export async function listOrgNodes() {
+  return prisma.orgNode.findMany({
+    orderBy: [{ order: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, title: true, parentId: true },
+  });
 }
 
 // ── Lista de espera ─────────────────────────────────────────────────────────
@@ -1262,9 +1646,20 @@ export async function getFamilyWaitlistBoard(studentId: string, cycleId: string)
  * Cuatro consultas fijas, sin importar cuántas solicitudes haya: la fila puede ser
  * larga y una consulta por solicitud la volvería lentísima.
  */
-export async function listWaitlistByProgram(cycleId: string) {
+export async function listWaitlistByProgram(
+  cycleId: string,
+  coordination?: Coordination | null,
+) {
   const requests = await prisma.waitlistRequest.findMany({
-    where: { cycleId, status: "EN_ESPERA" },
+    where: {
+      cycleId,
+      status: "EN_ESPERA",
+      // La coordinación con área asignada solo resuelve lo suyo (y lo que no tiene
+      // coordinación puesta, que es de todas).
+      ...(coordination
+        ? { program: { OR: [{ coordination }, { coordination: null }] } }
+        : {}),
+    },
     orderBy: { requestedAt: "asc" },
     select: {
       id: true,

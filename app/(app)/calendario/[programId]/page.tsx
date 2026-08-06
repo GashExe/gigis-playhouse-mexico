@@ -7,8 +7,10 @@ import {
   CaretLeft,
   CaretRight,
   ChalkboardTeacher,
+  ChartBar,
   Clock,
   ClockCounterClockwise,
+  Printer,
   UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 import { canGradeProgram, getCurrentUser } from "@/lib/dal";
@@ -165,9 +167,24 @@ export default async function ClassPanelPage({
             Este día no hay clase según el horario
           </span>
         )}
+        {/* La lista en papel está siempre a la mano, no solo cuando se llena el cupo. */}
+        <Link
+          href={`/calendario/${program.id}/lista?fecha=${dateKey}`}
+          className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <Printer className="size-4" />
+          Imprimir lista
+        </Link>
+        <Link
+          href={`/calendario/${program.id}/reporte`}
+          className="flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+        >
+          <ChartBar className="size-4" />
+          Reporte del grupo
+        </Link>
         <Link
           href={`/calendario/${program.id}/bitacoras`}
-          className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          className="flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ClockCounterClockwise className="size-4" />
           Historial de bitácoras
