@@ -14,6 +14,7 @@ import { getCurrentUser } from "@/lib/dal";
 import {
   getActiveCycle,
   getDashboardStats,
+  getFinalGradingProgress,
   getAbsenceAlerts,
   listFullPrograms,
   listRecentFamilyReservations,
@@ -50,13 +51,17 @@ export default async function PanelPage() {
   const user = await getCurrentUser();
   const esTerapeuta = user.role === "TERAPEUTA";
   const cycle = await getActiveCycle();
-  const [stats, absenceAlerts, reservations, fullPrograms] = await Promise.all([
-    getDashboardStats(),
+  const [stats, absenceAlerts, reservations, fullPrograms, grading] = await Promise.all([
+    // Los números de arriba son del ciclo que está corriendo, no de la historia entera.
+    getDashboardStats(cycle?.id),
     // La terapeuta ve las rachas de SUS grupos; el resto del equipo, todas.
     getAbsenceAlerts(esTerapeuta ? user.id : undefined),
     // Enterado de quién apartó lugar: no le toca a la terapeuta.
     esTerapeuta ? Promise.resolve([]) : listRecentFamilyReservations(),
     cycle ? listFullPrograms(cycle.id) : Promise.resolve([]),
+    cycle
+      ? getFinalGradingProgress(cycle.id)
+      : Promise.resolve({ done: 0, total: 0 }),
   ]);
   const firstName = user.name.split(" ")[0];
   const maxEnroll = Math.max(1, ...stats.programsWithCounts.map((p) => p._count.enrollments));
@@ -97,13 +102,16 @@ export default async function PanelPage() {
             icon: <Books weight="fill" className="size-[1.15rem]" />,
           },
           {
-            label: "Inscripciones activas",
+            label: cycle ? `Inscripciones de ${cycle.label}` : "Inscripciones activas",
             value: stats.activeEnrollments,
             icon: <GraduationCap weight="fill" className="size-[1.15rem]" />,
           },
           {
-            label: "Evaluaciones este mes",
-            value: stats.evaluationsThisMonth,
+            // Cuántas terapeutas ya cerraron TODAS sus calificaciones finales del
+            // ciclo. Es lo que dirección persigue al cerrar; "evaluaciones este mes"
+            // era un número que subía sin decir si ya estaba completo.
+            label: "Terapeutas con su evaluación final",
+            value: grading.total > 0 ? `${grading.done} de ${grading.total}` : "—",
             icon: <ChartLineUp weight="fill" className="size-[1.15rem]" />,
           },
         ]}
