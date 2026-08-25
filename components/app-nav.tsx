@@ -153,7 +153,7 @@ function NavLinks({ role }: { role: Role }) {
 
 function UserCard({ name, role }: { name: string; role: Role }) {
   return (
-    <div className="flex items-center gap-3 rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2.5">
+    <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-surface px-2.5 py-2.5">
       <span
         aria-hidden
         className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-weak text-sm font-bold text-primary-strong"
@@ -162,13 +162,16 @@ function UserCard({ name, role }: { name: string; role: Role }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-ink">{name}</p>
-        <p className="text-xs font-medium text-muted">{roleLabel(role)}</p>
+        <p className="truncate text-xs font-medium text-muted">{roleLabel(role)}</p>
       </div>
-      <ThemeToggle />
-      <form action={logout}>
+      {/* Los dos botones nunca se encogen: con zoom el nombre se recorta antes que
+          desaparecer "Cerrar sesión". */}
+      <ThemeToggle className="shrink-0" />
+      <form action={logout} className="shrink-0">
         <button
           type="submit"
           aria-label="Cerrar sesión"
+          title="Cerrar sesión"
           className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
         >
           <SignOut className="size-[1.1rem]" />
@@ -383,16 +386,22 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
       </header>
 
       {/* Sidebar escritorio */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-6 border-r border-border bg-sidebar px-4 py-5 lg:flex">
+      {/* La barra es de alto fijo: con zoom o texto grande el contenido crece más que
+          la ventana. Por eso el logo, el buscador y el pie no se encogen y lo que se
+          desplaza es la lista de secciones; así la tarjeta con "Cerrar sesión" nunca
+          se sale de la pantalla. */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col gap-4 border-r border-border bg-sidebar px-4 py-5 lg:flex">
         <span aria-hidden className="rainbow-strip absolute inset-x-0 top-0 h-1" />
-        <div className="px-2">
+        <div className="shrink-0 px-2">
           <LogoLockup className="w-40" />
         </div>
-        <SearchTrigger />
-        <div className="flex-1">
+        <div className="shrink-0">
+          <SearchTrigger />
+        </div>
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-1">
           <NavLinks role={role} />
         </div>
-        <div className="flex flex-col gap-3">
+        <div className="flex shrink-0 flex-col gap-3">
           <UserCard name={name} role={role} />
           <MexNodusCredit />
         </div>
