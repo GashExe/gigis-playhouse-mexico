@@ -12,7 +12,7 @@ import {
   ClockCounterClockwise,
 } from "@phosphor-icons/react/dist/ssr";
 import { getCurrentUser } from "@/lib/dal";
-import { canGrade, canManage, coversProgram } from "@/lib/roles";
+import { canGrade, canManage, canManageAccess, coversProgram } from "@/lib/roles";
 import {
   getStudent,
   listActivePrograms,
@@ -86,6 +86,9 @@ export default async function StudentDetailPage({
 
   // Terapeutas y lectores solo consultan: sin editar expediente, estado, salud ni inscripciones.
   const puedeGestionar = canManage(me.role);
+  // Entregar y reponer credenciales es ventanilla, no dirección: la gestora de
+  // operaciones también atiende a la familia que olvidó su contraseña.
+  const puedeVerAcceso = canManageAccess(me.role);
   // Calificar es otra cosa que gestionar: la gestora de operaciones administra el
   // expediente pero NO califica, la terapeuta solo en los programas a su cargo y la
   // coordinación con área asignada solo en los de su coordinación.
@@ -310,8 +313,8 @@ export default async function StudentDetailPage({
             )}
           </Card>
 
-          {/* Acceso del alumno — solo visible para la directora */}
-          {isDirectora && student.account && (
+          {/* Acceso del alumno — dirección y operaciones */}
+          {puedeVerAcceso && student.account && (
             <Card className="p-5">
               <div className="mb-3 flex items-center gap-2">
                 <span className="flex size-8 items-center justify-center rounded-[var(--radius-input)] bg-primary-weak text-primary">
@@ -334,8 +337,8 @@ export default async function StudentDetailPage({
                 </div>
               </dl>
               <p className="mt-3 text-xs leading-relaxed text-muted">
-                Confidencial: solo tú la ves. Si la familia ya la cambió aparece «—»;
-                repónla para generar una nueva.
+                Confidencial: solo dirección y operaciones la ven. Si la familia ya la
+                cambió aparece «—»; repónla para generar una nueva.
               </p>
               <ResetPasswordButton studentId={student.id} />
             </Card>

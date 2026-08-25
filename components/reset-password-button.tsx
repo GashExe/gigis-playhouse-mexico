@@ -5,7 +5,8 @@ import { ArrowsClockwise, CheckCircle, Warning } from "@phosphor-icons/react";
 import { resetStudentPassword } from "@/lib/actions/users";
 
 /**
- * Botón de dirección para reponer la contraseña de un participante que la olvidó.
+ * Botón de dirección y operaciones para reponer la contraseña de un participante
+ * que la olvidó.
  * Genera una nueva y la muestra al momento para entregarla a la familia. La familia
  * puede cambiarla luego desde Mi espacio.
  */

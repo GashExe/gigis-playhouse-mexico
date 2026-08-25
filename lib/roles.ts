@@ -29,6 +29,14 @@ export const MANAGER_ROLES: Role[] = ["DIRECTORA", "COORDINADOR", "GESTORA_OPERA
 /** Roles que califican (la terapeuta, solo en los programas a su cargo). */
 export const GRADER_ROLES: Role[] = ["DIRECTORA", "COORDINADOR", "TERAPEUTA"];
 
+/**
+ * Roles que llevan el acceso de las familias: ven el usuario y la contraseña
+ * inicial del participante y pueden reponerla cuando la olvidan. Es parte de la
+ * operación del día a día —quien entrega las credenciales es quien las repone—,
+ * no de la coordinación académica.
+ */
+export const ACCESS_ROLES: Role[] = ["DIRECTORA", "GESTORA_OPERACIONES"];
+
 /** Solo mira: ninguna escritura, en ninguna pantalla. */
 export function isReadOnly(role: Role): boolean {
   return role === "LECTOR";
@@ -37,6 +45,11 @@ export function isReadOnly(role: Role): boolean {
 /** ¿Administra expedientes, programas, inscripciones y demás operación? */
 export function canManage(role: Role): boolean {
   return MANAGER_ROLES.includes(role);
+}
+
+/** ¿Entrega y repone las credenciales de acceso de los participantes? */
+export function canManageAccess(role: Role): boolean {
+  return ACCESS_ROLES.includes(role);
 }
 
 /** ¿Registra calificaciones? (la terapeuta, además, solo en sus programas) */

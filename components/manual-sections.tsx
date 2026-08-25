@@ -144,8 +144,8 @@ export function ManualEntrar({ paraFamilia = false }: { paraFamilia?: boolean })
           ]}
         />
         <Callout tone="teal" icon={<Key weight="fill" className="size-4" />}>
-          ¿Olvidaste tu contraseña? Pídele a la dirección que te la reponga: es la única que
-          puede consultarla o cambiarla.
+          ¿Olvidaste tu contraseña? Pide en la playhouse que te la repongan: dirección y
+          operaciones son las únicas que pueden consultarla o cambiarla.
           {paraFamilia && " El usuario del participante se entrega junto con la contraseña."}
         </Callout>
       </ManualCard>

@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, requireWriter } from "@/lib/dal";
 import { UserSchema } from "@/lib/validators";
 import { generatePassword } from "@/lib/credentials";
 import { logAudit } from "@/lib/audit";
@@ -129,13 +129,16 @@ export async function toggleUserActive(id: string, active: boolean) {
 /**
  * Repone la contraseña de acceso de un participante para cuando la familia la olvidó.
  * Genera una nueva (con el mismo criterio que al crear la cuenta), la guarda como
- * contraseña inicial para que la dirección se la entregue, y queda en la bitácora.
+ * contraseña inicial para que se la entreguen a la familia, y queda en la bitácora.
  * Devuelve la nueva contraseña para mostrarla al momento.
+ *
+ * No es administrar el equipo, es atender a la familia en la ventanilla: por eso
+ * también la hace la gestora de operaciones, que es quien entrega las credenciales.
  */
 export async function resetStudentPassword(
   studentId: string,
 ): Promise<{ ok: true; password: string } | { ok: false }> {
-  await requireDirectora();
+  await requireWriter("GESTORA_OPERACIONES");
   const [account, student] = await Promise.all([
     prisma.user.findFirst({
       where: { studentId, role: "ALUMNO" },
