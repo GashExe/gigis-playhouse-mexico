@@ -39,8 +39,12 @@ type Group = {
 
 /**
  * La fila de espera por actividad, en orden de llegada. Aceptar inscribe de una vez;
- * si hay reparos (cupo lleno, tope de actividades, edad, empalme) el servidor los
- * devuelve y aquí se confirman — el mismo trato que inscribir desde el expediente.
+ * si hay reparos (cupo lleno, tope de actividades, empalme) el servidor los devuelve
+ * y aquí se confirman — el mismo trato que inscribir desde el expediente.
+ *
+ * La EDAD no es de esos: aquí no se puede autorizar. Quien no cumple la edad de la
+ * actividad no se inscribe por la fila; si de veras hay que meterlo, se hace desde su
+ * expediente, que es donde queda constancia de quién lo autorizó.
  */
 export function WaitlistBoard({
   groups,
@@ -151,8 +155,13 @@ function RequestRow({
               {warnings.length > 0 && <input type="hidden" name="force" value="1" />}
               <button
                 type="submit"
-                disabled={pending}
-                className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-primary px-3 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                disabled={pending || !r.ageOk}
+                title={
+                  r.ageOk
+                    ? undefined
+                    : "Está fuera del rango de edad: se inscribe desde su expediente."
+                }
+                className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-primary px-3 py-1.5 text-xs font-bold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CheckCircle weight="fill" className="size-4" />
                 {warnings.length > 0 ? "Darle lugar de todos modos" : "Darle lugar"}
@@ -196,8 +205,9 @@ function RequestRow({
         </p>
       )}
       {!r.ageOk && (
-        <p className="mt-1.5 pl-9 text-xs text-warning-strong">
-          Está fuera del rango de edad de la actividad.
+        <p className="mt-1.5 pl-9 text-xs font-semibold text-danger-strong">
+          Está fuera del rango de edad de la actividad: desde aquí no se le puede dar
+          lugar. Si aun así le corresponde, inscríbelo desde su expediente.
         </p>
       )}
 

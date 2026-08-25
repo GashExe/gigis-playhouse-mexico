@@ -39,7 +39,7 @@ type ProgramSlots = {
  * en el que quedaría al inscribirse). Sin esto, un programa con cuatro niveles a
  * cuatro horas distintas chocaría con todo.
  */
-async function effectiveSlots(
+export async function effectiveSlots(
   studentId: string,
   cycleId: string,
   programs: ProgramSlots[],

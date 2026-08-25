@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  CalendarCheck,
   Sparkle,
   Confetti,
   Clock,
@@ -10,7 +9,6 @@ import {
   ListChecks,
   Megaphone,
   CalendarX,
-  UsersThree,
   ChartLineUp,
   CaretRight,
   HandHeart,
@@ -27,7 +25,6 @@ import {
   listUpcomingSuspensionsFor,
   listFamilyCampaigns,
 } from "@/lib/queries";
-import { requestReservation } from "@/lib/actions/reservations";
 import { getLegalConfig, needsOnboarding } from "@/lib/legal";
 import { hasSurveyResponse } from "@/lib/survey";
 import { slotsLabel, slotsForLevel } from "@/lib/schedule";
@@ -35,6 +32,7 @@ import { fecha, fechaDia } from "@/lib/format";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { DonationCountdown } from "@/components/donation-countdown";
 import { TutorialVideo } from "@/components/tutorial-video";
+import { FamilyEnrollmentPicker } from "@/components/family-enrollment-picker";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -320,148 +318,33 @@ export default async function MiEspacioPage() {
         </section>
       )}
 
-      {/* Inscripción de actividades del ciclo (en pausa si hay un donativo obligatorio sin cumplir) */}
+      {/* Inscripción del ciclo: la familia arma su hoja y la manda de una vez
+          (en pausa si hay un donativo obligatorio sin cumplir) */}
       {offer && !donationBlocked && (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="flex items-center gap-2">
-              <CalendarCheck weight="fill" className="size-5 text-primary" />
-              <h2 className="text-base font-extrabold tracking-tight text-ink">
-                Inscripción
-              </h2>
-            </span>
-            {cycle && (
-              <span className="text-xs font-semibold text-subtle">
-                Ciclo {cycle.label}
-              </span>
-            )}
-          </div>
-          <p className="-mt-2 text-sm text-muted">
-            {`Inscribe a ${firstName} en las actividades del ciclo. Mientras haya lugares queda inscrito al momento.`}
-          </p>
-
-          {/* Tope de actividades del ciclo: la dirección decide cuánta carga aguanta
-              la casa. Se avisa arriba de la reja para que no parezca que el botón
-              está descompuesto. */}
-          {offer.load.max != null && (
-            <p
-              className={`rounded-[var(--radius-control)] px-3 py-2 text-sm ${
-                offer.load.full
-                  ? "border border-warning bg-warning-weak/40 font-semibold text-warning-strong"
-                  : "text-muted"
-              }`}
-            >
-              {offer.load.full
-                ? `${firstName} ya lleva ${offer.load.current} de ${offer.load.max} actividades de este ciclo. Si necesitas otra, háblalo con la dirección.`
-                : `Lleva ${offer.load.current} de ${offer.load.max} actividades que se pueden inscribir en este ciclo.`}
-            </p>
-          )}
-          {(() => {
-            const noInscritas = offer.programs.filter(
-              (p) => !offer.enrolledProgramIds.has(p.id),
-            );
-            // Las que no son para su edad ni se le enseñan: si dirección quiere
-            // meterlo de todos modos, lo hace desde el expediente.
-            const available = noInscritas.filter((p) => p.ageOk);
-            if (available.length === 0) {
-              return (
-                <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-6 text-center text-sm text-muted">
-                  {noInscritas.length === 0
-                    ? `${firstName} ya está en todas las actividades del ciclo. 🎉`
-                    : `Por ahora no hay actividades del ciclo para la edad de ${firstName}. Si tienes dudas, habla con la dirección.`}
-                </p>
-              );
-            }
-            return (
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {available.map((p) => {
-                  const color = p.color ?? "var(--brand-teal)";
-                  const horario = slotsLabel(p.scheduleSlots);
-                  const left = Math.max(0, p.studentCapacity - p._count.enrollments);
-                  return (
-                    <li
-                      key={p.id}
-                      className="flex flex-col gap-2 rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <span
-                            aria-hidden
-                            className="size-3 shrink-0 rounded-full"
-                            style={{ backgroundColor: color }}
-                          />
-                          <p className="truncate font-semibold text-ink">{p.name}</p>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${
-                            left === 0
-                              ? "bg-danger-weak text-danger-strong"
-                              : "bg-success-weak text-success-strong"
-                          }`}
-                        >
-                          {left === 0 ? "Cupo lleno" : `${left} lugares`}
-                        </span>
-                      </div>
-                      <div className="space-y-0.5 text-xs text-muted">
-                        {horario && (
-                          <p className="flex items-center gap-1.5">
-                            <Clock className="size-3.5 shrink-0 text-subtle" />
-                            {horario}
-                          </p>
-                        )}
-                        {(p.ageMin != null || p.ageMax != null) && (
-                          <p className="flex items-center gap-1.5">
-                            <UsersThree className="size-3.5 shrink-0 text-subtle" />
-                            {p.ageMin != null && p.ageMax != null
-                              ? `${p.ageMin}–${p.ageMax} años`
-                              : p.ageMin != null
-                                ? `Desde ${p.ageMin} años`
-                                : `Hasta ${p.ageMax} años`}
-                          </p>
-                        )}
-                        {p.teacher && <p>Con {p.teacher.name}</p>}
-                      </div>
-                      <div className="mt-auto pt-1">
-                        {p.dropped ? (
-                          // Dirección lo dio de baja de esta actividad: no se
-                          // vuelve a inscribir solo, se habla con la dirección.
-                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
-                            La dirección dio de baja esta actividad. Si quieres volver a
-                            inscribirla, háblalo con la dirección.
-                          </p>
-                        ) : !p.allowFamilyEnroll ? (
-                          // Grupo de lista preestablecida: lo arma la dirección.
-                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
-                            A esta actividad entra por lista de la dirección. Puedes pedir
-                            lugar en la lista de espera.
-                          </p>
-                        ) : p.clash ? (
-                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
-                            {`Se empalma con ${p.clash.programName} (${p.clash.label}). No se pueden llevar las dos a la misma hora.`}
-                          </p>
-                        ) : offer.load.full ? (
-                          <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
-                            {`Ya llegaste al tope de ${offer.load.max} actividades de este ciclo.`}
-                          </p>
-                        ) : (
-                          <form action={requestReservation}>
-                            <input type="hidden" name="programId" value={p.id} />
-                            <button
-                              type="submit"
-                              disabled={left === 0}
-                              className="w-full rounded-[var(--radius-control)] bg-primary px-3 py-2 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
-                            >
-                              {left === 0 ? "Sin lugares" : "Inscribir"}
-                            </button>
-                          </form>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            );
-          })()}
+        <>
+          <FamilyEnrollmentPicker
+            firstName={firstName}
+            cycleLabel={cycle?.label ?? null}
+            enrollmentOpen={offer.enrollmentOpen}
+            submittedAt={offer.submittedAt ? offer.submittedAt.toISOString() : null}
+            maxEnrollments={offer.load.max}
+            programs={offer.programs.map((p) => ({
+              id: p.id,
+              name: p.name,
+              color: p.color,
+              area: p.area,
+              ageMin: p.ageMin,
+              ageMax: p.ageMax,
+              studentCapacity: p.studentCapacity,
+              allowFamilyEnroll: p.allowFamilyEnroll,
+              teacherName: p.teacher?.name ?? null,
+              ageOk: p.ageOk,
+              dropped: p.dropped,
+              enrolled: offer.enrolledProgramIds.has(p.id),
+              occupied: p._count.enrollments,
+              slots: p.slots,
+            }))}
+          />
 
           {/* Lo que no puede inscribir sola (lleno, de lista de dirección o fuera de
               su edad) no desaparece: se pide por lista de espera. */}
@@ -482,7 +365,7 @@ export default async function MiEspacioPage() {
             </span>
             <CaretRight className="size-5 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
           </Link>
-        </section>
+        </>
       )}
 
       {/* Programas en los que está inscrito */}

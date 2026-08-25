@@ -119,6 +119,7 @@ model Student {
   surveyResponses  SurveyResponse[] // Respuestas de la familia a la encuesta de fin de ciclo
   announcementsFor AnnouncementRecipient[] // Anuncios dirigidos específicamente a él
   auditLogs        AuditLog[] // Movimientos registrados sobre este participante
+  submissions      EnrollmentSubmission[] // Ciclos donde la familia ya mandó su selección de actividades
 
   @@index([status])
   @@index([lastName])
@@ -246,6 +247,12 @@ model Cycle {
   // familias deben contestarla para seguir usando Mi espacio (compuerta de acceso).
   surveyOpen Boolean     @default(false)
 
+  // Ventanilla de inscripción de las familias. Cuando la directora la cierra, nadie
+  // manda ni edita su selección de actividades desde Mi espacio; la lista de espera
+  // y la inscripción por el expediente siguen abiertas. Abierta por omisión: un ciclo
+  // recién creado tiene que servir para inscribir sin un paso extra que recordar.
+  enrollmentOpen Boolean @default(true)
+
   // Ventana de fechas del ciclo. Sirve para saber QUÉ CLASES son de este ciclo: la
   // sesión de clase cuelga del programa y de una fecha, no del ciclo, así que sin
   // esto la asistencia "del ciclo" no se puede contar. Nulas = ciclo sin acotar.
@@ -258,10 +265,11 @@ model Cycle {
 
   records          LevelRecord[]
   enrollments      Enrollment[] // Inscripciones de este ciclo
-  programs         Program[]         @relation("ProgramasDelCiclo") // Qué programas se ofrecen en este ciclo
+  programs         Program[]              @relation("ProgramasDelCiclo") // Qué programas se ofrecen en este ciclo
   reservations     Reservation[] // Reservas pedidas para este ciclo
   surveyResponses  SurveyResponse[] // Respuestas a la encuesta de este ciclo
   waitlistRequests WaitlistRequest[] // Solicitudes de lista de espera de este ciclo
+  submissions      EnrollmentSubmission[] // Selecciones de actividades ya enviadas por las familias
 
   createdAt DateTime @default(now())
 
@@ -466,6 +474,26 @@ model Reservation {
   @@unique([studentId, programId, cycleId])
   @@index([status])
   @@index([programId, cycleId])
+}
+
+/// La familia ya MANDÓ su selección de actividades del ciclo. Es una firma, no una
+/// inscripción: las inscripciones reales son las `Enrollment` que nacieron al enviar.
+/// Existe porque el envío es de una sola vez —se le advierte a la familia antes de
+/// mandarlo— y sin dejar constancia por ciclo no habría manera de saber si ya lo hizo.
+/// Que dirección quiera reabrirle el envío se resuelve borrando esta fila.
+model EnrollmentSubmission {
+  id           String   @id @default(cuid())
+  student      Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId    String
+  cycle        Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId      String
+  submittedAt  DateTime @default(now())
+  /// Cuántas actividades quedaron al enviar. Para poder contarlo sin recorrer las
+  /// inscripciones, que dirección puede mover después.
+  programCount Int      @default(0)
+
+  @@unique([studentId, cycleId])
+  @@index([cycleId])
 }
 
 /// Una caja del organigrama. Se arma a mano porque en la casa hay gente que no

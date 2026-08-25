@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { CalendarDots, ClipboardText, LockOpen, Lock } from "@phosphor-icons/react/dist/ssr";
+import {
+  CalendarDots,
+  ClipboardText,
+  LockOpen,
+  Lock,
+  CalendarCheck,
+} from "@phosphor-icons/react/dist/ssr";
 import { requireRole } from "@/lib/dal";
 import { isReadOnly } from "@/lib/roles";
 import { getLegalConfig } from "@/lib/legal";
 import { listCycles, getActiveCycle } from "@/lib/queries";
 import { getSurveyConfig, getSurveyResults } from "@/lib/survey";
 import { setCycleSurveyOpen } from "@/lib/actions/survey";
+import { setCycleEnrollmentOpen } from "@/lib/actions/cycles";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { CycleManager } from "@/components/cycle-manager";
@@ -85,6 +92,78 @@ export default async function ConfiguracionPage({
             programCount: c._count.programs,
           }))}
         />
+      </section>
+
+      {/* Ventanilla de inscripción de las familias */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <span className="flex size-9 items-center justify-center rounded-[var(--radius-input)] bg-primary-weak text-primary">
+            <CalendarCheck weight="fill" className="size-5" />
+          </span>
+          <div>
+            <h2 className="text-lg font-extrabold tracking-tight text-ink">
+              Inscripciones de las familias
+            </h2>
+            <p className="text-sm text-muted">
+              Abre la ventanilla cuando toque inscribir y ciérrala cuando ya no quieras
+              que las familias muevan nada. Con la ventanilla cerrada siguen pudiendo
+              pedir lugar en lista de espera, y tú sigues inscribiendo desde el
+              expediente.
+            </p>
+          </div>
+        </div>
+        <Card className="p-5">
+          <ul className="space-y-2">
+            {cycles.map((c) => (
+              <li
+                key={c.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-border p-3"
+              >
+                <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-ink">
+                  {c.label}
+                  {c.active && (
+                    <span className="rounded-full bg-info-weak px-2 py-0.5 text-[0.7rem] font-bold text-info">
+                      Ciclo activo
+                    </span>
+                  )}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[0.7rem] font-bold ${
+                      c.enrollmentOpen
+                        ? "bg-success-weak text-success-strong"
+                        : "bg-surface-2 text-muted"
+                    }`}
+                  >
+                    {c.enrollmentOpen ? "Inscripciones abiertas" : "Inscripciones cerradas"}
+                  </span>
+                </span>
+                {!soloLectura && (
+                  <form action={setCycleEnrollmentOpen.bind(null, c.id, !c.enrollmentOpen)}>
+                    <button
+                      type="submit"
+                      className={`inline-flex items-center gap-1.5 rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-bold transition-colors ${
+                        c.enrollmentOpen
+                          ? "border border-border text-muted hover:bg-surface-2 hover:text-ink"
+                          : "bg-primary text-white hover:opacity-90"
+                      }`}
+                    >
+                      {c.enrollmentOpen ? (
+                        <>
+                          <Lock className="size-4" />
+                          Cerrar inscripciones
+                        </>
+                      ) : (
+                        <>
+                          <LockOpen className="size-4" />
+                          Abrir inscripciones
+                        </>
+                      )}
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Card>
       </section>
 
       {/* Encuesta de satisfacción */}

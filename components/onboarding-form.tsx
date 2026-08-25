@@ -74,8 +74,8 @@ export function OnboardingForm({
           <Field label="Teléfono del tutor" htmlFor="guardianPhone" required error={err.guardianPhone?.[0]}>
             <Input id="guardianPhone" name="guardianPhone" inputMode="tel" defaultValue={defaults.guardianPhone} required placeholder="55 1234 5678" />
           </Field>
-          <Field label="Correo (opcional)" htmlFor="guardianEmail" error={err.guardianEmail?.[0]}>
-            <Input id="guardianEmail" name="guardianEmail" type="email" defaultValue={defaults.guardianEmail} />
+          <Field label="Correo del tutor" htmlFor="guardianEmail" required error={err.guardianEmail?.[0]}>
+            <Input id="guardianEmail" name="guardianEmail" type="email" defaultValue={defaults.guardianEmail} required placeholder="tucorreo@ejemplo.com" />
           </Field>
           <Field label="Dirección (opcional)" htmlFor="address">
             <Input id="address" name="address" defaultValue={defaults.address} />
