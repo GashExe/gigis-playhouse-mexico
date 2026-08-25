@@ -86,8 +86,8 @@ export function StudentForm({
           <Field label="Teléfono" htmlFor="guardianPhone">
             <Input id="guardianPhone" name="guardianPhone" inputMode="tel" defaultValue={defaults.guardianPhone} placeholder="55 1234 5678" />
           </Field>
-          <Field label="Correo del tutor" htmlFor="guardianEmail" error={err.guardianEmail?.[0]}>
-            <Input id="guardianEmail" name="guardianEmail" type="email" defaultValue={defaults.guardianEmail} />
+          <Field label="Correo del tutor" htmlFor="guardianEmail" required error={err.guardianEmail?.[0]}>
+            <Input id="guardianEmail" name="guardianEmail" type="email" defaultValue={defaults.guardianEmail} required placeholder="correo@ejemplo.com" />
           </Field>
           <Field label="Dirección" htmlFor="address">
             <Input id="address" name="address" defaultValue={defaults.address} />

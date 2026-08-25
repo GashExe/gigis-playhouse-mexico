@@ -46,12 +46,13 @@ export const StudentSchema = z.object({
   gender: z.enum(["FEMENINO", "MASCULINO", "OTRO"]).optional().or(z.literal("")),
   guardianName: z.string().trim().optional(),
   guardianPhone: z.string().trim().optional(),
+  // Obligatorio: es la única vía de contacto escrita con la familia, y sin él el
+  // expediente queda a medias en cuanto alguien lo abre para avisarle algo.
   guardianEmail: z
     .string()
     .trim()
-    .email({ message: "Correo del tutor no válido." })
-    .optional()
-    .or(z.literal("")),
+    .min(1, { message: "El correo del tutor es obligatorio." })
+    .email({ message: "Correo del tutor no válido." }),
   address: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   status: StudentStatusSchema.default("ACTIVO"),
@@ -132,9 +133,8 @@ export const OnboardingSchema = z.object({
   guardianEmail: z
     .string()
     .trim()
-    .email({ message: "Correo del tutor no válido." })
-    .optional()
-    .or(z.literal("")),
+    .min(1, { message: "El correo del tutor es obligatorio." })
+    .email({ message: "Correo del tutor no válido." }),
   address: z.string().trim().optional(),
   // Cuestionario de salud
   bloodType: z.string().trim().optional(),

@@ -218,11 +218,16 @@ export function ManualParticipante({ nombre }: { nombre?: string }) {
         </ul>
         <Callout tone="teal" icon={<CalendarCheck weight="fill" className="size-4" />}>
           <strong>Inscribir actividades:</strong> en tu espacio ves la oferta del ciclo con
-          horario y lugares disponibles. Inscribes con un toque y queda al momento, mientras
-          haya lugares. Solo verás las actividades <strong>para la edad</strong> de tu hijo o
-          hija, y las que <strong>no se empalman</strong> con las que ya lleva: dos clases a
-          la misma hora no se pueden cursar. Si la dirección lo dio de baja de una actividad,
-          esa ya no la puedes volver a inscribir tú: háblalo con ella.
+          horario y lugares disponibles. <strong>Palomeas</strong> las que quieres —puedes
+          cambiarlas cuantas veces necesites, incluso quitar las que ya lleva— y cuando estés
+          conforme <strong>mandas la inscripción</strong>. Ojo: una vez mandada{" "}
+          <strong>ya no se puede editar</strong>; cualquier cambio se habla con la dirección.
+          Solo verás las actividades <strong>para la edad</strong> de tu hijo o hija, y no
+          podrás palomear dos que <strong>se empalmen</strong>: dos clases a la misma hora no
+          se pueden cursar. Si la dirección lo dio de baja de una actividad, esa ya no la
+          puedes volver a inscribir tú: háblalo con ella. Y si la dirección tiene{" "}
+          <strong>cerradas las inscripciones</strong>, no podrás mandar nada hasta que las
+          abra (la lista de espera sigue disponible).
         </Callout>
       </ManualCard>
     </section>

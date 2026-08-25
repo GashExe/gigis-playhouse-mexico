@@ -62,7 +62,8 @@ export default async function ListaEsperaPage() {
         <p className="mt-2 text-sm text-muted">
           {`Aquí están todas las actividades${cycle ? ` de ${cycle.label}` : ""}, incluso las que ya
           están llenas y las que arma la dirección. Pide lugar en la lista de espera y el
-          equipo te avisa cuando le toque a ${firstName}.`}
+          equipo te avisa cuando le toque a ${firstName}. Las que no son para su edad se
+          ven, pero no se pueden pedir.`}
         </p>
       </div>
 
@@ -132,7 +133,7 @@ export default async function ListaEsperaPage() {
                         : p.ageMin != null
                           ? `Desde ${p.ageMin} años`
                           : `Hasta ${p.ageMax} años`}
-                      {!p.ageOk && " · fuera de la edad de tu hijo"}
+                      {!p.ageOk && ` · fuera de la edad de ${firstName}`}
                     </p>
                   )}
                   {p.teacher && <p>Con {p.teacher.name}</p>}
@@ -171,6 +172,13 @@ export default async function ListaEsperaPage() {
                         Si te sales y vuelves a pedir, entras al final de la fila.
                       </p>
                     </div>
+                  ) : !p.ageOk ? (
+                    // La edad no se pide ni se espera: es requisito de la actividad,
+                    // no un lugar que se pueda liberar. Aparece para que la familia
+                    // vea la oferta completa, pero sin botón.
+                    <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
+                      {`Esta actividad no es para la edad de ${firstName}. Si crees que le corresponde, háblalo con la dirección.`}
+                    </p>
                   ) : donationBlocked ? (
                     <p className="rounded-[var(--radius-control)] bg-surface-2 px-3 py-2 text-center text-xs font-semibold text-muted">
                       En pausa por el donativo pendiente.

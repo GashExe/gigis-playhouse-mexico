@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { Coordination, Role, StudentStatus } from "@/lib/generated/prisma/client";
 import { ageFrom } from "@/lib/utils";
-import { findScheduleClashes } from "@/lib/enrollment-rules";
+import { effectiveSlots } from "@/lib/enrollment-rules";
 import { buildAttendanceSheets, fromDateKey } from "@/lib/schedule";
 
 export async function getDashboardStats() {
@@ -758,20 +758,29 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
  * pantalla no ofrezca lo que la acción va a rechazar:
  *   • `ageOk`   — cumple el rango de edad (si no, ni se le enseña a la familia).
  *   • `dropped` — dirección lo dio de baja de esta actividad en el ciclo.
- *   • `clash`   — se empalma con una actividad que ya lleva.
  *   • `allowFamilyEnroll` — si está apagado, el grupo lo arma dirección.
  * Y `load`, que es del participante y no de la actividad: cuántas lleva de las que
  * permite el ciclo.
+ *
+ * El EMPALME no viene resuelto de aquí: la familia arma su selección palomeando, así
+ * que el choque depende de lo que lleve palomeado en ese momento y no de lo que ya
+ * tiene inscrito. Por eso va el `slots` de cada actividad —ya recortado al nivel que
+ * le toca— y el empalme lo calcula la pantalla contra la selección viva, con las
+ * mismas funciones de `lib/schedule` que usa el servidor al recibir el envío.
+ *
+ * `submittedAt` es la firma: en cuanto la familia manda su selección, el listado se
+ * congela (se le advierte antes de mandarla). `enrollmentOpen` es la llave de la
+ * dirección sobre toda la ventanilla.
  */
 export async function getFamilyOffer(studentId: string, cycleId: string) {
-  const [student, cycle, programs, reservations, enrollments] = await Promise.all([
+  const [student, cycle, programs, reservations, enrollments, submission] = await Promise.all([
     prisma.student.findUnique({
       where: { id: studentId },
       select: { birthDate: true },
     }),
     prisma.cycle.findUnique({
       where: { id: cycleId },
-      select: { maxEnrollments: true },
+      select: { maxEnrollments: true, enrollmentOpen: true },
     }),
     prisma.program.findMany({
       where: { active: true, cycles: { some: { id: cycleId } } },
@@ -803,15 +812,17 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
       where: { studentId, cycleId, status: "ACTIVA" },
       select: { programId: true },
     }),
+    prisma.enrollmentSubmission.findUnique({
+      where: { studentId_cycleId: { studentId, cycleId } },
+      select: { submittedAt: true, programCount: true },
+    }),
   ]);
 
   const enrolledProgramIds = new Set(enrollments.map((e) => e.programId));
-  // Los empalmes solo se preguntan de lo que todavía puede inscribir.
-  const clashes = await findScheduleClashes(
-    studentId,
-    cycleId,
-    programs.filter((p) => !enrolledProgramIds.has(p.id)).map((p) => p.id),
-  );
+  // Horario que de verdad le toca en cada actividad (el de su nivel, cuando el
+  // programa parte el horario por niveles). Es lo que la pantalla necesita para
+  // juzgar los empalmes de la selección sin volver a preguntarle al servidor.
+  const slotsOf = await effectiveSlots(studentId, cycleId, programs);
   const dropped = new Set(
     reservations.filter((r) => r.status === "RECHAZADA").map((r) => r.programId),
   );
@@ -822,6 +833,8 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
 
   return {
     birthDate: student?.birthDate ?? null,
+    enrollmentOpen: cycle?.enrollmentOpen ?? true,
+    submittedAt: submission?.submittedAt ?? null,
     load: {
       current: enrollments.length,
       max,
@@ -831,7 +844,7 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
       ...p,
       ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
       dropped: dropped.has(p.id),
-      clash: clashes.get(p.id) ?? null,
+      slots: slotsOf.get(p.id) ?? [],
     })),
     reservations,
     enrolledProgramIds,

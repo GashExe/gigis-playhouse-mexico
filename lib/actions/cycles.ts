@@ -156,6 +156,35 @@ export async function updateCycle(
   return { ok: true };
 }
 
+/**
+ * Abre o cierra la VENTANILLA DE INSCRIPCIÓN del ciclo. Es la llave de la dirección
+ * sobre Mi espacio: mientras esté cerrada, ninguna familia manda ni edita su
+ * selección de actividades. Lo que NO cierra, a propósito:
+ *
+ *  • la lista de espera, que es justo donde se le dice a la casa "yo quiero" cuando
+ *    no se puede inscribir sola; y
+ *  • la inscripción por el expediente, que es de dirección y no de la familia.
+ */
+export async function setCycleEnrollmentOpen(cycleId: string, open: boolean) {
+  await requireWriter("DIRECTORA");
+  const cycle = await prisma.cycle.update({
+    where: { id: cycleId },
+    data: { enrollmentOpen: open },
+    select: { label: true },
+  });
+
+  await logAudit({
+    action: "ciclo.inscripciones",
+    summary: `${open ? "Abrió" : "Cerró"} las inscripciones de las familias en el ciclo ${cycle.label}`,
+    entityType: "Cycle",
+    entityId: cycleId,
+  });
+
+  revalidatePath("/configuracion");
+  revalidatePath("/mi-espacio");
+  revalidatePath("/mi-espacio/lista-espera");
+}
+
 export type ContinuityState =
   | {
       ok?: boolean;

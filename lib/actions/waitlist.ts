@@ -43,9 +43,20 @@ export async function requestWaitlist(formData: FormData) {
 
   const program = await prisma.program.findFirst({
     where: { id: programId, active: true, cycles: { some: { id: cycle.id } } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, ageMin: true, ageMax: true },
   });
   if (!program) return;
+
+  // EDAD: la lista de espera es una fila para entrar a la actividad, no una puerta
+  // aparte. Si formarse fuera libre, la familia quedaría esperando un lugar que
+  // nadie le puede dar, y coordinación tendría que decirle que no una por una.
+  const alumno = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { birthDate: true },
+  });
+  if (!meetsAgeRequirement(ageFrom(alumno?.birthDate), program.ageMin, program.ageMax)) {
+    return;
+  }
 
   // Ya inscrito: no hay nada que esperar.
   const enrolled = await prisma.enrollment.findFirst({
@@ -193,11 +204,20 @@ export async function acceptWaitlist(
     program.ageMax,
   );
 
+  // La EDAD no es un reparo que se pueda autorizar desde aquí: la lista de espera
+  // es la fila de entrada, y dejar pasar por ella a quien no cumple la edad sería
+  // la puerta trasera de la regla. Si dirección de veras quiere meterlo, lo hace
+  // desde el expediente, que es donde queda constancia de quién lo autorizó.
+  if (!ageOk) {
+    return {
+      error: `${request.student.firstName} está fuera del rango de edad de ${program.name}. Si aun así hay que inscribirlo, hazlo desde su expediente.`,
+    };
+  }
+
   const warnings = [
     ocupados >= program.studentCapacity &&
       `El cupo está lleno (${ocupados} de ${program.studentCapacity}).`,
     load.full && `Ya lleva ${load.current} de ${load.max} actividades del ciclo.`,
-    !ageOk && "Está fuera del rango de edad de la actividad.",
     clash && `Se empalma con ${clash.programName} (${clash.label}).`,
   ].filter(Boolean) as string[];
   if (warnings.length > 0 && !force) return { warnings };
