@@ -5,7 +5,12 @@ import { ageFrom } from "@/lib/utils";
 import { effectiveSlots } from "@/lib/enrollment-rules";
 import { buildAttendanceSheets, fromDateKey } from "@/lib/schedule";
 
-export async function getDashboardStats() {
+/**
+ * Números de arriba del panel. `cycleId` acota lo que es DEL CICLO y no de la casa:
+ * las inscripciones activas se contaban de todos los ciclos juntos, así que el número
+ * crecía para siempre y no decía nada de lo que está corriendo hoy.
+ */
+export async function getDashboardStats(cycleId?: string) {
   const [
     activeStudents,
     totalStudents,
@@ -18,7 +23,9 @@ export async function getDashboardStats() {
     prisma.student.count({ where: { status: "ACTIVO" } }),
     prisma.student.count(),
     prisma.program.count({ where: { active: true } }),
-    prisma.enrollment.count({ where: { status: "ACTIVA" } }),
+    prisma.enrollment.count({
+      where: { status: "ACTIVA", ...(cycleId ? { cycleId } : {}) },
+    }),
     prisma.evaluation.count({
       where: {
         date: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
@@ -40,7 +47,11 @@ export async function getDashboardStats() {
         name: true,
         color: true,
         area: true,
-        _count: { select: { enrollments: { where: { status: "ACTIVA" } } } },
+        _count: {
+          select: {
+            enrollments: { where: { status: "ACTIVA", ...(cycleId ? { cycleId } : {}) } },
+          },
+        },
       },
       orderBy: { enrollments: { _count: "desc" } },
     }),
@@ -54,6 +65,56 @@ export async function getDashboardStats() {
     evaluationsThisMonth,
     recentEvaluations,
     programsWithCounts,
+  };
+}
+
+/**
+ * Cuántas terapeutas ya cerraron sus calificaciones FINALES del ciclo.
+ *
+ * "Ya cerró" es todo o nada: le puso calificación final a cada participante inscrito
+ * en cada programa que tiene a su cargo. Media captura no es un cierre — es justo lo
+ * que dirección necesita perseguir, así que contarla como hecha escondería el trabajo
+ * que falta.
+ *
+ * En el denominador solo van las que TIENEN a quién calificar: una terapeuta con un
+ * programa sin nadie inscrito no debe salir como pendiente para siempre.
+ */
+export async function getFinalGradingProgress(cycleId: string) {
+  const [programs, enrollments, graded] = await Promise.all([
+    prisma.program.findMany({
+      where: { active: true, teacherId: { not: null }, cycles: { some: { id: cycleId } } },
+      select: { id: true, teacherId: true, teacher: { select: { id: true, name: true } } },
+    }),
+    prisma.enrollment.findMany({
+      where: { cycleId, status: "ACTIVA" },
+      select: { studentId: true, programId: true },
+    }),
+    // Solo las que ya tienen nota final: las demás no dicen nada aquí.
+    prisma.levelRecord.findMany({
+      where: { cycleId, finalScore: { not: null } },
+      select: { studentId: true, programId: true },
+    }),
+  ]);
+
+  const teacherOf = new Map(programs.map((p) => [p.id, p.teacher!]));
+  const calificado = new Set(graded.map((g) => `${g.studentId}:${g.programId}`));
+
+  // Por terapeuta: cuántos le tocan y cuántos lleva.
+  const total = new Map<string, { name: string; pendientes: number }>();
+  for (const e of enrollments) {
+    const teacher = teacherOf.get(e.programId);
+    if (!teacher) continue; // programa sin terapeuta a cargo: no es de nadie
+    const fila = total.get(teacher.id) ?? { name: teacher.name, pendientes: 0 };
+    if (!calificado.has(`${e.studentId}:${e.programId}`)) fila.pendientes++;
+    total.set(teacher.id, fila);
+  }
+
+  const conPendientes = [...total.values()].filter((t) => t.pendientes > 0).length;
+  return {
+    /** Terapeutas que ya cerraron todo lo suyo. */
+    done: total.size - conPendientes,
+    /** Terapeutas con algo que calificar en el ciclo. */
+    total: total.size,
   };
 }
 
@@ -1647,12 +1708,15 @@ export async function listOrgNodes() {
  * El tablero de lista de espera como lo ve una familia: TODAS las actividades del
  * ciclo, sin esconder ninguna. A diferencia de la reja de inscripción —donde lo
  * que no puede inscribir no se le enseña— aquí ve hasta lo que no es para su edad:
- * formarse es pedir, y quien juzga es coordinación.
+ * formarse es pedir, y quien juzga es coordinación (aunque fuera de su edad ya no
+ * puede pedir: es requisito de la actividad, no un lugar que se libere).
  *
- * Las posiciones de la fila salen de UNA consulta y se numeran en memoria.
+ * A la familia NO se le da su número de fila: el lugar se mueve solo conforme la
+ * gente entra y sale, así que enseñárselo promete un turno que nadie le prometió.
+ * El orden de llegada lo sigue viendo coordinación en su tablero.
  */
 export async function getFamilyWaitlistBoard(studentId: string, cycleId: string) {
-  const [student, cycle, programs, enrollments, requests, filas] = await Promise.all([
+  const [student, cycle, programs, enrollments, requests] = await Promise.all([
     prisma.student.findUnique({ where: { id: studentId }, select: { birthDate: true } }),
     prisma.cycle.findUnique({ where: { id: cycleId }, select: { maxEnrollments: true } }),
     prisma.program.findMany({
@@ -1683,25 +1747,10 @@ export async function getFamilyWaitlistBoard(studentId: string, cycleId: string)
       where: { studentId, cycleId },
       select: { programId: true, status: true, requestedAt: true, decisionNote: true },
     }),
-    // Toda la fila del ciclo de un jalón, en orden de llegada: de aquí salen las
-    // posiciones de todos los programas sin una consulta por programa.
-    prisma.waitlistRequest.findMany({
-      where: { cycleId, status: "EN_ESPERA" },
-      orderBy: { requestedAt: "asc" },
-      select: { programId: true, studentId: true },
-    }),
   ]);
 
   const enrolledIds = new Set(enrollments.map((e) => e.programId));
   const myRequest = new Map(requests.map((r) => [r.programId, r]));
-  const posiciones = new Map<string, number>(); // programId → mi lugar
-  const esperando = new Map<string, number>(); // programId → cuántos esperan
-  for (const f of filas) {
-    const n = (esperando.get(f.programId) ?? 0) + 1;
-    esperando.set(f.programId, n);
-    if (f.studentId === studentId) posiciones.set(f.programId, n);
-  }
-
   const age = ageFrom(student?.birthDate);
   const max = cycle?.maxEnrollments ?? null;
 
@@ -1717,8 +1766,6 @@ export async function getFamilyWaitlistBoard(studentId: string, cycleId: string)
       enrolled: enrolledIds.has(p.id),
       ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
       myRequest: myRequest.get(p.id) ?? null,
-      myPosition: posiciones.get(p.id) ?? null,
-      waiting: esperando.get(p.id) ?? 0,
     })),
   };
 }

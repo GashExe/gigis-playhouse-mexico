@@ -137,13 +137,6 @@ export default async function ListaEsperaPage() {
                     </p>
                   )}
                   {p.teacher && <p>Con {p.teacher.name}</p>}
-                  {p.waiting > 0 && (
-                    <p>
-                      {p.waiting === 1
-                        ? "1 familia en lista de espera"
-                        : `${p.waiting} familias en lista de espera`}
-                    </p>
-                  )}
                 </div>
 
                 <div className="mt-auto pt-1">
@@ -154,10 +147,11 @@ export default async function ListaEsperaPage() {
                     </p>
                   ) : enEspera ? (
                     <div className="space-y-1.5">
+                      {/* Sin número de fila: el lugar se mueve solo (alguien se sale,
+                          alguien se forma) y enseñárselo a la familia promete un turno
+                          que nadie le prometió. Coordinación sí ve el orden. */}
                       <p className="rounded-[var(--radius-control)] bg-warning-weak/50 px-3 py-2 text-center text-xs font-bold text-warning-strong">
-                        {p.myPosition != null
-                          ? `En lista de espera · lugar ${p.myPosition} de ${p.waiting}`
-                          : "En lista de espera"}
+                        En lista de espera
                       </p>
                       {/* Salirse cuesta el lugar: si vuelve a pedir, va al final. */}
                       <form action={cancelWaitlist.bind(null, p.id)}>
