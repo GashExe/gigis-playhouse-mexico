@@ -16,6 +16,8 @@
     "db:seed-niveles": "tsx prisma/seed-niveles.ts",
     "db:seed-organigrama": "tsx --env-file=.env prisma/seed-organigrama.ts",
     "db:import-niveles": "tsx prisma/import-niveles.ts",
+    "db:import-horarios": "tsx --env-file=.env prisma/import-horarios.ts",
+    "db:limpieza-pruebas": "tsx --env-file=.env prisma/limpieza-pruebas.ts",
     "db:regen-usuarios": "tsx prisma/regen-usuarios-alumnos.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"
