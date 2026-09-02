@@ -222,6 +222,20 @@ export default async function CalendarioPage({
                             >
                               {p.name}
                             </p>
+                            {/* Qué grupo es. El lunes hay tres Habilidades sociales a
+                                tres horas: sin esto no se sabe cuál es cuál. */}
+                            {slot.group && (
+                              <p className="truncate text-xs font-semibold text-primary-strong">
+                                {[
+                                  slot.group.level?.name,
+                                  slot.group.name === slot.group.level?.name
+                                    ? null
+                                    : slot.group.name,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </p>
+                            )}
                             {isCanceled && (
                               <span className="mt-0.5 inline-block rounded-full bg-warning-weak px-2 py-0.5 text-[0.65rem] font-bold text-warning-strong">
                                 Suspendida
@@ -239,7 +253,9 @@ export default async function CalendarioPage({
                               )}
                               <span className="flex items-center gap-1">
                                 <UsersThree className="size-3" />
-                                {p._count.enrollments}
+                                {slot.group
+                                  ? `${slot.group._count.enrollments}/${slot.group.studentCapacity ?? "—"}`
+                                  : p._count.enrollments}
                               </span>
                             </p>
                           </Link>

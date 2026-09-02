@@ -343,6 +343,19 @@ export default async function MiEspacioPage() {
               enrolled: offer.enrolledProgramIds.has(p.id),
               occupied: p._count.enrollments,
               slots: p.slots,
+              // Los grupos con sus lugares: es lo que le deja escoger a qué hora va
+              // cuando la actividad tiene más de un horario para su edad.
+              groups: p.groups.map((g) => ({
+                id: g.id,
+                name: g.name,
+                levelName: g.levelName,
+                scheduleLabel: g.scheduleLabel,
+                capacity: g.capacity,
+                occupied: g.occupied,
+                ageOk: g.ageOk,
+                slots: g.slots,
+              })),
+              enrolledGroupId: p.enrolledGroupId,
             }))}
           />
 

@@ -110,6 +110,22 @@ export const ScheduleSlotsSchema = z.array(
   }),
 );
 
+/**
+ * Un grupo: la hora, la edad y los lugares. El horario es UNO —el grupo ES esa
+ * hora—; si algún día un grupo se juntara dos veces por semana habría que abrir
+ * este formulario a varias filas, como el del programa.
+ */
+export const ProgramGroupSchema = z.object({
+  name: z.string().trim().min(1, { message: "Ponle nombre al grupo." }),
+  programLevelId: z.string().trim().optional(),
+  ageMin: z.string().trim().optional().or(z.literal("")),
+  ageMax: z.string().trim().optional().or(z.literal("")),
+  studentCapacity: z.string().trim().optional().or(z.literal("")),
+  weekday: z.string().trim().min(1, { message: "Escoge el día." }),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "Hora de inicio inválida." }),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "Hora de fin inválida." }),
+});
+
 export const EnrollmentSchema = z.object({
   studentId: z.string().min(1),
   programId: z.string().min(1, { message: "Selecciona un programa." }),

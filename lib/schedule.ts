@@ -21,7 +21,31 @@ export type Slot = {
   startTime: string;
   endTime: string;
   programLevelId?: string | null;
+  programGroupId?: string | null;
 };
+
+/**
+ * El horario que de verdad le toca al alumno en un programa.
+ *
+ * Manda el GRUPO: si ya se sabe en cuál está, su horario es el de ese grupo y nada
+ * más. Es lo que arregla el caso de Prerrequisitos, que es una clase de 45 minutos
+ * dentro de un programa cuyo bloque general dura toda la tarde: sin esto, al niño
+ * se le daba por ocupado el bloque entero y no podía llevar nada más ese día.
+ *
+ * Sin grupo se cae al criterio de antes (el nivel, o el programa completo), que es
+ * lo que siguen usando las terapias grandes: bloques largos con sesiones individuales
+ * rotando, donde no hay grupos que repartir.
+ */
+export function slotsForGroup<T extends { programGroupId?: string | null; programLevelId?: string | null }>(
+  slots: T[],
+  groupId: string | null | undefined,
+  levelId?: string | null,
+): T[] {
+  if (groupId) return slots.filter((s) => s.programGroupId === groupId);
+  // Sin grupo asignado, los horarios que pertenecen a algún grupo no son suyos:
+  // son de quien esté en ese grupo.
+  return slotsForLevel(slots.filter((s) => !s.programGroupId), levelId);
+}
 
 /**
  * Filtra el horario al nivel del alumno cuando el programa separa horario por nivel.
@@ -75,8 +99,8 @@ export function findSlotClash(slots: Slot[], others: Slot[]): Slot | null {
  * Vive aquí, aparte de la consulta, porque es la única parte con reglas y así se
  * puede razonar (y probar) sin base de datos.
  */
-export function buildAttendanceSheets<T extends { levelId: string | null }>(
-  daySlots: (Slot & { levelName?: string | null })[],
+export function buildAttendanceSheets<T extends { levelId: string | null; groupId?: string | null }>(
+  daySlots: (Slot & { levelName?: string | null; groupName?: string | null })[],
   students: T[],
 ): {
   key: string;
@@ -84,14 +108,25 @@ export function buildAttendanceSheets<T extends { levelId: string | null }>(
   endTime: string | null;
   levelId: string | null;
   levelName: string | null;
+  groupId: string | null;
+  groupName: string | null;
   students: T[];
 }[] {
-  const bloques = new Map<
-    string,
-    { key: string; startTime: string | null; endTime: string | null; levelId: string | null; levelName: string | null }
-  >();
+  type Bloque = {
+    key: string;
+    startTime: string | null;
+    endTime: string | null;
+    levelId: string | null;
+    levelName: string | null;
+    groupId: string | null;
+    groupName: string | null;
+  };
+  const bloques = new Map<string, Bloque>();
   for (const s of daySlots) {
-    const key = `${s.startTime}-${s.endTime}-${s.programLevelId ?? ""}`;
+    // Dos grupos del mismo nivel son dos clases distintas aunque compartan hora, así
+    // que el grupo entra en la llave: si no, a la terapeuta le saldría una sola hoja
+    // con los niños de los dos.
+    const key = `${s.startTime}-${s.endTime}-${s.programGroupId ?? s.programLevelId ?? ""}`;
     if (!bloques.has(key)) {
       bloques.set(key, {
         key,
@@ -99,6 +134,8 @@ export function buildAttendanceSheets<T extends { levelId: string | null }>(
         endTime: s.endTime,
         levelId: s.programLevelId ?? null,
         levelName: s.levelName ?? null,
+        groupId: s.programGroupId ?? null,
+        groupName: s.groupName ?? null,
       });
     }
   }
@@ -109,13 +146,19 @@ export function buildAttendanceSheets<T extends { levelId: string | null }>(
       endTime: null,
       levelId: null,
       levelName: null,
+      groupId: null,
+      groupName: null,
     });
   }
   return [...bloques.values()]
     .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""))
     .map((b) => ({
       ...b,
-      students: b.levelId ? students.filter((a) => a.levelId === b.levelId) : students,
+      students: b.groupId
+        ? students.filter((a) => a.groupId === b.groupId)
+        : b.levelId
+          ? students.filter((a) => a.levelId === b.levelId)
+          : students,
     }));
 }
 

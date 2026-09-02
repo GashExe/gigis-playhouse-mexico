@@ -6,6 +6,8 @@ import { requireWriter } from "@/lib/dal";
 import { getActiveCycle, meetsAgeRequirement } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
 import { enrollStudent } from "@/lib/enroll";
+import { groupOptionsForStudent, occupiedGroupSeats, soleGroup } from "@/lib/groups";
+import { resolvePlacement } from "@/lib/placement";
 import {
   checkEnrollmentLoad,
   clearStaffDrop,
@@ -29,6 +31,9 @@ export async function addEnrollment(studentId: string, formData: FormData) {
   await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const programId = String(formData.get("programId") ?? "");
   if (!programId) return;
+  // Grupo elegido. En los programas repartidos en grupos es lo que dice a qué hora
+  // va: sin él, un participante de Prerrequisitos no sabría si le toca lunes o jueves.
+  const chosenGroupId = String(formData.get("programGroupId") ?? "") || null;
   // Dirección puede pasar por encima de los reparos —edad, empalme y tope de
   // actividades del ciclo— pero a propósito: la pantalla se lo advierte y tiene
   // que confirmarlo.
@@ -49,37 +54,62 @@ export async function addEnrollment(studentId: string, formData: FormData) {
     where: { id: studentId },
     select: { birthDate: true },
   });
-  const ageOk = meetsAgeRequirement(
-    ageFrom(student?.birthDate),
-    ofertado.ageMin,
-    ofertado.ageMax,
-  );
-  const clash = await findScheduleClash(studentId, cycle.id, programId);
+  const age = ageFrom(student?.birthDate);
+
+  // El grupo, cuando el programa los tiene: el elegido, o el único que le cuadra.
+  // La edad y el cupo se juzgan contra ÉL y no contra el programa, que es justo lo
+  // que el grupo vino a arreglar: Cocina va de 8 a 45, pero su grupo Inicial es de
+  // 8 a 12 y tiene 7 lugares.
+  const placement = await resolvePlacement(studentId, programId, cycle.id);
+  const options = await groupOptionsForStudent(studentId, programId, cycle.id, {
+    levelId: placement?.levelId ?? null,
+    age,
+  });
+  const group = chosenGroupId
+    ? options.find((g) => g.id === chosenGroupId) ?? null
+    : soleGroup(options);
+  const hasGroups = options.length > 0 || chosenGroupId != null;
+
+  const ageOk = group
+    ? meetsAgeRequirement(age, group.ageMin, group.ageMax)
+    : meetsAgeRequirement(age, ofertado.ageMin, ofertado.ageMax);
+  // Grupo lleno: es un reparo más, del mismo tamaño que la edad o el empalme, y
+  // dirección puede pasarle por encima a propósito.
+  const groupFull = group
+    ? (await occupiedGroupSeats(group.id, cycle.id)) >= group.capacity
+    : false;
+  const clash = await findScheduleClash(studentId, cycle.id, programId, group?.id ?? null);
   // El tope es del participante, no del programa: se excluye este programa del
   // conteo porque reinscribir algo que ya lleva no le añade carga.
   const load = await checkEnrollmentLoad(studentId, cycle.id, {
     max: cycle.maxEnrollments,
     excludeProgramId: programId,
   });
-  if ((!ageOk || clash || load.full) && !force) return;
+  // Programa con grupos y ninguno decidido: no se inscribe a ciegas. Meterlo al
+  // primero que aparezca lo dejaría en un horario que nadie escogió.
+  if (hasGroups && !group) return;
+  if ((!ageOk || clash || load.full || groupFull) && !force) return;
 
   // Los reparos van a la bitácora: si dirección pasó por encima, que se sepa de qué.
   const reparos = [
     !ageOk && "fuera del rango de edad",
     clash && `empalmado con ${clash.programName}`,
     load.full && `ya con ${load.current} de ${load.max} actividades del ciclo`,
+    groupFull && `el grupo ya estaba lleno (${group?.capacity} lugares)`,
   ].filter(Boolean) as string[];
   const salvedad =
     reparos.length > 0 ? ` (${reparos.join(", ")}; autorizado por dirección)` : "";
 
   // Inscribir es lo mismo entre por donde entre (reactiva si ya existía, reabre la
   // baja, cierra la lista de espera y ubica el nivel): eso vive en lib/enroll.
+  const enGrupo = group ? ` — ${group.levelName ? `${group.levelName}, ` : ""}${group.name} (${group.scheduleLabel})` : "";
   await enrollStudent({
     studentId,
     programId,
     cycleId: cycle.id,
+    programGroupId: group?.id ?? null,
     notes: String(formData.get("notes") ?? "") || null,
-    audit: { summary: `Inscribió a ${ofertado.name} (${cycle.label})${salvedad}` },
+    audit: { summary: `Inscribió a ${ofertado.name}${enGrupo} (${cycle.label})${salvedad}` },
   });
 
   revalidatePath(`/estudiantes/${studentId}`);

@@ -34,6 +34,8 @@ type Group = {
     allowFamilyEnroll: boolean;
   };
   occupied: number;
+  /** Lugares totales: la suma de los grupos de la actividad, o su cupo si no reparte. */
+  capacity: number;
   requests: Request[];
 };
 
@@ -68,7 +70,7 @@ export function WaitlistBoard({
   return (
     <div className="space-y-5">
       {groups.map((g) => {
-        const left = Math.max(0, g.program.studentCapacity - g.occupied);
+        const left = Math.max(0, g.capacity - g.occupied);
         return (
           <Card key={g.program.id}>
             <CardHeader>
@@ -81,7 +83,7 @@ export function WaitlistBoard({
                 <div className="min-w-0">
                   <CardTitle>{g.program.name}</CardTitle>
                   <p className="text-xs text-muted">
-                    {`${g.occupied} de ${g.program.studentCapacity} cupos`}
+                    {`${g.occupied} de ${g.capacity} cupos`}
                     {left === 0 ? " · cupo lleno" : ` · ${left} libres`}
                     {!g.program.allowFamilyEnroll && " · solo dirección inscribe"}
                   </p>

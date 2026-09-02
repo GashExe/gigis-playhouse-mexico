@@ -18,6 +18,7 @@
     "db:import-niveles": "tsx prisma/import-niveles.ts",
     "db:import-horarios": "tsx --env-file=.env prisma/import-horarios.ts",
     "db:limpieza-pruebas": "tsx --env-file=.env prisma/limpieza-pruebas.ts",
+    "db:grupos-por-edad": "tsx --env-file=.env prisma/grupos-por-edad.ts",
     "db:regen-usuarios": "tsx prisma/regen-usuarios-alumnos.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio"

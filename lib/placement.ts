@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
+import { ageFrom, meetsAgeRequirement } from "@/lib/utils";
 
 /**
  * Ubicación automática de nivel al inscribirse a un programa.
@@ -9,7 +10,12 @@ import { logAudit } from "@/lib/audit";
  * quien es mucho trabajo, así que al inscribirse se resuelve solo —
  *   • Si la familia YA tiene historial en ese programa (un LevelRecord de
  *     cualquier ciclo anterior), se le RECUPERA el último nivel que alcanzó.
- *   • Si NO tiene historial, se le coloca en el nivel más bajo del programa.
+ *   • Si NO tiene historial, se le coloca en el nivel más bajo QUE LE CUADRE POR
+ *     EDAD. Antes era simplemente el más bajo, y con los grupos eso dejó de servir:
+ *     a un muchacho de 15 lo metía en Cocina Inicial (8–12), un grupo donde no cabe
+ *     y que por lo mismo la plataforma no le iba a ofrecer.
+ *   • Y si ya NO CABE por edad en el nivel que traía de antes, sube al que le toca.
+ *     Dejarlo en el viejo sería dejarlo fuera de todos los grupos del programa.
  *
  * No pisa nada: si ya existe una ubicación para ese alumno/programa/ciclo (porque
  * la terapeuta ya lo ubicó a mano), se respeta. Programas sin niveles se saltan.
@@ -26,7 +32,7 @@ export async function ensurePlacementOnEnroll(
   // Ya ubicado en este ciclo: se respeta lo que haya (p. ej. ubicación manual).
   // Sin niveles en el programa no hay nada que ubicar.
   if (!placement || placement.existing) return null;
-  const { levelId: placedLevelId, levelName: placedLevelName, recovered } = placement;
+  const { levelId: placedLevelId, levelName: placedLevelName, recovered, outgrown } = placement;
 
   await prisma.levelRecord.create({
     data: {
@@ -34,23 +40,27 @@ export async function ensurePlacementOnEnroll(
       programId,
       cycleId,
       programLevelId: placedLevelId,
-      note: recovered
-        ? "Nivel recuperado de su historial al inscribirse."
-        : "Ubicado en el nivel inicial al inscribirse (sin historial previo).",
+      note: outgrown
+        ? `Subió a «${placedLevelName}» al inscribirse: por edad ya no cabía en el nivel que traía.`
+        : recovered
+          ? "Nivel recuperado de su historial al inscribirse."
+          : "Ubicado en el nivel que le corresponde por edad al inscribirse (sin historial previo).",
     },
   });
 
   await logAudit({
     action: "nivel.ubicar",
-    summary: recovered
-      ? `Recuperó nivel «${placedLevelName}» al inscribirse (por historial)`
-      : `Ubicó en nivel inicial «${placedLevelName}» al inscribirse`,
+    summary: outgrown
+      ? `Subió a «${placedLevelName}» al inscribirse: ya no cabía por edad en el nivel anterior`
+      : recovered
+        ? `Recuperó nivel «${placedLevelName}» al inscribirse (por historial)`
+        : `Ubicó en «${placedLevelName}» al inscribirse (nivel que le toca por edad)`,
     entityType: "LevelRecord",
     entityId: programId,
     studentId,
   });
 
-  return { levelId: placedLevelId, levelName: placedLevelName, recovered };
+  return { levelId: placedLevelId, levelName: placedLevelName, recovered, outgrown };
 }
 
 /** Orden cronológico de un ciclo (mismo criterio que la línea de tiempo). */
@@ -76,6 +86,8 @@ export async function resolvePlacement(
   existing: boolean;
   /** Se recuperó de su historial en otro ciclo (si no, es el nivel más bajo). */
   recovered: boolean;
+  /** Traía otro nivel de antes, pero ya no cabe ahí por edad y se le subió. */
+  outgrown: boolean;
 } | null> {
   const current = await prisma.levelRecord.findUnique({
     where: { studentId_programId_cycleId: { studentId, programId, cycleId } },
@@ -87,16 +99,34 @@ export async function resolvePlacement(
       levelName: current.level.name,
       existing: true,
       recovered: false,
+      outgrown: false,
     };
   }
 
-  // El programa debe tener niveles para poder ubicar.
-  const lowest = await prisma.programLevel.findFirst({
+  // El programa debe tener niveles para poder ubicar. Se traen todos con la edad de
+  // sus grupos, que es lo que decide cuál le toca.
+  const levels = await prisma.programLevel.findMany({
     where: { programId },
     orderBy: { order: "asc" },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      groups: { where: { active: true }, select: { ageMin: true, ageMax: true } },
+    },
   });
-  if (!lowest) return null;
+  if (levels.length === 0) return null;
+
+  const age = ageFrom(
+    (await prisma.student.findUnique({ where: { id: studentId }, select: { birthDate: true } }))
+      ?.birthDate,
+  );
+  /** ¿Alguno de los grupos de este nivel le cuadra por edad? Sin grupos, no estorba. */
+  const cabeEn = (l: (typeof levels)[number]) =>
+    l.groups.length === 0 || l.groups.some((g) => meetsAgeRequirement(age, g.ageMin, g.ageMax));
+
+  // El más bajo que le cuadre; si ninguno (programa sin grupos, o edad fuera de todo),
+  // el más bajo a secas, que es el criterio de siempre.
+  const lowest = levels.find(cabeEn) ?? levels[0];
 
   // ¿Hay historial en OTRO ciclo? Se recupera el nivel del registro más reciente.
   const prior = await prisma.levelRecord.findMany({
@@ -107,15 +137,32 @@ export async function resolvePlacement(
     },
   });
   if (prior.length === 0) {
-    return { levelId: lowest.id, levelName: lowest.name, existing: false, recovered: false };
+    return {
+      levelId: lowest.id,
+      levelName: lowest.name,
+      existing: false,
+      recovered: false,
+      outgrown: false,
+    };
   }
   const latest = prior.reduce((best, r) =>
     cycleRank(r.cycle) > cycleRank(best.cycle) ? r : best,
   );
+  const traido = levels.find((l) => l.id === latest.level.id);
+  if (traido && !cabeEn(traido)) {
+    return {
+      levelId: lowest.id,
+      levelName: lowest.name,
+      existing: false,
+      recovered: false,
+      outgrown: true,
+    };
+  }
   return {
     levelId: latest.level.id,
     levelName: latest.level.name,
     existing: false,
     recovered: true,
+    outgrown: false,
   };
 }

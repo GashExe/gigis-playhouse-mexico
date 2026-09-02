@@ -1,9 +1,13 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { Coordination, Role, StudentStatus } from "@/lib/generated/prisma/client";
-import { ageFrom } from "@/lib/utils";
+import { ageFrom, meetsAgeRequirement } from "@/lib/utils";
+
+// Se re-exporta para no tocar las pantallas y acciones que ya la piden de aquí.
+export { meetsAgeRequirement };
 import { effectiveSlots } from "@/lib/enrollment-rules";
-import { buildAttendanceSheets, fromDateKey } from "@/lib/schedule";
+import { groupOptionsForPrograms } from "@/lib/groups";
+import { buildAttendanceSheets, fromDateKey, slotsLabel } from "@/lib/schedule";
 
 /**
  * Números de arriba del panel. `cycleId` acota lo que es DEL CICLO y no de la casa:
@@ -173,7 +177,20 @@ export async function getStudent(id: string) {
       account: { select: { username: true, initialPassword: true, active: true } },
       health: true,
       enrollments: {
-        include: { program: true },
+        include: {
+          program: true,
+          // A qué grupo va: sin esto el expediente dice la actividad pero no la hora,
+          // y con seis grupos de Habilidades sociales eso no le sirve a nadie.
+          group: {
+            include: {
+              level: { select: { name: true } },
+              slots: {
+                orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+                select: { weekday: true, startTime: true, endTime: true },
+              },
+            },
+          },
+        },
         orderBy: { startDate: "desc" },
       },
     },
@@ -281,7 +298,10 @@ export async function listPrograms(cycleId?: string) {
         orderBy: { order: "asc" },
         select: { id: true, name: true, order: true },
       },
+      // El editor de horario del programa solo maneja las horas SUYAS: las de los
+      // grupos se editan en cada grupo.
       scheduleSlots: {
+        where: { programGroupId: null },
         orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
         select: {
           id: true,
@@ -289,6 +309,27 @@ export async function listPrograms(cycleId?: string) {
           startTime: true,
           endTime: true,
           programLevelId: true,
+        },
+      },
+      groups: {
+        orderBy: [{ level: { order: "asc" } }, { name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          ageMin: true,
+          ageMax: true,
+          studentCapacity: true,
+          programLevelId: true,
+          level: { select: { id: true, name: true } },
+          slots: {
+            orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+            select: { weekday: true, startTime: true, endTime: true },
+          },
+          _count: {
+            select: {
+              enrollments: { where: { status: "ACTIVA", ...(cycleId ? { cycleId } : {}) } },
+            },
+          },
         },
       },
       _count: {
@@ -324,7 +365,17 @@ export async function listActivePrograms(cycleId?: string) {
       ...(cycleId ? { cycles: { some: { id: cycleId } } } : {}),
     },
     orderBy: { name: "asc" },
-    select: { id: true, name: true, color: true, area: true, ageMin: true, ageMax: true },
+    // `studentCapacity` va porque es el cupo de respaldo de los grupos que no traen
+    // el suyo, y quien pinta las opciones de inscripción lo necesita.
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      area: true,
+      ageMin: true,
+      ageMax: true,
+      studentCapacity: true,
+    },
   });
 }
 
@@ -733,7 +784,22 @@ export async function listCalendarPrograms(
           startTime: true,
           endTime: true,
           programLevelId: true,
+          programGroupId: true,
           level: { select: { name: true } },
+          // Sin el grupo, el lunes salían tres "Habilidades sociales" a tres horas y
+          // la terapeuta no podía saber cuál era la suya.
+          group: {
+            select: {
+              name: true,
+              studentCapacity: true,
+              level: { select: { name: true } },
+              _count: {
+                select: {
+                  enrollments: { where: { status: "ACTIVA", ...(cycleId ? { cycleId } : {}) } },
+                },
+              },
+            },
+          },
         },
       },
       _count: {
@@ -858,7 +924,13 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
         teacher: { select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
-          select: { weekday: true, startTime: true, endTime: true, programLevelId: true },
+          select: {
+            weekday: true,
+            startTime: true,
+            endTime: true,
+            programLevelId: true,
+            programGroupId: true,
+          },
         },
         _count: {
           select: { enrollments: { where: { status: "ACTIVA", cycleId } } },
@@ -871,7 +943,7 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
     }),
     prisma.enrollment.findMany({
       where: { studentId, cycleId, status: "ACTIVA" },
-      select: { programId: true },
+      select: { programId: true, programGroupId: true },
     }),
     prisma.enrollmentSubmission.findUnique({
       where: { studentId_cycleId: { studentId, cycleId } },
@@ -880,6 +952,7 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
   ]);
 
   const enrolledProgramIds = new Set(enrollments.map((e) => e.programId));
+  const enrolledGroupOf = new Map(enrollments.map((e) => [e.programId, e.programGroupId]));
   // Horario que de verdad le toca en cada actividad (el de su nivel, cuando el
   // programa parte el horario por niveles). Es lo que la pantalla necesita para
   // juzgar los empalmes de la selección sin volver a preguntarle al servidor.
@@ -888,6 +961,10 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
     reservations.filter((r) => r.status === "RECHAZADA").map((r) => r.programId),
   );
   const age = ageFrom(student?.birthDate);
+  // Los grupos que le tocan en cada actividad, con sus lugares. Es lo que la hoja
+  // necesita para preguntarle a la familia a qué hora va: en Prerrequisitos hay que
+  // escoger entre lunes y jueves, y el cupo que se llena es el de esa hora.
+  const groupsOf = await groupOptionsForPrograms(studentId, cycleId, programs, age);
   // La carga sale de lo que ya trajimos: `enrollments` son justo las ACTIVA del
   // ciclo, así que el tope no cuesta ninguna consulta más.
   const max = cycle?.maxEnrollments ?? null;
@@ -901,32 +978,25 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
       max,
       full: max != null && enrollments.length >= max,
     },
-    programs: programs.map((p) => ({
-      ...p,
-      ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
-      dropped: dropped.has(p.id),
-      slots: slotsOf.get(p.id) ?? [],
-    })),
+    programs: programs.map((p) => {
+      const groups = groupsOf.get(p.id) ?? [];
+      return {
+        ...p,
+        // Con grupos, la edad la decide el grupo: si no le cuadra ninguno, esta
+        // actividad no es para él aunque el rango del programa lo abarque (Cocina
+        // va de 8 a 45, pero un niño de 7 no cabe en ninguno de sus dos grupos).
+        ageOk: groups.length > 0 ? groups.some((g) => g.ageOk) : meetsAgeRequirement(age, p.ageMin, p.ageMax),
+        dropped: dropped.has(p.id),
+        slots: slotsOf.get(p.id) ?? [],
+        groups,
+        enrolledGroupId: enrolledGroupOf.get(p.id) ?? null,
+      };
+    }),
     reservations,
     enrolledProgramIds,
   };
 }
 
-/**
- * ¿El participante cumple el requisito de edad de un programa? Si el programa no
- * pide edad, o no conocemos la fecha de nacimiento, no se bloquea (el requisito
- * lo termina de revisar dirección al aprobar).
- */
-export function meetsAgeRequirement(
-  age: number | null,
-  ageMin: number | null,
-  ageMax: number | null,
-): boolean {
-  if (age == null) return true;
-  if (ageMin != null && age < ageMin) return false;
-  if (ageMax != null && age > ageMax) return false;
-  return true;
-}
 
 /**
  * Últimos lugares apartados por las familias (para la tarjeta del panel de
@@ -952,15 +1022,60 @@ export async function listRecentFamilyReservations(limit = 8) {
       },
     },
   });
-  // Cupo ocupado por programa+ciclo, para ver de un vistazo qué tan lleno quedó.
-  const seats = await Promise.all(
-    recent.map((r) =>
-      prisma.enrollment.count({
-        where: { programId: r.program.id, cycleId: r.cycleId, status: "ACTIVA" },
-      }),
-    ),
+  // En qué grupo quedó cada uno, para poder enseñar el cupo de SU hora y no el del
+  // programa entero, que con seis grupos no dice nada.
+  const enrollments = await prisma.enrollment.findMany({
+    where: {
+      OR: recent.map((r) => ({
+        studentId: r.student.id,
+        programId: r.program.id,
+        cycleId: r.cycleId,
+      })),
+    },
+    select: {
+      studentId: true,
+      programId: true,
+      cycleId: true,
+      group: {
+        select: {
+          id: true,
+          name: true,
+          studentCapacity: true,
+          level: { select: { name: true } },
+          slots: { select: { weekday: true, startTime: true, endTime: true } },
+        },
+      },
+    },
+  });
+  const grupoDe = new Map(
+    enrollments.map((e) => [`${e.studentId}|${e.programId}|${e.cycleId}`, e.group]),
   );
-  return recent.map((r, i) => ({ ...r, occupied: seats[i] }));
+
+  const seats = await Promise.all(
+    recent.map((r) => {
+      const g = grupoDe.get(`${r.student.id}|${r.program.id}|${r.cycleId}`);
+      return g
+        ? prisma.enrollment.count({
+            where: { programGroupId: g.id, cycleId: r.cycleId, status: "ACTIVA" },
+          })
+        : prisma.enrollment.count({
+            where: { programId: r.program.id, cycleId: r.cycleId, status: "ACTIVA" },
+          });
+    }),
+  );
+  return recent.map((r, i) => {
+    const g = grupoDe.get(`${r.student.id}|${r.program.id}|${r.cycleId}`);
+    return {
+      ...r,
+      occupied: seats[i],
+      capacity: g?.studentCapacity ?? r.program.studentCapacity,
+      groupLabel: g
+        ? [g.level?.name, g.name === g.level?.name ? null : g.name, slotsLabel(g.slots)]
+            .filter(Boolean)
+            .join(" · ")
+        : null,
+    };
+  });
 }
 
 /**
@@ -1567,11 +1682,16 @@ export async function getProgramAcademicReport(programId: string, cycleId: strin
 }
 
 /**
- * Programas del ciclo con el cupo lleno. Un solo groupBy cruzado en memoria: sin
- * esto habría que contar programa por programa.
+ * Lo que está lleno en el ciclo. Se cuenta POR GRUPO cuando el programa los reparte,
+ * porque el lugar que se llena es el de una hora concreta: sumar los seis grupos de
+ * Habilidades sociales contra un cupo de programa daba un número que no significaba
+ * nada, y llegó a marcar como llenos cinco programas que no lo estaban.
+ *
+ * Los programas sin grupos —las terapias grandes, que son bloques con sesiones
+ * individuales rotando— se siguen contando enteros, como siempre.
  */
 export async function listFullPrograms(cycleId: string) {
-  const [programs, counts] = await Promise.all([
+  const [programs, porPrograma, porGrupo, esperando] = await Promise.all([
     prisma.program.findMany({
       where: { active: true, cycles: { some: { id: cycleId } } },
       orderBy: { name: "asc" },
@@ -1580,7 +1700,22 @@ export async function listFullPrograms(cycleId: string) {
         name: true,
         color: true,
         studentCapacity: true,
+        groups: {
+          where: { active: true },
+          orderBy: [{ level: { order: "asc" } }, { name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            studentCapacity: true,
+            level: { select: { name: true } },
+            slots: {
+              orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+              select: { weekday: true, startTime: true, endTime: true },
+            },
+          },
+        },
         scheduleSlots: {
+          where: { programGroupId: null },
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
           select: { weekday: true, startTime: true, endTime: true, programLevelId: true },
         },
@@ -1588,25 +1723,75 @@ export async function listFullPrograms(cycleId: string) {
     }),
     prisma.enrollment.groupBy({
       by: ["programId"],
-      where: { cycleId, status: "ACTIVA" },
+      where: { cycleId, status: "ACTIVA", programGroupId: null },
+      _count: { _all: true },
+    }),
+    prisma.enrollment.groupBy({
+      by: ["programGroupId"],
+      where: { cycleId, status: "ACTIVA", programGroupId: { not: null } },
+      _count: { _all: true },
+    }),
+    prisma.waitlistRequest.groupBy({
+      by: ["programId"],
+      where: { cycleId, status: "EN_ESPERA" },
       _count: { _all: true },
     }),
   ]);
-  const ocupados = new Map(counts.map((c) => [c.programId, c._count._all]));
-  const esperando = await prisma.waitlistRequest.groupBy({
-    by: ["programId"],
-    where: { cycleId, status: "EN_ESPERA" },
-    _count: { _all: true },
-  });
+  const ocupadosPrograma = new Map(porPrograma.map((c) => [c.programId, c._count._all]));
+  const ocupadosGrupo = new Map(porGrupo.map((c) => [c.programGroupId, c._count._all]));
   const enEspera = new Map(esperando.map((c) => [c.programId, c._count._all]));
 
-  return programs
-    .map((p) => ({
-      ...p,
-      occupied: ocupados.get(p.id) ?? 0,
+  const llenos: {
+    id: string;
+    programId: string;
+    name: string;
+    /** Qué grupo es, cuando el programa los reparte ("Avanzado · Lun 16:00–16:45"). */
+    groupLabel: string | null;
+    color: string | null;
+    occupied: number;
+    capacity: number;
+    waiting: number;
+    slots: { weekday: number; startTime: string; endTime: string }[];
+  }[] = [];
+
+  for (const p of programs) {
+    if (p.groups.length > 0) {
+      for (const g of p.groups) {
+        const capacity = g.studentCapacity ?? p.studentCapacity;
+        const occupied = ocupadosGrupo.get(g.id) ?? 0;
+        if (occupied < capacity) continue;
+        const horario = slotsLabel(g.slots);
+        llenos.push({
+          id: g.id,
+          programId: p.id,
+          name: p.name,
+          groupLabel: [g.level?.name, g.name === g.level?.name ? null : g.name, horario]
+            .filter(Boolean)
+            .join(" · "),
+          color: p.color,
+          occupied,
+          capacity,
+          waiting: enEspera.get(p.id) ?? 0,
+          slots: g.slots,
+        });
+      }
+      continue;
+    }
+    const occupied = ocupadosPrograma.get(p.id) ?? 0;
+    if (occupied < p.studentCapacity) continue;
+    llenos.push({
+      id: p.id,
+      programId: p.id,
+      name: p.name,
+      groupLabel: null,
+      color: p.color,
+      occupied,
+      capacity: p.studentCapacity,
       waiting: enEspera.get(p.id) ?? 0,
-    }))
-    .filter((p) => p.occupied >= p.studentCapacity);
+      slots: p.scheduleSlots,
+    });
+  }
+  return llenos;
 }
 
 // ── Organigrama ─────────────────────────────────────────────────────────────
@@ -1753,6 +1938,10 @@ export async function getFamilyWaitlistBoard(studentId: string, cycleId: string)
   const myRequest = new Map(requests.map((r) => [r.programId, r]));
   const age = ageFrom(student?.birthDate);
   const max = cycle?.maxEnrollments ?? null;
+  // Los lugares que de verdad le quedan a ESTE participante: la suma de los grupos
+  // que le cuadran por edad. Formarse a esperar es por actividad, no por hora, así
+  // que lo que importa aquí es si le queda alguna puerta abierta.
+  const gruposDe = await groupOptionsForPrograms(studentId, cycleId, programs, age);
 
   return {
     load: {
@@ -1760,13 +1949,23 @@ export async function getFamilyWaitlistBoard(studentId: string, cycleId: string)
       max,
       full: max != null && enrollments.length >= max,
     },
-    programs: programs.map((p) => ({
-      ...p,
-      occupied: p._count.enrollments,
-      enrolled: enrolledIds.has(p.id),
-      ageOk: meetsAgeRequirement(age, p.ageMin, p.ageMax),
-      myRequest: myRequest.get(p.id) ?? null,
-    })),
+    programs: programs.map((p) => {
+      const grupos = gruposDe.get(p.id) ?? [];
+      const capacity = grupos.length
+        ? grupos.reduce((a, g) => a + g.capacity, 0)
+        : p.studentCapacity;
+      const occupied = grupos.length
+        ? grupos.reduce((a, g) => a + g.occupied, 0)
+        : p._count.enrollments;
+      return {
+        ...p,
+        studentCapacity: capacity,
+        occupied,
+        enrolled: enrolledIds.has(p.id),
+        ageOk: grupos.length > 0 ? grupos.some((g) => g.ageOk) : meetsAgeRequirement(age, p.ageMin, p.ageMax),
+        myRequest: myRequest.get(p.id) ?? null,
+      };
+    }),
   };
 }
 
@@ -1834,12 +2033,25 @@ export async function listWaitlistByProgram(
   const carga = new Map(cargas.map((c) => [c.studentId, c._count._all]));
   const max = cycle?.maxEnrollments ?? null;
 
+  // El cupo de un programa repartido en grupos es la suma de sus grupos: formarse a
+  // esperar es por actividad, y lo que coordinación necesita ver aquí es si queda
+  // alguna puerta abierta. La edad también sale de los grupos, que son los que la
+  // traen ahora.
+  const grupos = await prisma.programGroup.findMany({
+    where: { programId: { in: programIds }, active: true },
+    select: { programId: true, studentCapacity: true, ageMin: true, ageMax: true },
+  });
+  const gruposDe = new Map<string, typeof grupos>();
+  for (const g of grupos) gruposDe.set(g.programId, [...(gruposDe.get(g.programId) ?? []), g]);
+
   // Agrupa por programa conservando el orden de llegada dentro de cada uno.
   const byProgram = new Map<
     string,
     {
       program: (typeof requests)[number]["program"];
       occupied: number;
+      /** Lugares totales: la suma de los grupos, o el cupo del programa si no tiene. */
+      capacity: number;
       requests: {
         id: string;
         requestedAt: Date;
@@ -1854,9 +2066,13 @@ export async function listWaitlistByProgram(
   for (const r of requests) {
     let group = byProgram.get(r.program.id);
     if (!group) {
+      const gs = gruposDe.get(r.program.id) ?? [];
       group = {
         program: r.program,
         occupied: ocupados.get(r.program.id) ?? 0,
+        capacity: gs.length
+          ? gs.reduce((a, g) => a + (g.studentCapacity ?? r.program.studentCapacity), 0)
+          : r.program.studentCapacity,
         requests: [],
       };
       byProgram.set(r.program.id, group);
@@ -1869,7 +2085,12 @@ export async function listWaitlistByProgram(
       message: r.message,
       student: r.student,
       age,
-      ageOk: meetsAgeRequirement(age, r.program.ageMin, r.program.ageMax),
+      ageOk: (() => {
+        const gs = gruposDe.get(r.program.id) ?? [];
+        return gs.length > 0
+          ? gs.some((g) => meetsAgeRequirement(age, g.ageMin, g.ageMax))
+          : meetsAgeRequirement(age, r.program.ageMin, r.program.ageMax);
+      })(),
       load: { current, max, full: max != null && current >= max },
     });
   }

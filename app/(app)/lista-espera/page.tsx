@@ -35,6 +35,7 @@ export default async function ListaEsperaPage() {
         groups={groups.map((g) => ({
           program: g.program,
           occupied: g.occupied,
+          capacity: g.capacity,
           requests: g.requests.map((r) => ({
             id: r.id,
             requestedAt: r.requestedAt.toISOString(),

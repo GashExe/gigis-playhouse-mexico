@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { getActiveCycle, meetsAgeRequirement, familyDonationHold } from "@/lib/queries";
 import { enrollStudent, occupiedSeats } from "@/lib/enroll";
+import { groupOptionsForPrograms, occupiedGroupSeats } from "@/lib/groups";
 import { effectiveSlots } from "@/lib/enrollment-rules";
 import { findSlotClash, slotsLabel } from "@/lib/schedule";
 import { logAudit } from "@/lib/audit";
@@ -46,7 +47,13 @@ const FAMILY_PROGRAM_SELECT = {
   ageMax: true,
   allowFamilyEnroll: true,
   scheduleSlots: {
-    select: { weekday: true, startTime: true, endTime: true, programLevelId: true },
+    select: {
+      weekday: true,
+      startTime: true,
+      endTime: true,
+      programLevelId: true,
+      programGroupId: true,
+    },
   },
 } as const;
 
@@ -55,9 +62,17 @@ const FAMILY_PROGRAM_SELECT = {
  * diferencia contra lo que ya tenía: inscribe lo que palomeó de más y da de baja lo
  * que quitó. Al terminar deja la firma del envío, que es lo que cierra el listado.
  */
+export type SelectionItem = {
+  programId: string;
+  /** Grupo elegido. null cuando el programa no reparte grupos. */
+  programGroupId: string | null;
+};
+
 export async function submitEnrollmentSelection(
-  programIds: string[],
+  seleccionPedida: SelectionItem[],
 ): Promise<EnrollmentSubmitState> {
+  const programIds = seleccionPedida.map((x) => x.programId);
+  const grupoPedido = new Map(seleccionPedida.map((x) => [x.programId, x.programGroupId]));
   const user = await getCurrentUser();
   if (user.role !== "ALUMNO" || !user.studentId) return { error: "No es tu espacio." };
   const studentId = user.studentId;
@@ -102,7 +117,7 @@ export async function submitEnrollmentSelection(
     }),
     prisma.enrollment.findMany({
       where: { studentId, cycleId: cycle.id, status: "ACTIVA" },
-      select: { id: true, programId: true },
+      select: { id: true, programId: true, programGroupId: true },
     }),
     prisma.reservation.findMany({
       where: { studentId, cycleId: cycle.id, status: "RECHAZADA" },
@@ -116,6 +131,23 @@ export async function submitEnrollmentSelection(
   const dadosDeBajaPorDireccion = new Set(reservations.map((r) => r.programId));
   const age = ageFrom(student.birthDate);
   const rejected: string[] = [];
+
+  // Los grupos que le tocan en cada actividad. Con grupos, la edad y el cupo se
+  // juzgan contra el GRUPO: Cocina va de 8 a 45, pero su grupo Inicial es de 8 a 12
+  // y tiene sus propios 7 lugares.
+  const gruposDe = await groupOptionsForPrograms(studentId, cycle.id, ofertados, age);
+  /** El grupo que queda para un programa: el pedido, o el único posible. */
+  const grupoFinal = new Map<string, string | null>();
+  for (const p of ofertados) {
+    const opciones = gruposDe.get(p.id) ?? [];
+    if (opciones.length === 0) {
+      grupoFinal.set(p.id, null);
+      continue;
+    }
+    const pedido = grupoPedido.get(p.id) ?? null;
+    const valido = pedido ? opciones.find((g) => g.id === pedido) : null;
+    grupoFinal.set(p.id, valido?.id ?? (opciones.length === 1 ? opciones[0].id : null));
+  }
 
   // 1. La selección se acota a lo que la familia PUEDE mover. Lo que ya lleva de un
   //    grupo que arma dirección se queda dentro aunque no venga palomeado: no es de
@@ -138,7 +170,16 @@ export async function submitEnrollmentSelection(
       rejected.push(`${p.name}: a esa actividad se entra por lista de la dirección.`);
       continue;
     }
-    if (!meetsAgeRequirement(age, p.ageMin, p.ageMax)) {
+    const opciones = gruposDe.get(p.id) ?? [];
+    const grupo = opciones.find((g) => g.id === grupoFinal.get(p.id)) ?? null;
+    if (opciones.length > 0 && !grupo) {
+      rejected.push(`${p.name}: falta escoger a qué hora va.`);
+      continue;
+    }
+    const edadOk = grupo
+      ? meetsAgeRequirement(age, grupo.ageMin, grupo.ageMax)
+      : meetsAgeRequirement(age, p.ageMin, p.ageMax);
+    if (!edadOk) {
       rejected.push(`${p.name}: está fuera del rango de edad.`);
       continue;
     }
@@ -151,7 +192,7 @@ export async function submitEnrollmentSelection(
 
   // 2. Empalmes DENTRO de la selección: es la regla que solo se puede juzgar con la
   //    hoja completa en la mano. Se resuelve con el horario del nivel que le toca.
-  const slotsOf = await effectiveSlots(studentId, cycle.id, ofertados);
+  const slotsOf = await effectiveSlots(studentId, cycle.id, ofertados, grupoFinal);
   const aceptadas: string[] = [];
   for (const id of [...seleccion].sort((a, b) =>
     (programById.get(a)?.name ?? "").localeCompare(programById.get(b)?.name ?? "", "es"),
@@ -197,8 +238,17 @@ export async function submitEnrollmentSelection(
   for (const id of final) {
     if (inscritos.has(id)) continue;
     const program = programById.get(id)!;
-    if ((await occupiedSeats(id, cycle.id)) >= program.studentCapacity) {
-      rejected.push(`${program.name}: se llenó el cupo mientras armabas tu inscripción.`);
+    const grupoId = grupoFinal.get(id) ?? null;
+    const grupo = (gruposDe.get(id) ?? []).find((g) => g.id === grupoId) ?? null;
+    const lleno = grupo
+      ? (await occupiedGroupSeats(grupo.id, cycle.id)) >= grupo.capacity
+      : (await occupiedSeats(id, cycle.id)) >= program.studentCapacity;
+    if (lleno) {
+      rejected.push(
+        grupo
+          ? `${program.name} (${grupo.scheduleLabel}): se llenó ese horario mientras armabas tu inscripción.`
+          : `${program.name}: se llenó el cupo mientras armabas tu inscripción.`,
+      );
       continue;
     }
     altas.push(id);
@@ -232,6 +282,7 @@ export async function submitEnrollmentSelection(
       studentId,
       programId,
       cycleId: cycle.id,
+      programGroupId: grupoFinal.get(programId) ?? null,
       notes: "Inscrito por la familia desde Mi espacio",
       audit: {
         summary: `${student.firstName} ${student.lastName} apartó lugar en ${program.name} (${cycle.label})`,

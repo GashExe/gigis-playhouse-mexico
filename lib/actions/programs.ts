@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireWriter } from "@/lib/dal";
-import { ProgramSchema, ScheduleSlotsSchema } from "@/lib/validators";
+import { ProgramSchema, ProgramGroupSchema, ScheduleSlotsSchema } from "@/lib/validators";
 import { getActiveCycle } from "@/lib/queries";
 
 export type ProgramFormState =
@@ -164,7 +164,10 @@ export async function updateProgram(
         s.programLevelId && validLevelIds.has(s.programLevelId) ? s.programLevelId : null,
     }));
     await prisma.$transaction([
-      prisma.scheduleSlot.deleteMany({ where: { programId: id } }),
+      // SOLO el horario del programa. Las horas que pertenecen a un grupo se editan
+      // en el grupo; borrarlas aquí dejaría a los seis grupos de Habilidades sociales
+      // sin hora por haber guardado la descripción del programa.
+      prisma.scheduleSlot.deleteMany({ where: { programId: id, programGroupId: null } }),
       ...(rows.length > 0 ? [prisma.scheduleSlot.createMany({ data: rows })] : []),
     ]);
   }
@@ -172,6 +175,106 @@ export async function updateProgram(
   revalidatePath("/programas");
   revalidatePath("/panel");
   revalidatePath("/calendario");
+  return { ok: true };
+}
+
+// ── Grupos ──────────────────────────────────────────────────────────────────
+
+export type GroupFormState =
+  | { errors?: Record<string, string[]>; ok?: boolean; error?: string }
+  | undefined;
+
+/**
+ * Crea o edita un grupo con su hora. El grupo es la unidad que se llena: carga la
+ * edad y los lugares, y de él cuelga el horario.
+ *
+ * Su horario se reemplaza completo por la fila del formulario: un grupo ES una hora.
+ */
+export async function saveProgramGroup(
+  programId: string,
+  groupId: string | null,
+  _prev: GroupFormState,
+  formData: FormData,
+): Promise<GroupFormState> {
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
+  const parsed = ProgramGroupSchema.safeParse({
+    name: formData.get("name"),
+    programLevelId: formData.get("programLevelId") ?? "",
+    ageMin: formData.get("ageMin") ?? "",
+    ageMax: formData.get("ageMax") ?? "",
+    studentCapacity: formData.get("studentCapacity") ?? "",
+    weekday: formData.get("weekday") ?? "",
+    startTime: formData.get("startTime") ?? "",
+    endTime: formData.get("endTime") ?? "",
+  });
+  if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
+  const d = parsed.data;
+  if (d.endTime <= d.startTime) {
+    return { errors: { endTime: ["La clase tiene que terminar después de empezar."] } };
+  }
+
+  // El nivel tiene que ser de ESTE programa: un id ajeno dejaría el grupo colgando
+  // de un nivel de otra actividad.
+  const levelId = d.programLevelId
+    ? (
+        await prisma.programLevel.findFirst({
+          where: { id: d.programLevelId, programId },
+          select: { id: true },
+        })
+      )?.id ?? null
+    : null;
+
+  const data = {
+    programId,
+    programLevelId: levelId,
+    name: d.name,
+    ageMin: toInt(d.ageMin),
+    ageMax: toInt(d.ageMax),
+    studentCapacity: toInt(d.studentCapacity),
+  };
+  const slot = {
+    programId,
+    programLevelId: levelId,
+    weekday: Number(d.weekday),
+    startTime: d.startTime,
+    endTime: d.endTime,
+  };
+
+  if (groupId) {
+    await prisma.$transaction([
+      prisma.programGroup.update({ where: { id: groupId }, data }),
+      prisma.scheduleSlot.deleteMany({ where: { programGroupId: groupId } }),
+      prisma.scheduleSlot.create({ data: { ...slot, programGroupId: groupId } }),
+    ]);
+  } else {
+    const created = await prisma.programGroup.create({ data });
+    await prisma.scheduleSlot.create({ data: { ...slot, programGroupId: created.id } });
+  }
+
+  revalidatePath("/programas");
+  revalidatePath("/calendario");
+  revalidatePath("/panel");
+  return { ok: true };
+}
+
+/**
+ * Borra un grupo. Si tiene gente inscrita NO se borra: las inscripciones quedarían
+ * sin hora y nadie sabría a qué clase va cada quien. Primero hay que moverlos.
+ */
+export async function deleteProgramGroup(groupId: string): Promise<GroupFormState> {
+  await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
+  const inscritos = await prisma.enrollment.count({
+    where: { programGroupId: groupId, status: "ACTIVA" },
+  });
+  if (inscritos > 0) {
+    return {
+      error: `Ese grupo tiene ${inscritos} ${inscritos === 1 ? "participante inscrito" : "participantes inscritos"}. Muévelos a otro grupo antes de borrarlo.`,
+    };
+  }
+  await prisma.programGroup.delete({ where: { id: groupId } });
+  revalidatePath("/programas");
+  revalidatePath("/calendario");
+  revalidatePath("/panel");
   return { ok: true };
 }
 

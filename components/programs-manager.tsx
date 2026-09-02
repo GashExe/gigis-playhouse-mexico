@@ -26,6 +26,7 @@ import { COORDINATIONS, COORDINATION_LABEL } from "@/lib/roles";
 import type { Coordination } from "@/lib/generated/prisma/client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { WEEKDAYS, WEEK_ORDER, slotsLabel, type Slot } from "@/lib/schedule";
+import { ProgramGroups, type GroupRow } from "@/components/program-groups";
 
 type Teacher = { id: string; name: string };
 
@@ -52,6 +53,8 @@ type Program = {
   coordination: Coordination | null;
   teacherId: string | null;
   teacher: { id: string; name: string } | null;
+  /** Grupos de la actividad: la hora, la edad y los lugares de cada uno. */
+  groups: GroupRow[];
   _count: { enrollments: number; evaluations: number };
 };
 
@@ -256,11 +259,21 @@ function ProgramCard({
         </div>
       </dl>
 
+      <ProgramGroups
+        programId={p.id}
+        programCapacity={p.studentCapacity}
+        levels={p.levels}
+        groups={p.groups}
+        canManage={canManage}
+      />
+
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-sm text-muted">
         <span className="flex items-center gap-1.5">
           <UsersThree className="size-4" />
           <span className="tnum font-semibold text-ink">{p._count.enrollments}</span>
-          <span>/ {p.studentCapacity} cupos</span>
+          {/* Con grupos, el cupo del programa no dice nada: sumaría horas distintas.
+              El que cuenta se ve en cada grupo, aquí abajo. */}
+          <span>{p.groups.length > 0 ? "inscritos" : `/ ${p.studentCapacity} cupos`}</span>
         </span>
         {/* Se ve sin abrir el formulario: es lo que cambia quién puede inscribir. */}
         {!p.allowFamilyEnroll && (

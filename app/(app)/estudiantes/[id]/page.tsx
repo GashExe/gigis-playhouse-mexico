@@ -30,6 +30,8 @@ import {
   type ScheduleClash,
 } from "@/lib/enrollment-rules";
 import { edadLabel, ageFrom } from "@/lib/utils";
+import { groupOptionsForPrograms, type GroupOption } from "@/lib/groups";
+import { slotsLabel } from "@/lib/schedule";
 import { fechaDiaLarga } from "@/lib/format";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
@@ -127,6 +129,11 @@ export default async function StudentDetailPage({
       ? `Ya lleva ${load.current} de ${load.max} actividades del ciclo`
       : null;
   const studentAge = ageFrom(student.birthDate);
+  // Los grupos a los que puede entrar en cada actividad. Cuando hay más de uno hay
+  // que escoger: sin eso no se sabe a qué hora va, y la inscripción no puede salir.
+  const groupsOf = activeCycle
+    ? await groupOptionsForPrograms(student.id, activeCycle.id, programs, studentAge)
+    : new Map<string, GroupOption[]>();
   const programOptions = programs.map((p) => {
     const clash = clashes.get(p.id);
     return {
@@ -140,6 +147,14 @@ export default async function StudentDetailPage({
             ? `Es de ${p.ageMin} años en adelante`
             : `Es para hasta ${p.ageMax} años`,
       clashWarning: clash ? `Se empalma con ${clash.programName} (${clash.label})` : null,
+      groups: (groupsOf.get(p.id) ?? []).map((g) => ({
+        id: g.id,
+        label: [g.levelName, g.name === g.levelName ? null : g.name, g.scheduleLabel]
+          .filter(Boolean)
+          .join(" · "),
+        left: Math.max(0, g.capacity - g.occupied),
+        full: g.full,
+      })),
     };
   });
 
@@ -219,6 +234,15 @@ export default async function StudentDetailPage({
                 color: e.program.color,
                 area: e.program.area,
               },
+              groupLabel: e.group
+                ? [
+                    e.group.level?.name,
+                    e.group.name === e.group.level?.name ? null : e.group.name,
+                    slotsLabel(e.group.slots),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : null,
             }))}
             allPrograms={programOptions}
             loadWarning={loadWarning}
