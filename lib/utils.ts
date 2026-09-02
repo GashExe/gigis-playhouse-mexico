@@ -72,6 +72,26 @@ export function roleTone(role: string): "accent" | "warning" | "primary" | "neut
   return "primary";
 }
 
+/**
+ * ¿La edad cae dentro del rango? Sin fecha de nacimiento no se descarta a nadie:
+ * frenar a un participante por un dato que la casa todavía no capturó sería
+ * castigarlo por un hueco del expediente.
+ *
+ * Vive aquí, y no en las consultas, porque la usan tanto el programa como el grupo
+ * y las consultas ya dependen de las reglas de inscripción: tenerla allá cerraba
+ * un círculo de importaciones.
+ */
+export function meetsAgeRequirement(
+  age: number | null,
+  ageMin: number | null,
+  ageMax: number | null,
+): boolean {
+  if (age == null) return true;
+  if (ageMin != null && age < ageMin) return false;
+  if (ageMax != null && age > ageMax) return false;
+  return true;
+}
+
 /** Edad en años a partir de fecha de nacimiento. */
 export function ageFrom(date: Date | null | undefined): number | null {
   if (!date) return null;

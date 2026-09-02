@@ -131,7 +131,7 @@ export default async function PanelPage() {
           </CardHeader>
           <ul className="divide-y divide-border px-5 pb-4">
             {reservations.map((r) => {
-              const full = r.occupied >= r.program.studentCapacity;
+              const full = r.occupied >= r.capacity;
               const edad = edadLabel(r.student.birthDate);
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-3 py-3">
@@ -150,10 +150,13 @@ export default async function PanelPage() {
                       )}{" "}
                       <span className="font-normal text-muted">se inscribió a</span>{" "}
                       {r.program.name}
+                      {r.groupLabel && (
+                        <span className="font-normal text-muted">{` · ${r.groupLabel}`}</span>
+                      )}
                     </p>
                     <p className="text-xs text-muted">
                       <span className={`tnum font-semibold ${full ? "text-danger-strong" : ""}`}>
-                        {r.occupied}/{r.program.studentCapacity} cupos
+                        {r.occupied}/{r.capacity} cupos
                       </span>
                       {full ? " · cupo lleno" : ""}
                       {" · "}
@@ -190,10 +193,15 @@ export default async function PanelPage() {
                   style={{ backgroundColor: p.color ?? "var(--primary)" }}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-ink">{p.name}</p>
+                  <p className="text-sm font-semibold text-ink">
+                    {p.name}
+                    {p.groupLabel && (
+                      <span className="font-normal text-muted">{` · ${p.groupLabel}`}</span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted">
                     <span className="tnum font-semibold">
-                      {p.occupied}/{p.studentCapacity} cupos
+                      {p.occupied}/{p.capacity} cupos
                     </span>
                     {" · cupo lleno"}
                     {p.waiting > 0 && (
@@ -209,7 +217,7 @@ export default async function PanelPage() {
                   </p>
                 </div>
                 <Link
-                  href={`/calendario/${p.id}/lista?fecha=${toDateKey(proximaClase(p.scheduleSlots))}`}
+                  href={`/calendario/${p.programId}/lista?fecha=${toDateKey(proximaClase(p.slots))}`}
                   className="flex shrink-0 items-center gap-1.5 rounded-[var(--radius-control)] border border-border px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"
                 >
                   <Printer className="size-4" />

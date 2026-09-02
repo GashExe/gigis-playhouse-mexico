@@ -21,6 +21,8 @@ type EnrollmentItem = {
   status: EnrollmentStatus;
   startDate: Date;
   program: { id: string; name: string; color: string | null; area: string | null };
+  /** Grupo y hora a la que va ("Prerrequisitos · Grupo 2 · Jue 17:00–17:45"). */
+  groupLabel?: string | null;
 };
 
 /**
@@ -35,6 +37,11 @@ type ProgramOption = {
   ageWarning?: string | null;
   /** Se empalma con otra actividad que ya lleva (con cuál y a qué hora), o null. */
   clashWarning?: string | null;
+  /**
+   * Grupos a los que puede entrar. Vacío = la actividad no reparte grupos. Con más
+   * de uno hay que escoger a cuál va: es lo que dice su hora y su cupo.
+   */
+  groups?: { id: string; label: string; left: number; full: boolean }[];
 };
 
 export function EnrollmentsPanel({
@@ -57,6 +64,7 @@ export function EnrollmentsPanel({
 }) {
   const [adding, setAdding] = useState(false);
   const [selectedId, setSelectedId] = useState("");
+  const [groupId, setGroupId] = useState("");
   const enrolledIds = new Set(enrollments.map((e) => e.program.id));
   const available = allPrograms.filter((p) => !enrolledIds.has(p.id));
   const selected = available.find((p) => p.id === selectedId);
@@ -66,8 +74,13 @@ export function EnrollmentsPanel({
     selected ? loadWarning : null,
   ].filter(Boolean) as string[];
 
+  const grupos = selected?.groups ?? [];
+  // Con un solo grupo no hay nada que preguntar: se resuelve solo en el servidor.
+  const escogeGrupo = grupos.length > 1;
+
   function startAdding() {
     setSelectedId("");
+    setGroupId("");
     setAdding(true);
   }
 
@@ -89,6 +102,7 @@ export function EnrollmentsPanel({
             await addEnrollment(studentId, fd);
             setAdding(false);
             setSelectedId("");
+            setGroupId("");
           }}
           className="border-b border-border bg-surface-2/60 px-5 py-4"
         >
@@ -102,7 +116,10 @@ export function EnrollmentsPanel({
                 name="programId"
                 required
                 value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedId(e.target.value);
+                  setGroupId("");
+                }}
               >
                 <option value="" disabled>
                   Selecciona un programa…
@@ -116,6 +133,33 @@ export function EnrollmentsPanel({
                 ))}
               </Select>
             </div>
+            {escogeGrupo && (
+              <div className="flex-1">
+                <label
+                  htmlFor="programGroupId"
+                  className="mb-1.5 block text-sm font-semibold text-ink"
+                >
+                  Grupo
+                </label>
+                <Select
+                  id="programGroupId"
+                  name="programGroupId"
+                  required
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                >
+                  <option value="" disabled>
+                    ¿A qué hora va?…
+                  </option>
+                  {grupos.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.label}
+                      {g.full ? " · sin lugares" : ` · ${g.left} lugares`}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button type="submit" size="md">
                 Inscribir
@@ -218,6 +262,11 @@ function EnrollmentRow({
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-ink">{e.program.name}</p>
+          {e.groupLabel && (
+            <p className="truncate text-xs font-semibold text-primary-strong">
+              {e.groupLabel}
+            </p>
+          )}
           <p className="text-xs text-muted">
             {e.program.area ? `${e.program.area} · ` : ""}Desde {fecha(e.startDate)}
           </p>

@@ -6,6 +6,8 @@ import { coversProgramId, getCurrentUser, requireWriter } from "@/lib/dal";
 import { getActiveCycle, familyDonationHold, meetsAgeRequirement } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
 import { enrollStudent, occupiedSeats } from "@/lib/enroll";
+import { groupOptionsForStudent, occupiedGroupSeats } from "@/lib/groups";
+import { resolvePlacement } from "@/lib/placement";
 import {
   checkEnrollmentLoad,
   findScheduleClash,
@@ -192,17 +194,37 @@ export async function acceptWaitlist(
   if (request.status !== "EN_ESPERA") return { error: "Esa solicitud ya se resolvió." };
 
   const { studentId, cycleId, program } = request;
-  const ocupados = await occupiedSeats(program.id, cycleId);
+  const age = ageFrom(request.student.birthDate);
+
+  // El grupo, cuando el programa los reparte. Si le cuadra más de uno, aceptar desde
+  // aquí lo dejaría sin hora: no hay dónde preguntarle a la familia a cuál va. En ese
+  // caso se manda al expediente, que es la puerta que sí sabe escoger grupo.
+  const placement = await resolvePlacement(studentId, program.id, cycleId);
+  const opciones = await groupOptionsForStudent(studentId, program.id, cycleId, {
+    levelId: placement?.levelId ?? null,
+    age,
+  });
+  const grupo = opciones.length === 1 ? opciones[0] : null;
+  if (opciones.length > 1) {
+    return {
+      error: `${program.name} tiene más de un horario para ${request.student.firstName} (${opciones
+        .map((g) => g.scheduleLabel)
+        .join(" o ")}). Inscríbelo desde su expediente para escoger a cuál va.`,
+    };
+  }
+
+  const ocupados = grupo
+    ? await occupiedGroupSeats(grupo.id, cycleId)
+    : await occupiedSeats(program.id, cycleId);
+  const cupo = grupo ? grupo.capacity : program.studentCapacity;
   const load = await checkEnrollmentLoad(studentId, cycleId, {
     max: request.cycle.maxEnrollments,
     excludeProgramId: program.id,
   });
-  const clash = await findScheduleClash(studentId, cycleId, program.id);
-  const ageOk = meetsAgeRequirement(
-    ageFrom(request.student.birthDate),
-    program.ageMin,
-    program.ageMax,
-  );
+  const clash = await findScheduleClash(studentId, cycleId, program.id, grupo?.id ?? null);
+  const ageOk = grupo
+    ? meetsAgeRequirement(age, grupo.ageMin, grupo.ageMax)
+    : meetsAgeRequirement(age, program.ageMin, program.ageMax);
 
   // La EDAD no es un reparo que se pueda autorizar desde aquí: la lista de espera
   // es la fila de entrada, y dejar pasar por ella a quien no cumple la edad sería
@@ -215,8 +237,8 @@ export async function acceptWaitlist(
   }
 
   const warnings = [
-    ocupados >= program.studentCapacity &&
-      `El cupo está lleno (${ocupados} de ${program.studentCapacity}).`,
+    ocupados >= cupo &&
+      `El cupo está lleno (${ocupados} de ${cupo})${grupo ? ` en ${grupo.scheduleLabel}` : ""}.`,
     load.full && `Ya lleva ${load.current} de ${load.max} actividades del ciclo.`,
     clash && `Se empalma con ${clash.programName} (${clash.label}).`,
   ].filter(Boolean) as string[];
@@ -228,6 +250,7 @@ export async function acceptWaitlist(
     studentId,
     programId: program.id,
     cycleId,
+    programGroupId: grupo?.id ?? null,
     notes: "Inscrito desde la lista de espera",
     audit: {
       action: "espera.acepta",

@@ -199,6 +199,7 @@ model Program {
   enrollments      Enrollment[]
   evaluations      Evaluation[]
   levels           ProgramLevel[] // Niveles propios de este programa (ordenados)
+  groups           ProgramGroup[] // Grupos concretos: la unidad que de verdad se llena
   levelRecords     LevelRecord[]
   scheduleSlots    ScheduleSlot[] // Horario estructurado (día + horas); alimenta el calendario
   classSessions    ClassSession[] // Bitácora y asistencia por fecha de clase
@@ -227,12 +228,56 @@ model ProgramLevel {
 
   records       LevelRecord[]
   scheduleSlots ScheduleSlot[] // Horario propio del nivel (los programas por niveles lo usan)
+  groups        ProgramGroup[] // Grupos de este nivel (uno normalmente; dos cuando la familia escoge día)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([programId, order])
   @@index([programId])
+}
+
+/// Grupo concreto de un programa: la unidad que DE VERDAD se llena, y por eso es
+/// la que carga la hora, el rango de edad y los lugares.
+///
+/// Nació de un caso que el nivel no alcanzaba a describir. En Habilidades sociales
+/// el nivel manda: Inicial es de 3 a 7 y va a su hora. Pero en Lenguaje, música y
+/// gestos hay un solo nivel con DOS grupos el jueves (10:30 y 17:00), de 7 lugares
+/// cada uno, y la familia escoge uno: ahí el nivel no dice ni la hora ni el cupo.
+/// Poner edad y cupo en el nivel habría dejado ese programa sin manera de contarse.
+///
+/// `programLevelId` en null = grupo del programa entero (no separa por nivel).
+/// Los programas grandes de terapia (Sensorial, Lenguaje individual, Terapia física,
+/// Orofacial) NO tienen grupos: son bloques largos con sesiones individuales rotando,
+/// y ahí siguen valiendo la edad y el cupo del programa.
+model ProgramGroup {
+  id             String        @id @default(cuid())
+  program        Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId      String
+  level          ProgramLevel? @relation(fields: [programLevelId], references: [id], onDelete: Cascade)
+  programLevelId String?
+
+  /// Cómo lo nombra la coordinación ("Grupo 1", "Grupo 2"). Cuando el nivel tiene
+  /// un solo grupo se le pone el nombre del nivel, para que la familia lea algo
+  /// que entiende ("Intermedio") y no un "Grupo 1" que no dice nada.
+  name String
+
+  // Edad y cupo del GRUPO. En null hereda los del programa, que es lo que vale para
+  // los programas sin grupos.
+  ageMin          Int?
+  ageMax          Int?
+  studentCapacity Int? // null = el del programa
+
+  active Boolean @default(true)
+
+  slots       ScheduleSlot[] // Su horario (normalmente uno; el grupo es esa hora)
+  enrollments Enrollment[] // Quiénes tienen lugar en él
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([programId])
+  @@index([programLevelId])
 }
 
 /// Ciclo escolar por temporada. Los cursos corren en tres ciclos al año:
@@ -328,15 +373,21 @@ enum PlacementStatus {
 /// La calificación es POR PROGRAMA: un nivel que el maestro registra/actualiza
 /// para el alumno en ese programa (no es un examen con título/puntaje).
 model Enrollment {
-  id        String           @id @default(cuid())
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  studentId String
-  program   Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
-  programId String
+  id             String        @id @default(cuid())
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId      String
+  program        Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programId      String
   // El ciclo en el que está inscrito. Sin esto un alumno solo podía inscribirse a un
   // programa una vez en su vida, y no podía repetirlo en otro ciclo.
-  cycle     Cycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  cycleId   String
+  cycle          Cycle         @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  cycleId        String
+  /// En qué grupo quedó. Sin esto, un programa con dos grupos a la misma hora no
+  /// puede decir cuántos lugares le quedan ni a cuál de las dos horas va el niño.
+  /// null = programa sin grupos (los bloques grandes de terapia).
+  group          ProgramGroup? @relation(fields: [programGroupId], references: [id], onDelete: SetNull)
+  programGroupId String?
+
   startDate DateTime         @default(now())
   endDate   DateTime?
   status    EnrollmentStatus @default(ACTIVA)
@@ -352,6 +403,7 @@ model Enrollment {
   @@unique([studentId, programId, cycleId])
   @@index([programId])
   @@index([cycleId])
+  @@index([programGroupId])
 }
 
 enum EnrollmentStatus {
@@ -393,6 +445,11 @@ model ScheduleSlot {
   // el horario es propio de ese nivel (ej. Lectura Inicial a una hora, Avanzado a otra).
   level          ProgramLevel? @relation(fields: [programLevelId], references: [id], onDelete: Cascade)
   programLevelId String?
+  // Grupo dueño de esta hora. Cuando está lleno, ESTA es la hora del grupo y manda
+  // sobre cualquier bloque general del programa. null = bloque del programa o del nivel,
+  // como antes de que existieran los grupos.
+  group          ProgramGroup? @relation(fields: [programGroupId], references: [id], onDelete: Cascade)
+  programGroupId String?
   weekday        Int // Día de la semana como Date.getDay(): 0=domingo … 6=sábado
   startTime      String // "HH:MM" en 24h (ej. "10:00")
   endTime        String // "HH:MM" en 24h (ej. "11:00")
@@ -401,6 +458,7 @@ model ScheduleSlot {
 
   @@index([programId])
   @@index([programLevelId])
+  @@index([programGroupId])
 }
 
 /// Una clase concreta de un programa en una fecha: el "panel de control" del día.
