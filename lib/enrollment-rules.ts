@@ -60,6 +60,9 @@ export async function effectiveSlots(
   const porNivel = programs.filter(
     (p) => !p.scheduleSlots.some((s) => s.programGroupId) && p.scheduleSlots.some((s) => s.programLevelId),
   );
+  /** Programas donde le cuadra más de un grupo y todavía no escoge. */
+  const sinDecidir = new Set<string>();
+  const nivelDe = new Map<string, string | null>();
 
   const inscritas = conGrupo.length
     ? await prisma.enrollment.findMany({
@@ -77,10 +80,18 @@ export async function effectiveSlots(
       continue;
     }
     const placement = await resolvePlacement(studentId, p.id, cycleId);
+    nivelDe.set(p.id, placement?.levelId ?? null);
     const options = await groupOptionsForStudent(studentId, p.id, cycleId, {
       levelId: placement?.levelId ?? null,
     });
-    groupOf.set(p.id, soleGroup(options)?.id ?? null);
+    // Ningún grupo para él: su nivel no reparte grupos. Es el caso de Lectura y
+    // Escritura, donde Prerrequisitos y Preescritura son clase de grupo pero los
+    // otros tres niveles son tutoría individual dentro del bloque grande. Le toca
+    // el bloque, no el vacío.
+    if (options.length === 0) continue;
+    const solo = soleGroup(options);
+    if (solo) groupOf.set(p.id, solo.id);
+    else sinDecidir.add(p.id);
   }
 
   const placements = await Promise.all(
@@ -90,12 +101,13 @@ export async function effectiveSlots(
 
   return new Map(
     programs.map((p) => {
-      if (groupOf.has(p.id)) {
-        const g = groupOf.get(p.id) ?? null;
-        // Sin grupo decidido todavía no hay hora suya que defender.
-        return [p.id, g ? slotsForGroup(p.scheduleSlots, g) : []];
-      }
-      return [p.id, slotsForGroup(p.scheduleSlots, null, levelOf.get(p.id) ?? null)];
+      const g = groupOf.get(p.id);
+      if (g) return [p.id, slotsForGroup(p.scheduleSlots, g)];
+      // Le cuadran varios y no ha escogido: todavía no hay hora suya que defender,
+      // y suponerle todas lo dejaría fuera de media semana.
+      if (sinDecidir.has(p.id)) return [p.id, []];
+      const nivel = nivelDe.get(p.id) ?? levelOf.get(p.id) ?? null;
+      return [p.id, slotsForGroup(p.scheduleSlots, null, nivel)];
     }),
   );
 }

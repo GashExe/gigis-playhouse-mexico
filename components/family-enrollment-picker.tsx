@@ -146,14 +146,18 @@ export function FamilyEnrollmentPicker({
    * Con qué actividad ya palomeada choca esta (null si convive con todas). Se juzga
    * con el horario del GRUPO: escoger el jueves de Prerrequisitos deja libre el lunes.
    */
-  function clashWith(p: PickerProgram, slots?: Slot[]): PickerProgram | null {
+  function clashWith(
+    p: PickerProgram,
+    slots?: Slot[],
+  ): { otro: PickerProgram; slot: Slot } | null {
     const propios = slots ?? horarioDe(p);
     if (propios.length === 0) return null;
     for (const [id] of selected) {
       if (id === p.id) continue;
       const otro = byId.get(id);
       if (!otro) continue;
-      if (findSlotClash(propios, horarioDe(otro))) return otro;
+      const slot = findSlotClash(propios, horarioDe(otro));
+      if (slot) return { otro, slot };
     }
     return null;
   }
@@ -179,8 +183,11 @@ export function FamilyEnrollmentPicker({
     }
     const choque = clashWith(p, g?.slots);
     if (choque) {
-      const label = slotsLabel(g?.slots ?? horarioDe(p));
-      return `Se empalma con ${choque.name}${label ? ` (${label})` : ""}. No se pueden llevar las dos a la misma hora.`;
+      // La hora que DE VERDAD choca, no el horario entero: en Lectura, cuyo bloque
+      // de tutorías cubre toda la semana, el paréntesis con las nueve franjas no le
+      // decía nada a nadie.
+      const label = slotsLabel([choque.slot]);
+      return `Se empalma con ${choque.otro.name}${label ? ` (${label})` : ""}. No se pueden llevar las dos a la misma hora.`;
     }
     if (topeLleno) {
       return `Ya llevas ${maxEnrollments} actividades palomeadas, que es el tope de este ciclo. Quita una si quieres cambiarla.`;
