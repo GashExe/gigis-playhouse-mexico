@@ -43,15 +43,41 @@ function stepClassDay(slots: Slot[], from: Date, dir: 1 | -1): Date {
   return addDays(from, dir);
 }
 
+type GroupLite = {
+  id: string;
+  name: string;
+  level: { name: string } | null;
+  slots: { weekday: number; startTime: string; endTime: string }[];
+};
+
+/** Cómo se llama el grupo en pantalla: "Intermedio · Grupo 2" (o solo "Intermedio"). */
+function groupLabel(g: GroupLite): string {
+  return [g.level?.name, g.name === g.level?.name ? null : g.name].filter(Boolean).join(" · ");
+}
+
+/** A qué hora empieza el grupo ese día ("" si ese día no le toca). */
+function startOnDay(g: GroupLite, weekday: number): string {
+  return g.slots
+    .filter((s) => s.weekday === weekday)
+    .map((s) => s.startTime)
+    .sort()[0] ?? "";
+}
+
+/** Hora del reloj como "HH:MM", para comparar contra los horarios. */
+function nowHHMM(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 export default async function ClassPanelPage({
   params,
   searchParams,
 }: {
   params: Promise<{ programId: string }>;
-  searchParams: Promise<{ fecha?: string }>;
+  searchParams: Promise<{ fecha?: string; grupo?: string }>;
 }) {
   const { programId } = await params;
-  const { fecha } = await searchParams;
+  const { fecha, grupo } = await searchParams;
 
   const me = await getCurrentUser();
   // Quien lleva la clase: dirección, coordinación y operación en cualquier programa;
@@ -71,6 +97,37 @@ export default async function ClassPanelPage({
   );
   if (!program) notFound();
 
+  // ¿QUÉ grupo se está pasando? En los programas repartidos en grupos, la lista de
+  // una clase es la de esa hora y no la del programa entero: siete lugares no pueden
+  // salir como treinta nombres. Se ofrece el reparto del día y, aparte, "todos" para
+  // cuando alguien quiere ver el programa completo.
+  const dayGroups = program.groups
+    .filter((g) => startOnDay(g, date.getDay()) !== "")
+    .sort((a, b) => startOnDay(a, date.getDay()).localeCompare(startOnDay(b, date.getDay())));
+  // Si ese día no toca ninguno (clase repuesta, día fuera de horario) se ofrecen todos.
+  const groupChoices = dayGroups.length > 0 ? dayGroups : program.groups;
+  // Sin elección explícita: el grupo que corre a esta hora cuando el día es HOY, y el
+  // primero del día en cualquier otro caso. Así la terapeuta abre el panel y ya está
+  // en la lista que va a pasar.
+  const ahora = nowHHMM();
+  const porDefecto =
+    dateKey === toDateKey(new Date())
+      ? groupChoices.find((g) =>
+          g.slots.some((s) => s.weekday === date.getDay() && s.endTime >= ahora),
+        ) ?? groupChoices[groupChoices.length - 1]
+      : groupChoices[0];
+  const verTodos = grupo === "todos" || program.groups.length === 0;
+  const group = verTodos
+    ? null
+    : (grupo ? program.groups.find((g) => g.id === grupo) : null) ?? porDefecto ?? null;
+
+  // Los alumnos del grupo, y su asistencia. La sesión del día es una sola por
+  // programa, así que las marcas de los otros grupos se quedan guardadas: aquí solo
+  // se recortan para que los contadores hablen de este grupo.
+  const groupStudents = group ? students.filter((s) => s.groupId === group.id) : students;
+  const visibles = new Set(groupStudents.map((s) => s.id));
+  const groupAttendance = (session?.attendance ?? []).filter((a) => visibles.has(a.studentId));
+
   // Calificación de cada alumno del grupo, para poderla poner sin salir del panel.
   // El grupo es chico (cupo ~7), así que traerla completa no pesa.
   const grading: Record<
@@ -79,7 +136,7 @@ export default async function ClassPanelPage({
   > = {};
   if (cycle && puedeCalificar) {
     await Promise.all(
-      students.map(async (s) => {
+      groupStudents.map(async (s) => {
         const data = await getGradingData(s.id, programId, cycle.id);
         grading[s.id] = data
           ? {
@@ -93,10 +150,13 @@ export default async function ClassPanelPage({
   }
 
   const color = program.color ?? "var(--primary)";
-  const isClassDay =
-    program.scheduleSlots.length === 0 ||
-    program.scheduleSlots.some((s) => s.weekday === date.getDay());
-  const daySlots = program.scheduleSlots.filter((s) => s.weekday === date.getDay());
+  // Con un grupo elegido, el horario que manda es el SUYO: es la hora a la que de
+  // verdad hay clase para esta lista.
+  const slots = group ? group.slots : program.scheduleSlots;
+  const isClassDay = slots.length === 0 || slots.some((s) => s.weekday === date.getDay());
+  const daySlots = slots.filter((s) => s.weekday === date.getDay());
+  // Para no perder el grupo al moverse de día ni al imprimir.
+  const grupoQS = group ? `&grupo=${group.id}` : verTodos ? "&grupo=todos" : "";
   const dateLabel = format(date, "EEEE d 'de' MMMM", { locale: es });
 
   return (
@@ -121,10 +181,10 @@ export default async function ClassPanelPage({
           </h1>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-          {program.scheduleSlots.length > 0 && (
+          {slots.length > 0 && (
             <span className="flex items-center gap-1.5">
               <Clock className="size-4 text-subtle" />
-              {slotsLabel(program.scheduleSlots)}
+              {slotsLabel(slots)}
             </span>
           )}
           {program.teacher && (
@@ -135,7 +195,8 @@ export default async function ClassPanelPage({
           )}
           <span className="flex items-center gap-1.5">
             <UsersThree className="size-4 text-subtle" />
-            {students.length} en el grupo{cycle ? ` · ${cycle.label}` : ""}
+            {`${groupStudents.length} ${group ? `en ${groupLabel(group)}` : "en el grupo"}`}
+            {cycle ? ` · ${cycle.label}` : ""}
           </span>
         </div>
       </div>
@@ -143,14 +204,14 @@ export default async function ClassPanelPage({
       {/* Navegación por fecha de clase */}
       <div className="flex flex-wrap items-center gap-2">
         <Link
-          href={`/calendario/${program.id}?fecha=${toDateKey(stepClassDay(program.scheduleSlots, date, -1))}`}
+          href={`/calendario/${program.id}?fecha=${toDateKey(stepClassDay(slots, date, -1))}${grupoQS}`}
           aria-label="Clase anterior"
           className="flex size-9 items-center justify-center rounded-[var(--radius-input)] border border-border bg-surface text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <CaretLeft className="size-4" />
         </Link>
         <Link
-          href={`/calendario/${program.id}?fecha=${toDateKey(stepClassDay(program.scheduleSlots, date, 1))}`}
+          href={`/calendario/${program.id}?fecha=${toDateKey(stepClassDay(slots, date, 1))}${grupoQS}`}
           aria-label="Clase siguiente"
           className="flex size-9 items-center justify-center rounded-[var(--radius-input)] border border-border bg-surface text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
@@ -169,14 +230,14 @@ export default async function ClassPanelPage({
         )}
         {/* La lista en papel está siempre a la mano, no solo cuando se llena el cupo. */}
         <Link
-          href={`/calendario/${program.id}/lista?fecha=${dateKey}`}
+          href={`/calendario/${program.id}/lista?fecha=${dateKey}${group ? `&grupo=${group.id}` : ""}`}
           className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <Printer className="size-4" />
           Imprimir lista
         </Link>
         <Link
-          href={`/calendario/${program.id}/reporte`}
+          href={`/calendario/${program.id}/reporte${group ? `?grupo=${group.id}` : ""}`}
           className="flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ChartBar className="size-4" />
@@ -198,6 +259,45 @@ export default async function ClassPanelPage({
           />
         )}
       </div>
+
+      {/* Reparto en grupos: cada uno es su propia clase, con su hora y su cupo. */}
+      {program.groups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs font-bold uppercase tracking-wide text-subtle">
+            Grupo
+          </span>
+          {groupChoices.map((g) => {
+            const activo = group?.id === g.id;
+            const hora = startOnDay(g, date.getDay());
+            return (
+              <Link
+                key={g.id}
+                href={`/calendario/${program.id}?fecha=${dateKey}&grupo=${g.id}`}
+                aria-current={activo ? "page" : undefined}
+                className={`rounded-[var(--radius-pill)] border px-3 py-1.5 text-xs font-bold transition-colors ${
+                  activo
+                    ? "border-transparent bg-primary-weak text-primary-strong"
+                    : "border-border bg-surface text-muted hover:bg-surface-2 hover:text-ink"
+                }`}
+              >
+                {groupLabel(g)}
+                {hora && <span className="tnum ml-1.5 font-semibold opacity-70">{hora}</span>}
+              </Link>
+            );
+          })}
+          <Link
+            href={`/calendario/${program.id}?fecha=${dateKey}&grupo=todos`}
+            aria-current={verTodos ? "page" : undefined}
+            className={`rounded-[var(--radius-pill)] border px-3 py-1.5 text-xs font-bold transition-colors ${
+              verTodos
+                ? "border-transparent bg-primary-weak text-primary-strong"
+                : "border-border bg-surface text-muted hover:bg-surface-2 hover:text-ink"
+            }`}
+          >
+            {`Todos (${students.length})`}
+          </Link>
+        </div>
+      )}
 
       {session?.canceled &&
         (soloLectura ? (
@@ -224,8 +324,8 @@ export default async function ClassPanelPage({
         canGrade={puedeCalificar}
         readOnly={soloLectura}
         grading={grading}
-        students={students}
-        attendance={session?.attendance ?? []}
+        students={groupStudents}
+        attendance={groupAttendance}
         classNotes={session?.notes ?? ""}
         notes={notes.map((n) => ({
           id: n.id,

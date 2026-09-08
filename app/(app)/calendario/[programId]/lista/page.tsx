@@ -26,10 +26,10 @@ export default async function ListaAsistenciaPage({
   searchParams,
 }: {
   params: Promise<{ programId: string }>;
-  searchParams: Promise<{ fecha?: string; membrete?: string }>;
+  searchParams: Promise<{ fecha?: string; membrete?: string; grupo?: string }>;
 }) {
   const { programId } = await params;
-  const { fecha, membrete } = await searchParams;
+  const { fecha, membrete, grupo } = await searchParams;
 
   // Misma compuerta que el panel de clase: quien lleva la clase la imprime.
   const me = await getCurrentUser();
@@ -45,6 +45,14 @@ export default async function ListaAsistenciaPage({
   const sheet = await getAttendanceSheet(programId, dateKey, cycle.id);
   if (!sheet) notFound();
 
+  // Se llega aquí desde el panel de un grupo: entonces sale SU hoja y no las de todos
+  // los grupos del día. Sin grupo en la liga salen todas, que es como se imprime el
+  // día completo.
+  // Si ese grupo no tiene hoja ese día (clase repuesta, día sin horario) salen todas:
+  // más vale la hoja de más que una página en blanco a la hora de la clase.
+  const delGrupo = grupo ? sheet.sheets.filter((s) => s.groupId === grupo) : [];
+  const hojas = delGrupo.length > 0 ? delGrupo : sheet.sheets;
+
   // Sobre papel membretado preimpreso la imagen sobra (y gasta tinta de una hoja cara).
   const conMembrete = membrete !== "0";
   const dateLabel = format(date, "EEEE d 'de' MMMM 'de' yyyy", { locale: es });
@@ -54,7 +62,7 @@ export default async function ListaAsistenciaPage({
       {/* Barra de trabajo: no se imprime */}
       <div className="mb-5 print:hidden">
         <Link
-          href={`/calendario/${programId}?fecha=${dateKey}`}
+          href={`/calendario/${programId}?fecha=${dateKey}${grupo ? `&grupo=${grupo}` : ""}`}
           className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-4" />
@@ -67,7 +75,7 @@ export default async function ListaAsistenciaPage({
           <span className="text-sm capitalize text-muted">{dateLabel}</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Link
-              href={`/calendario/${programId}/lista?fecha=${dateKey}&membrete=${conMembrete ? "0" : "1"}`}
+              href={`/calendario/${programId}/lista?fecha=${dateKey}${grupo ? `&grupo=${grupo}` : ""}&membrete=${conMembrete ? "0" : "1"}`}
               className="rounded-[var(--radius-control)] border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               {conMembrete ? "Imprimir sin membrete" : "Imprimir con membrete"}
@@ -80,18 +88,18 @@ export default async function ListaAsistenciaPage({
             Según el horario, este día no hay clase: sale una sola hoja, sin hora.
           </p>
         )}
-        {sheet.sheets.length > 1 && (
+        {hojas.length > 1 && (
           <p className="mt-2 text-xs text-muted">
-            {`Este día tiene ${sheet.sheets.length} horarios: sale una hoja por cada uno.`}
+            {`Este día tiene ${hojas.length} horarios: sale una hoja por cada uno.`}
           </p>
         )}
       </div>
 
-      {sheet.sheets.map((s, i) => (
+      {hojas.map((s, i) => (
         <HojaMembretada
           key={s.key}
           membrete={conMembrete}
-          saltoDePagina={i < sheet.sheets.length - 1}
+          saltoDePagina={i < hojas.length - 1}
         >
           <header className="mb-4">
             <p className="text-[10pt] font-bold uppercase tracking-wide text-[#6b7280]">
@@ -114,6 +122,9 @@ export default async function ListaAsistenciaPage({
                 }
               />
               {s.levelName && <Dato label="Nivel" value={s.levelName} />}
+              {s.groupName && s.groupName !== s.levelName && (
+                <Dato label="Grupo" value={s.groupName} />
+              )}
               <Dato
                 label="En el grupo"
                 value={`${s.students.length} participante${s.students.length === 1 ? "" : "s"}`}

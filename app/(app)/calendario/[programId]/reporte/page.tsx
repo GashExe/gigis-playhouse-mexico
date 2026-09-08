@@ -29,10 +29,10 @@ export default async function ReporteMateriaPage({
   searchParams,
 }: {
   params: Promise<{ programId: string }>;
-  searchParams: Promise<{ ciclo?: string }>;
+  searchParams: Promise<{ ciclo?: string; grupo?: string }>;
 }) {
   const { programId } = await params;
-  const { ciclo } = await searchParams;
+  const { ciclo, grupo } = await searchParams;
 
   const me = await getCurrentUser();
   const soloLectura = isReadOnly(me.role);
@@ -47,11 +47,14 @@ export default async function ReporteMateriaPage({
     cycles[0]?.id ??
     "";
   const report = selectedCycleId
-    ? await getProgramAcademicReport(programId, selectedCycleId)
+    ? await getProgramAcademicReport(programId, selectedCycleId, grupo)
     : null;
   if (!report) notFound();
 
-  const { program, cycle, participants, totals } = report;
+  const { program, cycle, group, participants, totals } = report;
+  const grupoQS = group ? `&grupo=${group.id}` : "";
+  const groupLabel = (g: { name: string; level: { name: string } | null }) =>
+    [g.level?.name, g.name === g.level?.name ? null : g.name].filter(Boolean).join(" · ");
   const num = (n: number | null, dec = 1) => (n == null ? "—" : n.toFixed(dec));
 
   return (
@@ -59,7 +62,7 @@ export default async function ReporteMateriaPage({
       {/* Barra de trabajo: no se imprime */}
       <div className="mb-5 print:hidden">
         <Link
-          href={`/calendario/${programId}`}
+          href={`/calendario/${programId}${group ? `?grupo=${group.id}` : ""}`}
           className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-4" />
@@ -76,7 +79,7 @@ export default async function ReporteMateriaPage({
             {cycles.map((c) => (
               <Link
                 key={c.id}
-                href={`/calendario/${programId}/reporte?ciclo=${c.id}`}
+                href={`/calendario/${programId}/reporte?ciclo=${c.id}${grupoQS}`}
                 className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors ${
                   c.id === selectedCycleId
                     ? "bg-primary text-white"
@@ -86,6 +89,38 @@ export default async function ReporteMateriaPage({
                 {c.label}
               </Link>
             ))}
+          </div>
+        )}
+        {/* El reporte es de UN grupo: siete personas y sus clases, no las treinta del
+            programa. "Todos" queda para ver la actividad completa. */}
+        {program.groups.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs font-bold uppercase tracking-wide text-subtle">
+              Grupo
+            </span>
+            {program.groups.map((g) => (
+              <Link
+                key={g.id}
+                href={`/calendario/${programId}/reporte?ciclo=${selectedCycleId}&grupo=${g.id}`}
+                aria-current={group?.id === g.id ? "page" : undefined}
+                className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors ${
+                  group?.id === g.id
+                    ? "bg-primary text-white"
+                    : "bg-surface-2 text-muted hover:text-ink"
+                }`}
+              >
+                {groupLabel(g)}
+              </Link>
+            ))}
+            <Link
+              href={`/calendario/${programId}/reporte?ciclo=${selectedCycleId}`}
+              aria-current={group ? undefined : "page"}
+              className={`rounded-full px-2.5 py-1 text-xs font-bold transition-colors ${
+                group ? "bg-surface-2 text-muted hover:text-ink" : "bg-primary text-white"
+              }`}
+            >
+              Todos
+            </Link>
           </div>
         )}
       </div>
@@ -101,6 +136,7 @@ export default async function ReporteMateriaPage({
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
             <Dato label="Ciclo" value={cycle.label} />
             <Dato label="Terapeuta" value={program.teacher?.name ?? "Sin asignar"} />
+            {group && <Dato label="Grupo" value={groupLabel(group)} />}
             <Dato label="Participantes" value={String(totals.total)} />
             <Dato
               label="Clases registradas"
@@ -139,7 +175,9 @@ export default async function ReporteMateriaPage({
 
         {participants.length === 0 ? (
           <p className="rounded-[var(--radius-card)] border border-dashed border-border bg-surface-2 px-6 py-8 text-center text-sm text-muted">
-            No hay participantes inscritos a esta actividad en {cycle.label}.
+            {group
+              ? `Nadie inscrito en ${groupLabel(group)} en ${cycle.label}.`
+              : `No hay participantes inscritos a esta actividad en ${cycle.label}.`}
           </p>
         ) : (
           <div className="overflow-x-auto">

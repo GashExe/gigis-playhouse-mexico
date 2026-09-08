@@ -275,7 +275,7 @@ function AttendanceList({
 
       {students.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">
-          No hay alumnos inscritos a este programa en el ciclo activo.
+          Nadie inscrito en esta lista en el ciclo activo.
         </p>
       ) : (
         <ul className="mt-3 divide-y divide-border">
