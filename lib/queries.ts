@@ -790,6 +790,7 @@ export async function listCalendarPrograms(
           // la terapeuta no podía saber cuál era la suya.
           group: {
             select: {
+              id: true,
               name: true,
               studentCapacity: true,
               level: { select: { name: true } },
@@ -812,9 +813,13 @@ export async function listCalendarPrograms(
 }
 
 /**
- * Todo lo que necesita el panel de una clase en una fecha: el programa, su grupo
- * del ciclo, la sesión de ese día (bitácora + asistencia) y las anotaciones
- * recientes sobre alumnos de este programa.
+ * Todo lo que necesita el panel de una clase en una fecha: el programa, sus grupos,
+ * quiénes están inscritos en el ciclo —cada quien con SU grupo—, la sesión de ese día
+ * (bitácora + asistencia) y las anotaciones recientes sobre alumnos del programa.
+ *
+ * El reparto por grupo no se hace aquí: la pantalla decide qué grupo se está pasando
+ * (el del horario que toca) y filtra. Aquí solo se traen los grupos y el `groupId` de
+ * cada alumno, que es lo que faltaba para poder separarlos.
  */
 export async function getClassPanel(programId: string, dateKey: string, cycleId?: string) {
   const date = new Date(`${dateKey}T00:00:00.000Z`);
@@ -835,7 +840,22 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
             startTime: true,
             endTime: true,
             programLevelId: true,
+            programGroupId: true,
             level: { select: { name: true } },
+          },
+        },
+        groups: {
+          where: { active: true },
+          orderBy: [{ level: { order: "asc" } }, { name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            studentCapacity: true,
+            level: { select: { name: true } },
+            slots: {
+              orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+              select: { weekday: true, startTime: true, endTime: true },
+            },
           },
         },
       },
@@ -844,6 +864,7 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
       where: { programId, status: "ACTIVA", ...(cycleId ? { cycleId } : {}) },
       orderBy: { student: { firstName: "asc" } },
       select: {
+        programGroupId: true,
         student: { select: { id: true, firstName: true, lastName: true, matricula: true } },
       },
     }),
@@ -873,7 +894,12 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
       },
     }),
   ]);
-  return { program, students: enrollments.map((e) => e.student), session, notes };
+  return {
+    program,
+    students: enrollments.map((e) => ({ ...e.student, groupId: e.programGroupId })),
+    session,
+    notes,
+  };
 }
 
 /**
@@ -1476,7 +1502,9 @@ export async function getAttendanceSheet(
             startTime: true,
             endTime: true,
             programLevelId: true,
+            programGroupId: true,
             level: { select: { name: true } },
+            group: { select: { name: true } },
           },
         },
       },
@@ -1486,6 +1514,7 @@ export async function getAttendanceSheet(
       where: { programId, cycleId, status: "ACTIVA" },
       orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
       select: {
+        programGroupId: true,
         student: { select: { id: true, firstName: true, lastName: true, matricula: true } },
       },
     }),
@@ -1506,6 +1535,7 @@ export async function getAttendanceSheet(
   );
   const alumnos = enrollments.map((e) => ({
     ...e.student,
+    groupId: e.programGroupId,
     levelId: nivelDe.get(e.student.id)?.id ?? null,
     levelName: nivelDe.get(e.student.id)?.name ?? null,
   }));
@@ -1523,7 +1553,11 @@ export async function getAttendanceSheet(
     // El reparto en hojas (una por horario, y por nivel cuando el horario es de un
     // nivel) vive en lib/schedule: es la única parte con reglas.
     sheets: buildAttendanceSheets(
-      daySlots.map((s) => ({ ...s, levelName: s.level?.name ?? null })),
+      daySlots.map((s) => ({
+        ...s,
+        levelName: s.level?.name ?? null,
+        groupName: s.group?.name ?? null,
+      })),
       alumnos,
     ),
   };
@@ -1546,8 +1580,16 @@ export async function getAttendanceSheet(
  * Las clases "del ciclo" salen de la ventana de fechas del ciclo. Si el ciclo no
  * las tiene puestas se cuentan todas las del programa y se avisa (`ventanaAbierta`),
  * porque si no el reporte saldría en ceros para los ciclos viejos.
+ *
+ * Con `groupId` el reporte es el de UN grupo: sus alumnos y sus clases (las de los
+ * días en que ese grupo se junta). Sin él sale el programa entero, que es lo que
+ * significa el reporte en las terapias grandes, donde no hay grupos que separar.
  */
-export async function getProgramAcademicReport(programId: string, cycleId: string) {
+export async function getProgramAcademicReport(
+  programId: string,
+  cycleId: string,
+  groupId?: string | null,
+) {
   const [program, cycle] = await Promise.all([
     prisma.program.findUnique({
       where: { id: programId },
@@ -1557,6 +1599,19 @@ export async function getProgramAcademicReport(programId: string, cycleId: strin
         color: true,
         area: true,
         teacher: { select: { name: true } },
+        groups: {
+          where: { active: true },
+          orderBy: [{ level: { order: "asc" } }, { name: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            level: { select: { name: true } },
+            slots: {
+              orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
+              select: { weekday: true, startTime: true, endTime: true },
+            },
+          },
+        },
       },
     }),
     prisma.cycle.findUnique({
@@ -1567,9 +1622,17 @@ export async function getProgramAcademicReport(programId: string, cycleId: strin
   if (!program || !cycle) return null;
 
   const ventanaAbierta = cycle.startDate == null && cycle.endDate == null;
+  // El grupo pedido, si existe y es de este programa. Si el id no cuadra sale el
+  // programa entero, que es lo que había antes de que existieran los grupos.
+  const group = groupId ? program.groups.find((g) => g.id === groupId) ?? null : null;
   const [enrollments, records, sessions] = await Promise.all([
     prisma.enrollment.findMany({
-      where: { programId, cycleId, status: "ACTIVA" },
+      where: {
+        programId,
+        cycleId,
+        status: "ACTIVA",
+        ...(group ? { programGroupId: group.id } : {}),
+      },
       orderBy: [{ student: { lastName: "asc" } }, { student: { firstName: "asc" } }],
       select: {
         student: {
@@ -1601,12 +1664,21 @@ export async function getProgramAcademicReport(programId: string, cycleId: strin
         ...(cycle.startDate ? { date: { gte: cycle.startDate } } : {}),
         ...(cycle.endDate ? { date: { lte: cycle.endDate } } : {}),
       },
-      select: { id: true },
+      select: { id: true, date: true },
     }),
   ]);
 
+  // Las clases DEL GRUPO: la sesión es una sola por programa y fecha, así que lo que
+  // dice si esa clase fue suya es el día en que se junta. Sin horario capturado se
+  // cuentan todas, que es mejor que dejar el reporte en ceros.
+  const diasDelGrupo = new Set(group?.slots.map((s) => s.weekday) ?? []);
+  const propias =
+    diasDelGrupo.size > 0
+      ? sessions.filter((s) => diasDelGrupo.has(s.date.getUTCDay()))
+      : sessions;
+
   const studentIds = enrollments.map((e) => e.student.id);
-  const sessionIds = sessions.map((s) => s.id);
+  const sessionIds = propias.map((s) => s.id);
   // Todos los contadores de asistencia en UNA consulta: una por alumno volvería
   // lentísimo un grupo grande.
   const marcas =
@@ -1668,8 +1740,9 @@ export async function getProgramAcademicReport(programId: string, cycleId: strin
   return {
     program,
     cycle,
+    group,
     ventanaAbierta,
-    totalSessions: sessions.length,
+    totalSessions: propias.length,
     participants,
     totals: {
       total: participants.length,

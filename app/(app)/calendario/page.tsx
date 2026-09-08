@@ -209,7 +209,9 @@ export default async function CalendarioPage({
                       return (
                         <li key={`${p.id}-${i}`}>
                           <Link
-                            href={`/calendario/${p.id}?fecha=${key}`}
+                            /* Con el grupo en la liga, la tarjeta abre SU lista y no la
+                               del programa entero: es la clase que se está tocando. */
+                            href={`/calendario/${p.id}?fecha=${key}${slot.group ? `&grupo=${slot.group.id}` : ""}`}
                             className={`block rounded-[var(--radius-control)] border border-border bg-surface-2 p-2.5 transition-colors hover:border-border-strong hover:bg-surface ${
                               isCanceled ? "opacity-60" : ""
                             }`}
