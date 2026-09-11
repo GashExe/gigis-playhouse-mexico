@@ -21,7 +21,8 @@
     "db:grupos-por-edad": "tsx --env-file=.env prisma/grupos-por-edad.ts",
     "db:regen-usuarios": "tsx prisma/regen-usuarios-alumnos.ts",
     "db:reset": "prisma migrate reset --force",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:inscribir-danza": "tsx --env-file=.env prisma/inscribir-danza.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
