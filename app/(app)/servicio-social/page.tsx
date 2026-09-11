@@ -142,7 +142,7 @@ export default async function ServicioSocialPage({
                 Abre una y usa «Juntar con otra ficha» si de verdad son la misma.
               </p>
               <ul className="mt-3 space-y-2">
-                {duplicados.map(({ a, b }) => (
+                {duplicados.map(({ a, b, identicas }) => (
                   <li
                     key={`${a.id}-${b.id}`}
                     className="rounded-[var(--radius-control)] border border-border bg-surface-2 px-3 py-2 text-xs"
@@ -154,6 +154,11 @@ export default async function ServicioSocialPage({
                     <Link href={`/servicio-social/${b.id}`} className="font-semibold text-ink hover:text-primary-strong">
                       {b.name}
                     </Link>
+                    {identicas && (
+                      <Badge tone="danger" className="ml-2">
+                        Mismo nombre
+                      </Badge>
+                    )}
                   </li>
                 ))}
               </ul>

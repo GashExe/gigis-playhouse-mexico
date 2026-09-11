@@ -109,6 +109,36 @@ function parseFecha(texto: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Una semana de verdad no dura tres años. Arriba de este tramo, el renglón trae
+ * un año mal tecleado en una de las dos fechas y no se le puede creer.
+ */
+const DIAS_SEMANA_CREIBLE = 60;
+
+/**
+ * De qué AÑO es un renglón, para el corte.
+ *
+ * Normalmente manda la fecha de término: una semana que se mandó tarde sigue
+ * siendo de cuando ocurrió. Pero cuando el tramo entre las dos fechas es absurdo
+ * —"22/ene/2023 a 26/ene/2026"— lo que pasó es que alguien tecleó mal el año de
+ * una, y casi siempre es el de la de término, porque la de inicio es la que
+ * escogen primero y con calma. En ese caso manda la de inicio.
+ *
+ * No es un detalle: sin esto, tres prestadores de 2023 y 2024 se colaron al corte
+ * de 2026 por un dedazo, cada uno con un solo renglón, y en el padrón parecían
+ * gente activa este año.
+ */
+function anioDelRenglon(f: Fila): { anio: number; sospechoso: boolean } {
+  if (f.inicio && f.fin) {
+    const dias = Math.abs(f.fin.getTime() - f.inicio.getTime()) / 86_400_000;
+    if (dias > DIAS_SEMANA_CREIBLE) {
+      return { anio: f.inicio.getUTCFullYear(), sospechoso: true };
+    }
+  }
+  const referencia = (f.fin ?? f.inicio ?? f.marca)!;
+  return { anio: referencia.getUTCFullYear(), sospechoso: false };
+}
+
 /** El valor que más se repite (y, si empatan, el último). */
 function moda(valores: string[]): string {
   const cuenta = new Map<string, number>();
@@ -253,6 +283,9 @@ async function main() {
 
   const filas = leeHoja(ruta);
   const problemas: string[] = [];
+  // Renglones que SÍ se traen pero con las fechas raras: no se descartan —las
+  // horas son de alguien— pero hay que enseñárselos a quien revisa.
+  const sospechosos: string[] = [];
 
   // Filas que no se pueden usar: sin nombre no hay a quién acreditárselas.
   let viejas = 0;
@@ -262,12 +295,16 @@ async function main() {
       problemas.push(`línea ${f.linea}: «${f.nombre}» sin ninguna fecha legible; se omite`);
       return false;
     }
-    // El año de la semana reportada manda, no el de cuando se capturó: una semana
-    // de diciembre que se mandó tarde sigue siendo de ese diciembre.
-    const referencia = (f.fin ?? f.inicio ?? f.marca)!;
-    if (referencia.getUTCFullYear() < desde) {
+    const { anio, sospechoso } = anioDelRenglon(f);
+    if (anio < desde) {
       viejas++;
       return false;
+    }
+    if (sospechoso) {
+      sospechosos.push(
+        `línea ${f.linea}: «${f.nombre}» reporta del ${f.inicio!.toISOString().slice(0, 10)}` +
+          ` al ${f.fin!.toISOString().slice(0, 10)} — revisa las fechas`,
+      );
     }
     return true;
   });
@@ -500,6 +537,11 @@ async function main() {
     console.log(`\nFilas omitidas (${problemas.length}):`);
     problemas.slice(0, 30).forEach((p) => console.log("  · " + p));
     if (problemas.length > 30) console.log(`  … y ${problemas.length - 30} más`);
+  }
+  if (sospechosos.length) {
+    console.log(`\nSÍ se trajeron, pero con las fechas raras (${sospechosos.length}):`);
+    sospechosos.slice(0, 30).forEach((p) => console.log("  · " + p));
+    if (sospechosos.length > 30) console.log(`  … y ${sospechosos.length - 30} más`);
   }
 }
 
