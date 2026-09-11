@@ -2746,13 +2746,26 @@ export async function listPossibleDuplicateVolunteers(limit = 15) {
     select: { id: true, name: true, school: true, nameKey: true },
   });
 
-  const pares: { a: (typeof volunteers)[number]; b: (typeof volunteers)[number] }[] = [];
+  const pares: {
+    a: (typeof volunteers)[number];
+    b: (typeof volunteers)[number];
+    /** true cuando el nombre es LITERALMENTE el mismo: ahí no hay nada que dudar. */
+    identicas: boolean;
+  }[] = [];
   for (let i = 0; i < volunteers.length && pares.length < limit; i++) {
     for (let j = i + 1; j < volunteers.length && pares.length < limit; j++) {
-      if (seParecen(volunteers[i].nameKey, volunteers[j].nameKey)) {
-        pares.push({ a: volunteers[i], b: volunteers[j] });
+      const a = volunteers[i];
+      const b = volunteers[j];
+      // El caso idéntico va aparte porque `seParecen` lo descarta —está pensada
+      // para sugerir parecidos, no repeticiones— y así los dos nombres iguales
+      // quedaban invisibles justo aquí, que es donde se tenían que ver.
+      if (a.nameKey && a.nameKey === b.nameKey) {
+        pares.push({ a, b, identicas: true });
+      } else if (seParecen(a.nameKey, b.nameKey)) {
+        pares.push({ a, b, identicas: false });
       }
     }
   }
-  return pares;
+  // Las idénticas primero: son las que se juntan sin pensarlo.
+  return pares.sort((x, y) => Number(y.identicas) - Number(x.identicas));
 }

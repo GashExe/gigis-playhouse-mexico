@@ -25,7 +25,8 @@
     "db:inscribir-danza": "tsx --env-file=.env prisma/inscribir-danza.ts",
     "db:import-servicio-social": "tsx --env-file=.env prisma/import-servicio-social.ts",
     "db:servicio-claves": "tsx --env-file=.env prisma/servicio-claves-busqueda.ts",
-    "db:servicio-solo-2026": "tsx --env-file=.env prisma/servicio-solo-2026.ts"
+    "db:servicio-solo-2026": "tsx --env-file=.env prisma/servicio-solo-2026.ts",
+    "db:servicio-juntar": "tsx --env-file=.env prisma/servicio-juntar-duplicados.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

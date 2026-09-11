@@ -36,19 +36,39 @@ async function main() {
   // diciembre que se mandó en enero sigue siendo de ese diciembre.
   const corte = new Date(Date.UTC(desde, 0, 1));
 
-  const viejos = await prisma.serviceLog.count({ where: { weekEnd: { lt: corte } } });
+  /**
+   * Qué se borra. Dos cosas, no una:
+   *
+   *   1. Lo que terminó antes del corte. Lo obvio.
+   *   2. Lo que DICE terminar después pero empezó años antes ("22/ene/2023 al
+   *      26/ene/2026"). Una semana no dura tres años: ahí alguien tecleó mal el
+   *      año de la fecha de término, y el renglón es de cuando empezó. Sin esta
+   *      segunda regla, tres prestadores de 2023 y 2024 se quedan en el padrón
+   *      pareciendo gente activa este año, cada uno por un solo dedazo.
+   */
+  const viejosDeVerdad = { weekEnd: { lt: corte } };
+  const fechaMalTecleada = {
+    weekEnd: { gte: corte },
+    weekStart: { lt: new Date(Date.UTC(desde, 0, 1) - 60 * 86_400_000) },
+  };
+  const seBorran = { OR: [viejosDeVerdad, fechaMalTecleada] };
+
+  const viejos = await prisma.serviceLog.count({ where: seBorran });
+  const porDedazo = await prisma.serviceLog.count({ where: fechaMalTecleada });
   const total = await prisma.serviceLog.count();
 
   // Prestadores que se quedarían sin un solo reporte: los que solo existen por lo
   // que se va. Quien tenga aunque sea una semana de 2026 se queda con su ficha.
   const candidatos = await prisma.volunteer.findMany({
-    where: { logs: { none: { weekEnd: { gte: corte } } } },
+    where: { logs: { none: { NOT: seBorran } } },
     select: { id: true, name: true, _count: { select: { logs: true } } },
   });
 
   console.log(
     `Reportes en la base: ${total}\n` +
-      `Anteriores a ${desde} (se borran): ${viejos}\n` +
+      `Anteriores a ${desde} (se borran): ${viejos}` +
+      (porDedazo ? ` — ${porDedazo} de ellos por el año mal tecleado` : "") +
+      `\n` +
       `Quedan de ${desde} en adelante: ${total - viejos}\n` +
       `Prestadores que se quedan sin reportes (se borran): ${candidatos.length}`,
   );
@@ -68,7 +88,7 @@ async function main() {
     return;
   }
 
-  await prisma.serviceLog.deleteMany({ where: { weekEnd: { lt: corte } } });
+  await prisma.serviceLog.deleteMany({ where: seBorran });
 
   // Las cuentas de acceso se van con su ficha: sin ficha no tienen a dónde entrar.
   const ids = candidatos.map((v) => v.id);
