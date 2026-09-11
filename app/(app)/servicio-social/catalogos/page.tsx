@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, Plus, Trash, Eye, EyeSlash, Sliders } from "@phosphor-icons/react/dist/ssr";
-import { requireRole } from "@/lib/dal";
+import { requireServiceAccess } from "@/lib/dal";
 import { canManageService } from "@/lib/roles";
-import { listServiceAreas, listServiceLeaders } from "@/lib/queries";
+import { listServiceAreas, listServiceLeaders, listServiceSchools } from "@/lib/queries";
 import {
   createServiceCatalogEntry,
   deleteServiceCatalogEntry,
@@ -19,7 +19,8 @@ type Entrada = {
   id: string;
   name: string;
   active: boolean;
-  _count: { logs: number; volunteers: number };
+  /** Las instituciones no cuelgan de reportes, solo de prestadores. */
+  _count: { logs?: number; volunteers: number };
 };
 
 /**
@@ -34,7 +35,7 @@ function Catalogo({
   entradas,
   puedeEditar,
 }: {
-  tipo: "area" | "lider";
+  tipo: "area" | "lider" | "escuela";
   titulo: string;
   descripcion: string;
   placeholder: string;
@@ -64,7 +65,7 @@ function Catalogo({
 
       <ul className="mt-4 divide-y divide-border">
         {entradas.map((e) => {
-          const enUso = e._count.logs + e._count.volunteers;
+          const enUso = (e._count.logs ?? 0) + e._count.volunteers;
           return (
             <li key={e.id} className="flex items-center gap-2 py-2.5">
               <div className="min-w-0 flex-1">
@@ -72,8 +73,12 @@ function Catalogo({
                   {e.name}
                 </p>
                 <p className="text-xs text-subtle">
-                  {e._count.logs} reporte{e._count.logs === 1 ? "" : "s"}
-                  {e._count.volunteers > 0 && ` · ${e._count.volunteers} prestador${e._count.volunteers === 1 ? "" : "es"}`}
+                  {e._count.logs != null &&
+                    `${e._count.logs} reporte${e._count.logs === 1 ? "" : "s"}`}
+                  {e._count.logs != null && e._count.volunteers > 0 && " · "}
+                  {e._count.volunteers > 0 &&
+                    `${e._count.volunteers} prestador${e._count.volunteers === 1 ? "" : "es"}`}
+                  {e._count.logs == null && e._count.volunteers === 0 && "Todavía sin prestadores"}
                 </p>
               </div>
               {!e.active && <Badge tone="neutral">Ya no se ofrece</Badge>}
@@ -118,9 +123,13 @@ function Catalogo({
 }
 
 export default async function CatalogosPage() {
-  const me = await requireRole("COORDINADOR_SERVICIO_SOCIAL");
-  const puedeEditar = canManageService(me.role);
-  const [areas, lideres] = await Promise.all([listServiceAreas(true), listServiceLeaders(true)]);
+  const me = await requireServiceAccess();
+  const puedeEditar = canManageService(me);
+  const [areas, lideres, escuelas] = await Promise.all([
+    listServiceAreas(true),
+    listServiceLeaders(true),
+    listServiceSchools(true),
+  ]);
 
   return (
     <div>
@@ -133,11 +142,19 @@ export default async function CatalogosPage() {
       </Link>
 
       <PageHeader
-        title="Áreas y líderes"
-        subtitle="Lo que el prestador escoge al mandar su reporte. Lo que ya no se ofrece se deja de ofrecer en vez de borrarse: los reportes viejos lo siguen nombrando."
+        title="Áreas, líderes e instituciones"
+        subtitle="Las tres listas que el prestador escoge al mandar su reporte. Lo que ya no se ofrece se deja de ofrecer en vez de borrarse: los reportes viejos lo siguen nombrando."
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
+        <Catalogo
+          tipo="escuela"
+          titulo="Instituciones"
+          descripcion="Las universidades y colegios activos. Es la lista del formulario: si alguien llega de una escuela que no está, agrégala aquí y le aparece en el acto."
+          placeholder="Ej. Universidad Cuauhtémoc"
+          entradas={escuelas}
+          puedeEditar={puedeEditar}
+        />
         <Catalogo
           tipo="area"
           titulo="Áreas en las que se apoya"

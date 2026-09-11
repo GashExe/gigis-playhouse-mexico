@@ -23,8 +23,19 @@ model User {
 
   /// Solo para COORDINADOR: de qué coordinación es. null = coordina todo.
   coordination Coordination?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+
+  /// Lleva el servicio social ADEMÁS de su encargo principal.
+  ///
+  /// Va como bandera y no como otro rol porque en la casa el servicio social se
+  /// carga encima de lo que la persona ya hace —la misma terapeuta que da clases
+  /// puede llevarlo—, y `role` es uno solo por cuenta: obligar a escoger dejaría
+  /// a esa persona sin la mitad de su trabajo. El rol COORDINADOR_SERVICIO_SOCIAL
+  /// sigue existiendo para quien SOLO lleva eso; quién puede tocarlo lo decide
+  /// `canManageService` y nada más (ver lib/roles.ts).
+  leadsService Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Contraseña inicial autogenerada (texto). Visible SOLO para la directora, para
   // poder entregársela/reimprimirla a la familia. No se expone al cliente en general.
@@ -899,10 +910,46 @@ model Volunteer {
   id     String @id @default(cuid())
   /// Nombre completo, tal como lo pide el formulario (un solo campo).
   name   String
-  /// ¿De qué escuela provienes? Texto libre: en la hoja vieja hay 170 formas de
-  /// escribir las mismas ocho escuelas, y forzar un catálogo aquí obligaría a
-  /// rechazar al primero que llegue de una escuela nueva.
+  /// De qué institución viene, en texto. Es lo que se enseña y lo que entra al
+  /// buscador; cuando la institución está en el catálogo, guarda su nombre tal
+  /// como está ahí.
+  ///
+  /// Sigue siendo texto y no solo la llave de abajo porque lo importado de la
+  /// hoja trae cosas que no empatan con nada ("8", o una escuela que ya no
+  /// aparece en la lista), y tirar ese dato sería perder de dónde venía esa
+  /// persona.
   school String
+
+  /// La institución del catálogo. Es lo que permite contar voluntarios POR
+  /// institución sin adivinar: en la hoja de 2026 las mismas cuatro escuelas
+  /// están escritas de 24 maneras ("Universidad Anáhuac", "Anahuac qro",
+  /// "Anhuac Queretaro"), y contarlas por el texto da 24 instituciones.
+  schoolRef ServiceSchool? @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  schoolId  String?
+
+  /// El correo en minúsculas y sin espacios. Es la MEJOR identidad que hay: el
+  /// nombre lo teclea distinto la misma persona cada semana, el correo no. Cuando
+  /// llega un reporte por la liga abierta se busca por aquí primero, y así un
+  /// nombre mal escrito cae en la ficha correcta en vez de abrir otra.
+  ///
+  /// No es único: los 2026 que se importaron de la hoja vieja no traen correo, y
+  /// un unique dejaría pasar solo a uno de ellos.
+  emailKey String?
+
+  /// Solo el nombre, sin acentos y en minúsculas: la identidad de respaldo, para
+  /// cuando no hay correo (todo lo que vino de la hoja del formulario).
+  /// Con esto se reconoce a quien manda un reporte por la liga abierta y cae en
+  /// su ficha en lugar de abrirse otra. Va sobre el nombre solo —y no sobre
+  /// nombre y escuela— porque la escuela la escribe distinta cada vez la misma
+  /// persona ("Anáhuac", "Anahuac Qro", "Universidad Anáhuac Querétaro").
+  nameKey String @default("")
+
+  /// Nombre y escuela juntos, igual de normalizados, para el BUSCADOR. Es otra
+  /// columna y no la de arriba porque son dos preguntas distintas: aquí se quiere
+  /// encontrar a todos los de una escuela, y allá se quiere saber si dos fichas
+  /// son la misma persona. Las dos las llena `claveDeBusqueda` (lib/servicio.ts)
+  /// en el mismo guardado; ninguna se edita a mano.
+  searchKey String @default("")
 
   /// Área y líder de cabecera: lo que viene propuesto al abrir el reporte semanal.
   /// El prestador puede reportar en otra área sin que haya que cambiarle la ficha
@@ -933,12 +980,36 @@ model Volunteer {
 
   @@index([status])
   @@index([name])
+  @@index([nameKey])
+  @@index([emailKey])
+  @@index([schoolId])
+  @@index([searchKey])
 }
 
 enum VolunteerStatus {
   ACTIVO // Está prestando servicio
   CONCLUIDO // Cumplió y se le liberó
   BAJA // Se salió antes de terminar
+}
+
+/// Institución de la que viene un prestador: la lista que la casa lleva de las
+/// universidades y colegios activos.
+///
+/// Es un catálogo y no texto libre porque es la única manera de contar cuántos
+/// voluntarios manda cada institución, que es justo el reporte que la casa venía
+/// llevando a mano en Excel. Cuando llegue alguien de una escuela nueva, se
+/// agrega desde Áreas y líderes y aparece en el formulario en el acto.
+model ServiceSchool {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  volunteers Volunteer[]
+
+  createdAt DateTime @default(now())
+
+  @@index([active, order])
 }
 
 /// Área en la que apoya un prestador. Es un catálogo y no un enum porque la lista
@@ -1017,8 +1088,10 @@ model ServiceLog {
   decidedById  String?
   decisionNote String? // Por qué se autorizó parcialmente o se rechazó
 
-  /// De dónde salió la fila: lo que se mandó desde la plataforma o lo que se
-  /// importó de la hoja del formulario de Google.
+  /// De dónde salió la fila. Importa para revisarla: lo que llega por la liga
+  /// abierta no trae a nadie identificado detrás —cualquiera con la liga pudo
+  /// escribir ese nombre—, así que se marca para que la coordinación lo sepa al
+  /// autorizarlo.
   source ServiceLogSource @default(PLATAFORMA)
 
   createdAt DateTime @default(now())
@@ -1036,6 +1109,7 @@ enum ServiceLogStatus {
 }
 
 enum ServiceLogSource {
-  PLATAFORMA // Lo mandó el prestador desde su espacio
+  PLATAFORMA // Lo mandó el prestador desde su espacio, con su cuenta
+  LIGA_PUBLICA // Llegó por la liga abierta, sin cuenta: nadie verificó quién lo mandó
   FORMULARIO // Importado de la hoja del Google Form (2021–2026)
 }

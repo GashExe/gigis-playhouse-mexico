@@ -214,6 +214,8 @@ export const UserSchema = z.object({
     .default("TERAPEUTA"),
   // Solo cuenta para COORDINADOR; en los demás roles se ignora al guardar.
   coordination: z.enum(["EDUCACIONAL", "LENGUAJE"]).optional().or(z.literal("")),
+  // ¿Lleva el servicio social además de lo suyo? Es una casilla: llega o no llega.
+  leadsService: z.coerce.boolean().default(false),
   password: z
     .string()
     .min(8, { message: "La contraseña debe tener al menos 8 caracteres." })

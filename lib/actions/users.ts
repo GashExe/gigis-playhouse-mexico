@@ -32,6 +32,7 @@ export async function createUser(
     email: formData.get("email"),
     role: (formData.get("role") as string) || "TERAPEUTA",
     coordination: formData.get("coordination") ?? "",
+    leadsService: formData.get("leadsService") != null,
     password: formData.get("password") ?? "",
   });
   if (!parsed.success) {
@@ -61,6 +62,10 @@ export async function createUser(
       // La coordinación solo tiene sentido en un coordinador: en cualquier otro rol
       // se guarda vacía para que no quede un dato mintiendo si cambia de puesto.
       coordination: d.role === "COORDINADOR" ? d.coordination || null : null,
+      // Quien YA es coordinador de servicio social no necesita además la bandera:
+      // sería el mismo permiso apuntado dos veces, y de esos nacen los "pero si
+      // se lo quité" cuando se apaga uno y queda prendido el otro.
+      leadsService: d.role === "COORDINADOR_SERVICIO_SOCIAL" ? false : d.leadsService,
       passwordHash: await bcrypt.hash(d.password, 10),
     },
   });
@@ -80,6 +85,7 @@ export async function updateUser(
     email: formData.get("email"),
     role: (formData.get("role") as string) || "TERAPEUTA",
     coordination: formData.get("coordination") ?? "",
+    leadsService: formData.get("leadsService") != null,
     password: formData.get("password") ?? "",
   });
   if (!parsed.success) {
@@ -112,6 +118,7 @@ export async function updateUser(
       email,
       role: d.role,
       coordination: d.role === "COORDINADOR" ? d.coordination || null : null,
+      leadsService: d.role === "COORDINADOR_SERVICIO_SOCIAL" ? false : d.leadsService,
       ...(d.password ? { passwordHash: await bcrypt.hash(d.password, 10) } : {}),
     },
   });

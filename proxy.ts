@@ -4,8 +4,18 @@ import { jwtVerify } from "jose";
 const SESSION_COOKIE = "gph_session";
 const encodedKey = new TextEncoder().encode(process.env.SESSION_SECRET);
 
-// Rutas públicas (accesibles sin sesión).
-const PUBLIC_PATHS = ["/login"];
+// Rutas que se pueden abrir SIN sesión.
+//
+// /reportar es la liga que se le comparte a los prestadores de servicio social:
+// mandan su semana sin cuenta, igual que en el Google Form. Lo que se puede hacer
+// ahí lo acota la acción del servidor (solo crea reportes, y siempre pendientes),
+// no esta lista.
+const PUBLIC_PATHS = ["/login", "/reportar"];
+
+// De éstas se saca a quien YA tiene sesión: no hay nada que hacer en el login si
+// ya entraste. /reportar no está aquí a propósito — la coordinación necesita
+// poder abrir la liga para revisarla y copiarla sin que la eche fuera.
+const AUTH_PATHS = ["/login"];
 
 async function hasValidSession(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
@@ -20,7 +30,9 @@ async function hasValidSession(req: NextRequest): Promise<boolean> {
 
 export default async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const matches = (list: string[]) =>
+    list.some((p) => pathname === p || pathname.startsWith(p + "/"));
+  const isPublic = matches(PUBLIC_PATHS);
   const authed = await hasValidSession(req);
 
   // Usuario sin sesión que intenta entrar a una ruta protegida → login.
@@ -30,7 +42,7 @@ export default async function proxy(req: NextRequest) {
   }
 
   // Usuario con sesión que va a /login → panel.
-  if (authed && isPublic) {
+  if (authed && matches(AUTH_PATHS)) {
     return NextResponse.redirect(new URL("/panel", req.nextUrl));
   }
 

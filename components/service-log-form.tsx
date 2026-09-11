@@ -4,7 +4,8 @@ import { useActionState, useEffect, useRef } from "react";
 import { Warning, CheckCircle, PaperPlaneTilt } from "@phosphor-icons/react";
 import { submitServiceLog, type ReporteState } from "@/lib/actions/servicio";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
+import { ActivitiesField } from "@/components/activities-field";
 
 type Opcion = { id: string; name: string };
 
@@ -105,20 +106,10 @@ export function ServiceLogForm({
         <Input id="s-hours" name="hours" required inputMode="decimal" placeholder="Ej. 8" />
       </Field>
 
-      <Field
-        label="Actividades realizadas"
-        htmlFor="s-activities"
-        required
-        hint="Con detalle: es lo que tu líder de área lee para avalarte las horas."
-      >
-        <Textarea
-          id="s-activities"
-          name="activities"
-          rows={4}
-          required
-          placeholder="Qué hiciste esta semana…"
-        />
-      </Field>
+      <ActivitiesField
+        id="s-activities"
+        hint="Al grano: es lo que tu líder de área lee para avalarte las horas."
+      />
 
       <div className="flex justify-end">
         <Button type="submit" loading={pending} disabled={pending}>
