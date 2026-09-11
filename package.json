@@ -22,7 +22,8 @@
     "db:regen-usuarios": "tsx prisma/regen-usuarios-alumnos.ts",
     "db:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
-    "db:inscribir-danza": "tsx --env-file=.env prisma/inscribir-danza.ts"
+    "db:inscribir-danza": "tsx --env-file=.env prisma/inscribir-danza.ts",
+    "db:import-servicio-social": "tsx --env-file=.env prisma/import-servicio-social.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

@@ -2503,3 +2503,198 @@ export async function nextOficioFolio(zona: string, year: number) {
   });
   return (last?.folio ?? 0) + 1;
 }
+
+/* ── Servicio social ───────────────────────────────────────────────────────────
+ *
+ * Las horas se guardan en minutos y lo que CUENTA de un reporte son los minutos
+ * que autorizó la coordinación (`approvedMinutes`) o, si no le recortó nada, los
+ * que reportó el prestador. Eso no se puede sumar de un jalón con `_sum`, así que
+ * se suma en dos grupos —los recortados y los que no— y se juntan. Sale exacto y
+ * sin bajar los 3 mil reportes a memoria para contarlos.
+ */
+
+/** Minutos autorizados por prestador. Devuelve un mapa id → minutos. */
+async function minutosAutorizadosPorPrestador(
+  volunteerIds?: string[],
+): Promise<Map<string, number>> {
+  const where = {
+    status: "AUTORIZADO" as const,
+    ...(volunteerIds ? { volunteerId: { in: volunteerIds } } : {}),
+  };
+  const [recortados, completos] = await Promise.all([
+    prisma.serviceLog.groupBy({
+      by: ["volunteerId"],
+      where: { ...where, approvedMinutes: { not: null } },
+      _sum: { approvedMinutes: true },
+    }),
+    prisma.serviceLog.groupBy({
+      by: ["volunteerId"],
+      where: { ...where, approvedMinutes: null },
+      _sum: { reportedMinutes: true },
+    }),
+  ]);
+
+  const total = new Map<string, number>();
+  const suma = (id: string, minutos: number | null) =>
+    total.set(id, (total.get(id) ?? 0) + (minutos ?? 0));
+  recortados.forEach((r) => suma(r.volunteerId, r._sum.approvedMinutes));
+  completos.forEach((r) => suma(r.volunteerId, r._sum.reportedMinutes));
+  return total;
+}
+
+/**
+ * Los prestadores de servicio social, con sus horas autorizadas y cuántos
+ * reportes traen esperando. `q` busca por nombre o escuela.
+ */
+export async function listVolunteers(opts: { q?: string; status?: string } = {}) {
+  const q = opts.q?.trim();
+  const volunteers = await prisma.volunteer.findMany({
+    where: {
+      ...(opts.status && opts.status !== "TODOS"
+        ? { status: opts.status as "ACTIVO" | "CONCLUIDO" | "BAJA" }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" as const } },
+              { school: { contains: q, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ status: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      school: true,
+      status: true,
+      requiredHours: true,
+      startDate: true,
+      endDate: true,
+      area: { select: { name: true } },
+      leader: { select: { name: true } },
+      user: { select: { username: true } },
+      _count: { select: { logs: { where: { status: "PENDIENTE" } } } },
+    },
+  });
+
+  const ids = volunteers.map((v) => v.id);
+  const minutos = await minutosAutorizadosPorPrestador(ids);
+  return volunteers.map((v) => ({
+    ...v,
+    pendientes: v._count.logs,
+    minutosAutorizados: minutos.get(v.id) ?? 0,
+  }));
+}
+
+/** Un prestador con todos sus reportes, del más reciente al más viejo. */
+export async function getVolunteer(id: string) {
+  const volunteer = await prisma.volunteer.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      school: true,
+      status: true,
+      requiredHours: true,
+      startDate: true,
+      endDate: true,
+      email: true,
+      phone: true,
+      notes: true,
+      areaId: true,
+      leaderId: true,
+      area: { select: { id: true, name: true } },
+      leader: { select: { id: true, name: true } },
+      user: { select: { id: true, username: true, active: true, initialPassword: true } },
+      logs: {
+        orderBy: [{ weekStart: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          weekStart: true,
+          weekEnd: true,
+          reportedMinutes: true,
+          approvedMinutes: true,
+          rawHours: true,
+          activities: true,
+          status: true,
+          decisionNote: true,
+          decidedAt: true,
+          source: true,
+          createdAt: true,
+          area: { select: { name: true } },
+          leader: { select: { name: true } },
+          decidedBy: { select: { name: true } },
+        },
+      },
+    },
+  });
+  if (!volunteer) return null;
+  const minutos = await minutosAutorizadosPorPrestador([id]);
+  return { ...volunteer, minutosAutorizados: minutos.get(id) ?? 0 };
+}
+
+/** La bandeja de la coordinación: lo que está esperando respuesta, lo viejo primero. */
+export async function listPendingServiceLogs(limit = 100) {
+  return prisma.serviceLog.findMany({
+    where: { status: "PENDIENTE" },
+    orderBy: [{ weekEnd: "asc" }, { createdAt: "asc" }],
+    take: limit,
+    select: {
+      id: true,
+      weekStart: true,
+      weekEnd: true,
+      reportedMinutes: true,
+      rawHours: true,
+      activities: true,
+      createdAt: true,
+      source: true,
+      area: { select: { name: true } },
+      leader: { select: { name: true } },
+      volunteer: { select: { id: true, name: true, school: true } },
+    },
+  });
+}
+
+/** Los números de arriba de la pantalla de servicio social. */
+export async function getServiceStats() {
+  const [activos, pendientes, minutos] = await Promise.all([
+    prisma.volunteer.count({ where: { status: "ACTIVO" } }),
+    prisma.serviceLog.count({ where: { status: "PENDIENTE" } }),
+    minutosAutorizadosPorPrestador(),
+  ]);
+  let totalMinutos = 0;
+  for (const m of minutos.values()) totalMinutos += m;
+  return { activos, pendientes, totalMinutos };
+}
+
+/** El catálogo de áreas. Por defecto solo las que el formulario sigue ofreciendo. */
+export async function listServiceAreas(todas = false) {
+  return prisma.serviceArea.findMany({
+    where: todas ? {} : { active: true },
+    orderBy: [{ active: "desc" }, { order: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      order: true,
+      _count: { select: { logs: true, volunteers: true } },
+    },
+  });
+}
+
+/** El catálogo de líderes de área. */
+export async function listServiceLeaders(todas = false) {
+  return prisma.serviceLeader.findMany({
+    where: todas ? {} : { active: true },
+    orderBy: [{ active: "desc" }, { order: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      order: true,
+      user: { select: { name: true } },
+      _count: { select: { logs: true, volunteers: true } },
+    },
+  });
+}

@@ -44,7 +44,19 @@ export type AuditAction =
   | "oficio.aprobado"
   | "organigrama.editar"
   | "config.legal.editar"
-  | "config.encuesta.editar";
+  | "config.encuesta.editar"
+  | "servicio.prestador.alta"
+  | "servicio.prestador.editar"
+  | "servicio.prestador.estado"
+  | "servicio.prestador.baja"
+  | "servicio.prestador.acceso"
+  | "servicio.prestador.fusion"
+  | "servicio.reporte.envio"
+  | "servicio.reporte.autoriza"
+  | "servicio.reporte.rechaza"
+  | "servicio.reporte.horas"
+  | "servicio.reporte.baja"
+  | "servicio.catalogo.editar";
 
 type AuditInput = {
   action: AuditAction;

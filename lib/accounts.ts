@@ -57,3 +57,46 @@ export async function ensureAlumnoAccount(
 
   return { username, password };
 }
+
+/**
+ * Crea la cuenta de acceso (role VOLUNTARIO) de un prestador de servicio social,
+ * si aún no la tiene. Mismas reglas que la de la familia: el usuario sale del
+ * nombre y la contraseña inicial se guarda en texto para poder entregársela.
+ *
+ * El formulario pide el nombre completo en un solo campo, así que aquí se parte:
+ * la primera palabra es el nombre y la última el apellido. Es una aproximación
+ * —"María Daniela Delgado Gutiérrez" da "mariagutierrez"— y con eso basta: el
+ * usuario es una llave para entrar, no un dato del expediente, y la unicidad la
+ * resuelve `uniqueUsername`.
+ *
+ * Devuelve { username, password } al crearla, o null si ya tenía cuenta.
+ */
+export async function ensureVolunteerAccount(
+  volunteer: { id: string; name: string },
+): Promise<{ username: string; password: string } | null> {
+  const already = await prisma.user.findFirst({
+    where: { volunteerId: volunteer.id },
+    select: { id: true },
+  });
+  if (already) return null;
+
+  const partes = volunteer.name.trim().split(/\s+/).filter(Boolean);
+  const nombre = partes[0] ?? "prestador";
+  const apellido = partes.length > 1 ? partes[partes.length - 1] : "";
+
+  const username = await uniqueUsername(usernameFromName(nombre, apellido));
+  const password = generatePassword(nombre, apellido, new Date().getFullYear());
+
+  await prisma.user.create({
+    data: {
+      name: volunteer.name,
+      username,
+      role: "VOLUNTARIO",
+      passwordHash: await bcrypt.hash(password, 10),
+      initialPassword: password,
+      volunteerId: volunteer.id,
+    },
+  });
+
+  return { username, password };
+}
