@@ -35,10 +35,14 @@ export function roleLabel(role: string): string {
     // movimientos viejos dicen MAESTRA: es el mismo rol con el nombre anterior.
     case "MAESTRA":
       return "Terapeuta";
+    case "COORDINADOR_SERVICIO_SOCIAL":
+      return "Coordinador de servicio social";
     case "LECTOR":
       return "Lector";
     case "ALUMNO":
       return "Alumno";
+    case "VOLUNTARIO":
+      return "Prestador de servicio social";
     default:
       return role;
   }
@@ -55,10 +59,14 @@ export function roleDescription(role: string): string {
       return "Lleva la operación (participantes, programas, calendario, donativos, avisos, oficios y reportes). No califica.";
     case "TERAPEUTA":
       return "Pasa lista, escribe bitácora y califica en los programas a su cargo.";
+    case "COORDINADOR_SERVICIO_SOCIAL":
+      return "Lleva el servicio social: prestadores, horas y autorizaciones. Nada más.";
     case "LECTOR":
       return "Ve toda la plataforma; no puede modificar nada.";
     case "ALUMNO":
       return "Cuenta de la familia para Mi espacio.";
+    case "VOLUNTARIO":
+      return "Cuenta del prestador para reportar sus horas de servicio social.";
     default:
       return "";
   }
@@ -67,7 +75,7 @@ export function roleDescription(role: string): string {
 /** Tono del Badge para el rol (para <Badge tone={...}>). */
 export function roleTone(role: string): "accent" | "warning" | "primary" | "neutral" {
   if (role === "DIRECTORA") return "accent";
-  if (role === "COORDINADOR") return "warning";
+  if (role === "COORDINADOR" || role === "COORDINADOR_SERVICIO_SOCIAL") return "warning";
   if (role === "LECTOR") return "neutral";
   return "primary";
 }

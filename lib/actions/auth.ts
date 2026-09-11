@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { createSession, deleteSession, getSession } from "@/lib/session";
 import { LoginSchema, PasswordChangeSchema } from "@/lib/validators";
+import { homePath } from "@/lib/roles";
 
 export type LoginState = {
   error?: string;
@@ -33,6 +34,7 @@ export async function login(
       active: true,
       passwordHash: true,
       studentId: true,
+      volunteerId: true,
     },
   });
 
@@ -48,10 +50,12 @@ export async function login(
     role: user.role,
     name: user.name,
     studentId: user.studentId ?? undefined,
+    volunteerId: user.volunteerId ?? undefined,
   });
 
-  // Los alumnos entran a su propio espacio; el equipo, al panel.
-  redirect(user.role === "ALUMNO" ? "/mi-espacio" : "/panel");
+  // Cada quien a su casa: la familia a Mi espacio, el prestador de servicio social
+  // a Mi servicio, y el equipo al panel.
+  redirect(homePath(user.role));
 }
 
 export async function logout() {

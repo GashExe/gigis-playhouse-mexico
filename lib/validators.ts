@@ -203,7 +203,14 @@ export const UserSchema = z.object({
     .optional()
     .or(z.literal("")),
   role: z
-    .enum(["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES", "TERAPEUTA", "LECTOR"])
+    .enum([
+      "DIRECTORA",
+      "COORDINADOR",
+      "GESTORA_OPERACIONES",
+      "TERAPEUTA",
+      "COORDINADOR_SERVICIO_SOCIAL",
+      "LECTOR",
+    ])
     .default("TERAPEUTA"),
   // Solo cuenta para COORDINADOR; en los demás roles se ignora al guardar.
   coordination: z.enum(["EDUCACIONAL", "LENGUAJE"]).optional().or(z.literal("")),

@@ -43,6 +43,10 @@ model User {
   studentId String?  @unique
   student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
 
+  // Cuenta ligada a un prestador de servicio social (solo para role VOLUNTARIO).
+  volunteerId String?    @unique
+  volunteer   Volunteer? @relation(fields: [volunteerId], references: [id], onDelete: SetNull)
+
   evaluations         Evaluation[]      @relation("EvaluadorEvaluaciones")
   programs            Program[]         @relation("MaestroPrograma") // Programas/actividades a su cargo
   studentNotes        StudentNote[]     @relation("AutorAnotaciones") // Anotaciones que ha escrito
@@ -56,6 +60,8 @@ model User {
   oficiosCreados      Oficio[]          @relation("OficioAutor") // Oficios que redactó
   oficiosAprobados    Oficio[]          @relation("OficioAprobador") // Oficios que aprobó (Eva)
   surveyEdits         SurveyConfig[]    @relation("SurveyEditor") // Ediciones de la encuesta
+  serviceDecided      ServiceLog[]      @relation("DecideServicio") // Reportes de horas que autorizó o rechazó
+  serviceLed          ServiceLeader[]   @relation("LiderCuenta") // Su ficha de líder de área
 
   @@index([role])
 }
@@ -74,8 +80,10 @@ enum Role {
   COORDINADOR // Coordinador de programas educativos
   GESTORA_OPERACIONES // Operación: participantes, programas, calendario, donativos, avisos, oficios y reportes. NO califica.
   TERAPEUTA // Da las clases: pasa lista, escribe bitácora y califica (inicial y final) en sus programas
+  COORDINADOR_SERVICIO_SOCIAL // Lleva el servicio social: prestadores, horas y autorizaciones. Nada más.
   LECTOR // Solo mira: ve toda la plataforma y no puede modificar nada
   ALUMNO
+  VOLUNTARIO // Prestador de servicio social: manda su reporte semanal de horas
 }
 
 /// Estudiantes ("participantes") de Gigi's Playhouse.
@@ -870,4 +878,164 @@ model SurveyResponse {
 
   @@unique([studentId, cycleId])
   @@index([cycleId])
+}
+
+/**
+ * ── Servicio social ────────────────────────────────────────────────────────
+ * Los prestadores reportan sus horas por semana y la coordinación de servicio
+ * social las autoriza o las rechaza. Antes eso vivía en un Google Form con su
+ * hoja de respuestas (2021 en adelante); aquí queda dentro de la plataforma, con
+ * la misma forma del formulario para que quien ya lo llenaba no tenga que
+ * aprender otra cosa.
+ * Las horas se guardan en MINUTOS y no en horas con decimales: el formulario
+ * viejo recibió "10:30", "1 1/2" y "8h30", y sumar eso en decimales se presta a
+ * perder medias horas por el redondeo. Lo que se ve en pantalla siempre son horas
+ * (ver `lib/servicio.ts`).
+ */
+
+/// Un prestador de servicio social. Su cuenta de acceso (role VOLUNTARIO) cuelga
+/// de aquí, igual que la de la familia cuelga del participante.
+model Volunteer {
+  id     String @id @default(cuid())
+  /// Nombre completo, tal como lo pide el formulario (un solo campo).
+  name   String
+  /// ¿De qué escuela provienes? Texto libre: en la hoja vieja hay 170 formas de
+  /// escribir las mismas ocho escuelas, y forzar un catálogo aquí obligaría a
+  /// rechazar al primero que llegue de una escuela nueva.
+  school String
+
+  /// Área y líder de cabecera: lo que viene propuesto al abrir el reporte semanal.
+  /// El prestador puede reportar en otra área sin que haya que cambiarle la ficha
+  /// (en la hoja vieja hay quien reportó en dos áreas la misma semana).
+  area     ServiceArea?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  areaId   String?
+  leader   ServiceLeader? @relation(fields: [leaderId], references: [id], onDelete: SetNull)
+  leaderId String?
+
+  /// Meta de horas que le pide SU escuela (480, 500, 240…). La marca cada escuela,
+  /// por eso va por prestador y no como un número de la casa. null = sin meta:
+  /// se le lleva el acumulado y nada más.
+  requiredHours Int?
+
+  startDate DateTime?       @db.Date // Inicio del servicio
+  endDate   DateTime?       @db.Date // Liberación / término
+  status    VolunteerStatus @default(ACTIVO)
+
+  email String?
+  phone String?
+  notes String? // Nota interna de la coordinación
+
+  user User? // Cuenta de acceso, si ya se le entregó
+  logs ServiceLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([name])
+}
+
+enum VolunteerStatus {
+  ACTIVO // Está prestando servicio
+  CONCLUIDO // Cumplió y se le liberó
+  BAJA // Se salió antes de terminar
+}
+
+/// Área en la que apoya un prestador. Es un catálogo y no un enum porque la lista
+/// la mueve la coordinación sola (en el formulario ya cambió varias veces, y
+/// algunas áreas traen el nombre de quien las lleva). Las que ya no se ofrecen se
+/// marcan inactivas en vez de borrarse: los reportes viejos las siguen nombrando.
+model ServiceArea {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  volunteers Volunteer[]
+  logs       ServiceLog[]
+
+  createdAt DateTime @default(now())
+
+  @@index([active, order])
+}
+
+/// Líder de área que recibe y avala el trabajo del prestador. Va aparte del área
+/// —y no como un campo de ella— porque el formulario los pregunta por separado y
+/// un mismo líder aparece en varias áreas. Se liga a una cuenta cuando la tiene.
+model ServiceLeader {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  user   User?   @relation("LiderCuenta", fields: [userId], references: [id], onDelete: SetNull)
+  userId String?
+
+  volunteers Volunteer[]
+  logs       ServiceLog[]
+
+  createdAt DateTime @default(now())
+
+  @@index([active, order])
+}
+
+/// El reporte semanal de horas: una fila por lo que mandó el prestador. Nace
+/// PENDIENTE y la coordinación la autoriza o la rechaza.
+///
+/// No lleva unique por prestador y semana a propósito: quien apoya en dos áreas
+/// manda dos reportes de la misma semana, y eso es correcto.
+model ServiceLog {
+  id          String    @id @default(cuid())
+  volunteer   Volunteer @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+  volunteerId String
+
+  area     ServiceArea?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  areaId   String?
+  leader   ServiceLeader? @relation(fields: [leaderId], references: [id], onDelete: SetNull)
+  leaderId String?
+
+  weekStart DateTime @db.Date // Fecha de inicio de la semana a reportar
+  weekEnd   DateTime @db.Date // Fecha de término de la semana a reportar
+
+  /// Lo que reportó el prestador, en minutos.
+  reportedMinutes Int
+  /// Lo que la coordinación le contó, en minutos. Casi siempre es lo mismo que
+  /// reportó; existe porque en la hoja vieja hay semanas marcadas "se autorizan 20"
+  /// —se autoriza el reporte pero no todas las horas— y bajarle el número al
+  /// reporte original borraría lo que la persona dijo que hizo.
+  approvedMinutes Int?
+  /// El texto tal cual, cuando no se pudo convertir a un número de horas
+  /// ("1 hora y 15", "8h30", o un párrafo entero en el campo equivocado). Se
+  /// conserva para que la coordinación lo lea y lo corrija a mano.
+  rawHours        String?
+
+  activities String // Actividades realizadas
+
+  status       ServiceLogStatus @default(PENDIENTE)
+  decidedAt    DateTime?
+  decidedBy    User?            @relation("DecideServicio", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedById  String?
+  decisionNote String? // Por qué se autorizó parcialmente o se rechazó
+
+  /// De dónde salió la fila: lo que se mandó desde la plataforma o lo que se
+  /// importó de la hoja del formulario de Google.
+  source ServiceLogSource @default(PLATAFORMA)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([volunteerId, weekStart])
+  @@index([areaId])
+}
+
+enum ServiceLogStatus {
+  PENDIENTE // Esperando a la coordinación
+  AUTORIZADO // Las horas cuentan
+  NO_AUTORIZADO // Las horas no cuentan
+}
+
+enum ServiceLogSource {
+  PLATAFORMA // Lo mandó el prestador desde su espacio
+  FORMULARIO // Importado de la hoja del Google Form (2021–2026)
 }

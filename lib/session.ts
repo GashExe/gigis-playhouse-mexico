@@ -13,6 +13,7 @@ export type SessionPayload = {
   role: Role;
   name: string;
   studentId?: string; // solo para cuentas ALUMNO: expediente ligado
+  volunteerId?: string; // solo para cuentas VOLUNTARIO: ficha de servicio social
 };
 
 export async function encrypt(payload: SessionPayload) {

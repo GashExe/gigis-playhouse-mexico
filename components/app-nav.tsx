@@ -15,6 +15,7 @@ import {
   FileText,
   HandHeart,
   Hourglass,
+  HandsClapping,
   ChartBar,
   TreeStructure,
   GearSix,
@@ -86,6 +87,14 @@ const NAV: NavItem[] = [
     roles: ["DIRECTORA", "GESTORA_OPERACIONES"],
   },
   {
+    // La coordinación de servicio social no ve el resto de la plataforma: este es
+    // su único destino, y por eso está nombrado aquí y no dentro de otro.
+    href: "/servicio-social",
+    label: "Servicio social",
+    icon: HandsClapping,
+    roles: ["DIRECTORA", "COORDINADOR_SERVICIO_SOCIAL"],
+  },
+  {
     href: "/reportes",
     label: "Reportes",
     icon: ChartBar,
@@ -103,10 +112,22 @@ const NAV: NavItem[] = [
 ];
 
 /**
+ * Lo único que le toca a la coordinación de servicio social. Va como lista aparte
+ * porque los destinos sin `roles` los ve todo el equipo, y a esta coordinación
+ * enseñarle programas, calendario y expedientes sería llenarle la barra de cosas
+ * que no son suyas. Lo que sí puede TOCAR lo sigue decidiendo el servidor: no
+ * gestiona participantes ni califica, igual que antes de esta lista.
+ */
+const NAV_SERVICIO_SOCIAL = ["/panel", "/servicio-social", "/organigrama", "/manual"];
+
+/**
  * Qué destinos ve cada rol. El LECTOR los ve TODOS: su encargo es ver la plataforma
  * completa (lo que no puede es escribir, y de eso se encarga el servidor).
  */
 function useVisibleNav(role: Role) {
+  if (role === "COORDINADOR_SERVICIO_SOCIAL") {
+    return NAV.filter((i) => NAV_SERVICIO_SOCIAL.includes(i.href));
+  }
   return NAV.filter((i) => !i.roles || role === "LECTOR" || i.roles.includes(role));
 }
 

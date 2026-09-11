@@ -240,6 +240,7 @@ function UserForm({
               <option value="TERAPEUTA">Terapeuta</option>
               <option value="GESTORA_OPERACIONES">Gestora de operaciones</option>
               <option value="COORDINADOR">Coordinador</option>
+              <option value="COORDINADOR_SERVICIO_SOCIAL">Coordinador de servicio social</option>
               <option value="LECTOR">Lector</option>
               <option value="DIRECTORA">Directora</option>
             </Select>

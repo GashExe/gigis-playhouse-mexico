@@ -10,8 +10,12 @@ import type { Coordination, Role } from "@/lib/generated/prisma/client";
  *  - GESTORA_OPERACIONES: operación (participantes, programas, calendario, donativos,
  *    avisos, oficios y reportes). NO califica y no toca equipo ni configuración.
  *  - TERAPEUTA: da las clases; pasa lista, escribe bitácora y califica en SUS programas.
+ *  - COORDINADOR_SERVICIO_SOCIAL: lleva el servicio social —prestadores, horas y
+ *    autorizaciones—. No es una coordinación de programas: consulta la plataforma
+ *    como el resto del equipo, pero no gestiona participantes ni califica.
  *  - LECTOR: ve toda la plataforma y no modifica nada.
  *  - ALUMNO: la familia, en su propio espacio.
+ *  - VOLUNTARIO: el prestador de servicio social, en su propio espacio.
  */
 
 /** Roles del equipo (todo lo que no es una cuenta de familia). */
@@ -20,8 +24,19 @@ export const STAFF_ROLES: Role[] = [
   "COORDINADOR",
   "GESTORA_OPERACIONES",
   "TERAPEUTA",
+  "COORDINADOR_SERVICIO_SOCIAL",
   "LECTOR",
 ];
+
+/** Cuentas que NO son del equipo: cada una vive en su propio espacio. */
+export const GUEST_ROLES: Role[] = ["ALUMNO", "VOLUNTARIO"];
+
+/** A dónde entra cada cuenta al iniciar sesión. */
+export function homePath(role: Role): string {
+  if (role === "ALUMNO") return "/mi-espacio";
+  if (role === "VOLUNTARIO") return "/mi-servicio";
+  return "/panel";
+}
 
 /** Roles que administran la operación: dan de alta, editan y resuelven. */
 export const MANAGER_ROLES: Role[] = ["DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES"];
@@ -36,6 +51,22 @@ export const GRADER_ROLES: Role[] = ["DIRECTORA", "COORDINADOR", "TERAPEUTA"];
  * no de la coordinación académica.
  */
 export const ACCESS_ROLES: Role[] = ["DIRECTORA", "GESTORA_OPERACIONES"];
+
+/**
+ * Roles que llevan el servicio social: dan de alta a los prestadores, les entregan
+ * su acceso y autorizan o rechazan los reportes semanales de horas.
+ *
+ * Va aparte de MANAGER_ROLES a propósito. El coordinador de servicio social NO es
+ * una coordinación de programas: lo suyo son los prestadores y sus horas, y darle
+ * de paso los expedientes de los participantes sería regalarle un permiso que
+ * nadie le pidió. Por eso tampoco está en MANAGER_ROLES ni en GRADER_ROLES.
+ */
+export const SERVICE_ROLES: Role[] = ["DIRECTORA", "COORDINADOR_SERVICIO_SOCIAL"];
+
+/** ¿Lleva el servicio social (prestadores, horas y autorizaciones)? */
+export function canManageService(role: Role): boolean {
+  return SERVICE_ROLES.includes(role);
+}
 
 /** Solo mira: ninguna escritura, en ninguna pantalla. */
 export function isReadOnly(role: Role): boolean {

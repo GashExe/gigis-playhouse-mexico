@@ -5,9 +5,11 @@ import { getSession, type SessionPayload } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import {
   canGrade,
+  canManageService,
   canRunClasses,
   coordinationScope,
   coversProgram,
+  homePath,
   isReadOnly,
 } from "@/lib/roles";
 import type { Coordination, Role } from "@/lib/generated/prisma/client";
@@ -44,6 +46,8 @@ export const getCurrentUser = cache(async () => {
       coordination: true,
       active: true,
       studentId: true,
+      // Prestador ligado (solo para role VOLUNTARIO).
+      volunteerId: true,
       tutorialSeenAt: true,
       // Hasta cuándo leyó sus mensajes la familia: lo posterior se le marca nuevo.
       messagesSeenAt: true,
@@ -104,15 +108,44 @@ export async function requireWriter(...roles: Role[]) {
 }
 
 /**
- * Exige que sea del equipo. Las cuentas de alumno se envían a su propio espacio,
- * nunca al panel de administración.
+ * Exige que sea del equipo. Las cuentas que no lo son —la familia y el prestador
+ * de servicio social— se envían a su propio espacio, nunca al panel de
+ * administración.
  */
 export async function requireStaff() {
   const user = await getCurrentUser();
-  if (user.role === "ALUMNO") {
-    redirect("/mi-espacio");
+  if (user.role === "ALUMNO" || user.role === "VOLUNTARIO") {
+    redirect(homePath(user.role));
   }
   return user;
+}
+
+/**
+ * ESCRIBIR en servicio social: dar de alta prestadores, editarlos y autorizar o
+ * rechazar sus reportes de horas. Dirección y coordinación de servicio social.
+ */
+export async function requireServiceManager() {
+  const user = await getCurrentUser();
+  if (isReadOnly(user.role) || !canManageService(user.role)) {
+    throw new Error("No autorizado");
+  }
+  return user;
+}
+
+/**
+ * La cuenta del prestador, con su ficha ya resuelta. Una cuenta VOLUNTARIO sin
+ * ficha ligada no tiene nada que hacer aquí: se le manda al login en vez de
+ * enseñarle un espacio vacío que no puede arreglar.
+ */
+export async function requireVolunteer() {
+  const user = await getCurrentUser();
+  if (user.role !== "VOLUNTARIO") {
+    redirect(homePath(user.role));
+  }
+  if (!user.volunteerId) {
+    redirect("/login");
+  }
+  return { ...user, volunteerId: user.volunteerId };
 }
 
 /**
