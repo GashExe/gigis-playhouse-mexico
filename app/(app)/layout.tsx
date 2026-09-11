@@ -14,7 +14,7 @@ export default async function AppLayout({
     <div className="min-h-[100dvh]">
       {/* Al imprimir, el armazón de la app no va al papel: solo el contenido. */}
       <div className="print:hidden">
-        <AppNav name={user.name} role={user.role} />
+        <AppNav name={user.name} role={user.role} leadsService={user.leadsService} />
         <CommandPalette />
       </div>
       <div className="lg:pl-64 print:pl-0">

@@ -24,6 +24,7 @@ import {
   SignOut,
 } from "@phosphor-icons/react";
 import { cn, initials, roleLabel } from "@/lib/utils";
+import { canManageService } from "@/lib/roles";
 import { LogoLockup } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { OPEN_SEARCH_EVENT } from "@/components/command-palette";
@@ -51,6 +52,9 @@ function SearchTrigger() {
     </button>
   );
 }
+
+/** La cuenta, con lo justo para decidir qué destinos enseñarle. */
+type NavUser = { role: Role; leadsService?: boolean };
 
 type NavItem = {
   href: string;
@@ -87,8 +91,9 @@ const NAV: NavItem[] = [
     roles: ["DIRECTORA", "GESTORA_OPERACIONES"],
   },
   {
-    // La coordinación de servicio social no ve el resto de la plataforma: este es
-    // su único destino, y por eso está nombrado aquí y no dentro de otro.
+    // Quién ve este destino no cabe en una lista de roles: además de la directora
+    // y de quien tiene el rol, lo ve quien lleva el servicio social ADEMÁS de lo
+    // suyo. Eso lo resuelve `canManageService` abajo, que es quien lo decide.
     href: "/servicio-social",
     label: "Servicio social",
     icon: HandsClapping,
@@ -124,11 +129,17 @@ const NAV_SERVICIO_SOCIAL = ["/panel", "/servicio-social", "/organigrama", "/man
  * Qué destinos ve cada rol. El LECTOR los ve TODOS: su encargo es ver la plataforma
  * completa (lo que no puede es escribir, y de eso se encarga el servidor).
  */
-function useVisibleNav(role: Role) {
-  if (role === "COORDINADOR_SERVICIO_SOCIAL") {
+function useVisibleNav(user: NavUser) {
+  // Quien SOLO lleva el servicio social ve su lista corta y ya.
+  if (user.role === "COORDINADOR_SERVICIO_SOCIAL") {
     return NAV.filter((i) => NAV_SERVICIO_SOCIAL.includes(i.href));
   }
-  return NAV.filter((i) => !i.roles || role === "LECTOR" || i.roles.includes(role));
+  return NAV.filter((i) => {
+    // El servicio social se pregunta aparte: quien lo lleva encima de lo suyo no
+    // cambia de rol, así que la lista de roles del destino no alcanza a verlo.
+    if (i.href === "/servicio-social") return canManageService(user) || user.role === "LECTOR";
+    return !i.roles || user.role === "LECTOR" || i.roles.includes(user.role);
+  });
 }
 
 function isActive(pathname: string, href: string) {
@@ -137,9 +148,9 @@ function isActive(pathname: string, href: string) {
 
 /* ---------- Escritorio: barra lateral ---------- */
 
-function NavLinks({ role }: { role: Role }) {
+function NavLinks({ user }: { user: NavUser }) {
   const pathname = usePathname();
-  const items = useVisibleNav(role);
+  const items = useVisibleNav(user);
   return (
     <nav className="flex flex-col gap-1">
       {items.map((item) => {
@@ -229,9 +240,9 @@ function MexNodusCredit() {
  */
 const MAX_TABS = 5;
 
-function GlassTabBar({ role }: { role: Role }) {
+function GlassTabBar({ user }: { user: NavUser }) {
   const pathname = usePathname();
-  const items = useVisibleNav(role);
+  const items = useVisibleNav(user);
   const [moreOpen, setMoreOpen] = useState(false);
 
   // Si no caben todos, la última ranura la ocupa "Más".
@@ -364,7 +375,16 @@ function GlassTabBar({ role }: { role: Role }) {
   );
 }
 
-export function AppNav({ name, role }: { name: string; role: Role }) {
+export function AppNav({
+  name,
+  role,
+  leadsService,
+}: {
+  name: string;
+  role: Role;
+  leadsService?: boolean;
+}) {
+  const user: NavUser = { role, leadsService };
   return (
     <>
       {/* Barra superior móvil (respeta el notch con safe-area arriba) */}
@@ -420,7 +440,7 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
           <SearchTrigger />
         </div>
         <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-1">
-          <NavLinks role={role} />
+          <NavLinks user={user} />
         </div>
         <div className="flex shrink-0 flex-col gap-3">
           <UserCard name={name} role={role} />
@@ -429,7 +449,7 @@ export function AppNav({ name, role }: { name: string; role: Role }) {
       </aside>
 
       {/* Barra flotante liquid glass (solo móvil) */}
-      <GlassTabBar role={role} />
+      <GlassTabBar user={user} />
     </>
   );
 }

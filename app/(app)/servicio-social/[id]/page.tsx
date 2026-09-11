@@ -9,9 +9,15 @@ import {
   ArrowsMerge,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
-import { requireRole } from "@/lib/dal";
+import { requireServiceAccess } from "@/lib/dal";
 import { canManageService } from "@/lib/roles";
-import { getVolunteer, listServiceAreas, listServiceLeaders, listVolunteers } from "@/lib/queries";
+import {
+  getVolunteer,
+  listServiceAreas,
+  listServiceLeaders,
+  listServiceSchools,
+  listVolunteers,
+} from "@/lib/queries";
 import {
   createVolunteerAccess,
   deleteServiceLog,
@@ -42,14 +48,15 @@ function fechaInput(d: Date | null): string {
 }
 
 export default async function PrestadorPage({ params }: { params: Promise<{ id: string }> }) {
-  const me = await requireRole("COORDINADOR_SERVICIO_SOCIAL");
-  const puedeResolver = canManageService(me.role);
+  const me = await requireServiceAccess();
+  const puedeResolver = canManageService(me);
   const { id } = await params;
 
-  const [volunteer, areas, lideres, todos] = await Promise.all([
+  const [volunteer, areas, lideres, escuelas, todos] = await Promise.all([
     getVolunteer(id),
     listServiceAreas(),
     listServiceLeaders(),
+    listServiceSchools(),
     listVolunteers({ status: "TODOS" }),
   ]);
   if (!volunteer) notFound();
@@ -198,8 +205,29 @@ export default async function PrestadorPage({ params }: { params: Promise<{ id: 
                   <Field label="Nombre completo" htmlFor="e-name" required>
                     <Input id="e-name" name="name" required defaultValue={volunteer.name} />
                   </Field>
-                  <Field label="Escuela" htmlFor="e-school" required>
-                    <Input id="e-school" name="school" required defaultValue={volunteer.school} />
+                  <Field
+                    label="Institución"
+                    htmlFor="e-school"
+                    hint={
+                      volunteer.schoolId
+                        ? undefined
+                        : `Hoy dice «${volunteer.school}», que no está en el catálogo. Si lo dejas sin escoger se queda así.`
+                    }
+                  >
+                    {/* Lo que tenía escrito viaja en un campo oculto: si su
+                        institución no está en la lista —pasa con lo que vino de
+                        la hoja— guardar no debe vaciársela. */}
+                    <input type="hidden" name="school" value={volunteer.school} />
+                    <Select id="e-school" name="schoolId" defaultValue={volunteer.schoolId ?? ""}>
+                      <option value="">
+                        {volunteer.schoolId ? "Sin institución" : `Dejar «${volunteer.school}»`}
+                      </option>
+                      {escuelas.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.name}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
                   <Field label="Área en la que apoya" htmlFor="e-area">
                     <Select id="e-area" name="areaId" defaultValue={volunteer.areaId ?? ""}>

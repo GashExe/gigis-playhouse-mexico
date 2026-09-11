@@ -6,7 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { requireServiceManager, requireVolunteer } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { ensureVolunteerAccount } from "@/lib/accounts";
-import { horasLabel, parseHorasAMinutos } from "@/lib/servicio";
+import {
+  claveDeCorreo,
+  clavesDePrestador,
+  cuentaPalabras,
+  horasLabel,
+  MAX_PALABRAS_ACTIVIDADES,
+  parseHorasAMinutos,
+} from "@/lib/servicio";
 
 /**
  * Servicio social: alta de prestadores, su reporte semanal de horas y la
@@ -41,10 +48,39 @@ function parseEntero(v: FormDataEntryValue | null): number | null {
 
 /* ── Prestadores ───────────────────────────────────────────────────────────── */
 
-function camposPrestador(formData: FormData) {
+/**
+ * La institución que se escogió, con su nombre tal como está en el catálogo.
+ *
+ * El formulario manda el id, no el texto: así lo que queda guardado es siempre
+ * uno de los nombres de la lista, y el conteo de voluntarios por institución
+ * cuadra. Si el id no existe o está retirado, se devuelve vacío y quien llama
+ * decide —nunca se inventa una institución con lo que venga en el campo.
+ */
+async function resuelveInstitucion(
+  schoolId: string | null,
+): Promise<{ schoolId: string; school: string } | null> {
+  if (!schoolId) return null;
+  const inst = await prisma.serviceSchool.findFirst({
+    where: { id: schoolId, active: true },
+    select: { id: true, name: true },
+  });
+  return inst ? { schoolId: inst.id, school: inst.name } : null;
+}
+
+async function camposPrestador(formData: FormData) {
+  const name = texto(formData.get("name"));
+  const inst = await resuelveInstitucion(opcional(formData.get("schoolId")));
+  // Al editar una ficha vieja, la institución puede ser una que no está en el
+  // catálogo: en ese caso se respeta el texto que ya tenía en vez de vaciárselo.
+  const school = inst?.school ?? texto(formData.get("school"));
   return {
-    name: texto(formData.get("name")),
-    school: texto(formData.get("school")),
+    name,
+    school,
+    schoolId: inst?.schoolId ?? null,
+    // Se recalculan en cada guardado: si el nombre cambia y las claves se quedan
+    // con el viejo, la persona deja de aparecer al buscarla y los reportes que
+    // lleguen por la liga le abrirían una ficha nueva, sin que nadie sepa por qué.
+    ...clavesDePrestador(name, school, texto(formData.get("email"))),
     areaId: opcional(formData.get("areaId")),
     leaderId: opcional(formData.get("leaderId")),
     // La meta la marca la escuela de cada quien, por eso va por prestador.
@@ -59,7 +95,7 @@ function camposPrestador(formData: FormData) {
 
 export async function createVolunteer(formData: FormData) {
   await requireServiceManager();
-  const data = camposPrestador(formData);
+  const data = await camposPrestador(formData);
   if (!data.name || !data.school) return;
   const volunteer = await prisma.volunteer.create({ data, select: { id: true, name: true } });
   await logAudit({
@@ -75,7 +111,7 @@ export async function createVolunteer(formData: FormData) {
 export async function updateVolunteer(formData: FormData) {
   await requireServiceManager();
   const id = texto(formData.get("id"));
-  const data = camposPrestador(formData);
+  const data = await camposPrestador(formData);
   if (!id || !data.name || !data.school) return;
   await prisma.volunteer.update({ where: { id }, data });
   await logAudit({
@@ -187,7 +223,51 @@ export async function mergeVolunteers(formData: FormData) {
 
 /* ── Reportes de horas ─────────────────────────────────────────────────────── */
 
-export type ReporteState = { error?: string; ok?: boolean } | undefined;
+export type ReporteState =
+  | {
+      error?: string;
+      ok?: boolean;
+      /** A nombre de quién quedó el reporte, para devolvérselo a quien lo mandó. */
+      nombre?: string;
+    }
+  | undefined;
+
+/**
+ * Lo que revisa cualquier reporte, venga de una cuenta o de la liga abierta.
+ * Está en un solo lugar para que las dos puertas pidan exactamente lo mismo: si
+ * una fuera más laxa, esa sería la que todo mundo acabaría usando.
+ */
+function revisaReporte(input: {
+  weekStart: Date | null;
+  weekEnd: Date | null;
+  horasTexto: string;
+  activities: string;
+}): { error: string } | { minutos: number; weekStart: Date; weekEnd: Date } {
+  if (!input.weekStart || !input.weekEnd) {
+    return { error: "Elige la fecha de inicio y la de término." };
+  }
+  if (input.weekEnd < input.weekStart) {
+    return { error: "La fecha de término no puede ser anterior a la de inicio." };
+  }
+  const minutos = parseHorasAMinutos(input.horasTexto);
+  if (minutos == null) return { error: "Escribe las horas como un número: 6, 8.5 o 10:30." };
+  if (minutos === 0) return { error: "Un reporte de 0 horas no hace falta mandarlo." };
+  // Tope de una semana completa. Frena el dedazo de quien captura tres semanas
+  // juntas —en la hoja vieja ya pasó— antes de que llegue a la coordinación.
+  if (minutos > 100 * 60) {
+    return { error: "Son demasiadas horas para una semana. Repórtala semana por semana." };
+  }
+  if (!input.activities) return { error: "Cuenta qué hiciste esta semana." };
+  const palabras = cuentaPalabras(input.activities);
+  if (palabras > MAX_PALABRAS_ACTIVIDADES) {
+    return {
+      error: `Resume tus actividades en ${MAX_PALABRAS_ACTIVIDADES} palabras o menos (llevas ${palabras}).`,
+    };
+  }
+  // Devuelve las fechas ya comprobadas, y no solo los minutos, para que quien
+  // llama no tenga que volver a jurar que no son nulas.
+  return { minutos, weekStart: input.weekStart, weekEnd: input.weekEnd };
+}
 
 /**
  * El prestador manda su reporte de la semana. Es el formulario de Google, pero
@@ -205,21 +285,9 @@ export async function submitServiceLog(
   const horasTexto = texto(formData.get("hours"));
   const activities = textoLargo(formData.get("activities"));
 
-  if (!weekStart || !weekEnd) return { error: "Elige la fecha de inicio y la de término." };
-  if (weekEnd < weekStart) {
-    return { error: "La fecha de término no puede ser anterior a la de inicio." };
-  }
-  const minutos = parseHorasAMinutos(horasTexto);
-  if (minutos == null) {
-    return { error: "Escribe las horas como un número: 6, 8.5 o 10:30." };
-  }
-  if (minutos === 0) return { error: "Un reporte de 0 horas no hace falta mandarlo." };
-  // Tope de una semana completa. Frena el dedazo de quien captura tres semanas
-  // juntas —en la hoja vieja ya pasó— antes de que llegue a la coordinación.
-  if (minutos > 100 * 60) {
-    return { error: "Son demasiadas horas para una semana. Repórtala semana por semana." };
-  }
-  if (!activities) return { error: "Cuenta qué hiciste esta semana." };
+  const revision = revisaReporte({ weekStart, weekEnd, horasTexto, activities });
+  if ("error" in revision) return revision;
+  const { minutos, weekStart: inicio, weekEnd: fin } = revision;
 
   const volunteer = await prisma.volunteer.findUnique({
     where: { id: me.volunteerId },
@@ -232,8 +300,8 @@ export async function submitServiceLog(
       volunteerId: me.volunteerId,
       areaId: opcional(formData.get("areaId")) ?? volunteer.areaId,
       leaderId: opcional(formData.get("leaderId")) ?? volunteer.leaderId,
-      weekStart,
-      weekEnd,
+      weekStart: inicio,
+      weekEnd: fin,
       reportedMinutes: minutos,
       activities,
       source: "PLATAFORMA",
@@ -250,6 +318,148 @@ export async function submitServiceLog(
   revalidatePath("/mi-servicio");
   revalidatePath("/servicio-social");
   return { ok: true };
+}
+
+/**
+ * El reporte que llega por la LIGA ABIERTA, sin cuenta. Es el Google Form tal
+ * cual: cualquiera con la liga escribe su nombre y manda su semana.
+ *
+ * Por eso lo que se puede hacer aquí está acotado a propósito:
+ *
+ *  - Solo CREA reportes, y siempre PENDIENTES. Nada se autoriza solo y nadie
+ *    puede editar ni borrar lo que ya está: quien manda no está identificado.
+ *  - No lee ni devuelve nada del padrón. Un formulario abierto que contestara
+ *    "ese prestador no existe" sería una manera de averiguar quién colabora aquí.
+ *  - Reconoce a la persona por `nameKey` —el nombre sin acentos ni mayúsculas— y
+ *    cae en la ficha que ya existe. Es la única defensa contra lo que pasó en la
+ *    hoja vieja, donde el mismo prestador acabó repartido en tres fichas por
+ *    escribir su nombre distinto. No alcanza para todo: quien hoy pone su nombre
+ *    completo y mañana el corto sigue abriendo ficha aparte, y eso lo junta la
+ *    coordinación desde «Juntar con otra ficha».
+ *  - Si la ficha nace aquí, nace ACTIVO y sin meta de horas: la meta la marca su
+ *    escuela y este formulario no tiene manera de saberla.
+ */
+export async function submitPublicServiceLog(
+  _prev: ReporteState,
+  formData: FormData,
+): Promise<ReporteState> {
+  const name = texto(formData.get("name"));
+  const emailKey = claveDeCorreo(texto(formData.get("email")));
+  const institucion = await resuelveInstitucion(opcional(formData.get("schoolId")));
+  const weekStart = parseDateInput(formData.get("weekStart"));
+  const weekEnd = parseDateInput(formData.get("weekEnd"));
+  const horasTexto = texto(formData.get("hours"));
+  const activities = textoLargo(formData.get("activities"));
+  const areaId = opcional(formData.get("areaId"));
+  const leaderId = opcional(formData.get("leaderId"));
+
+  if (name.length < 5 || name.split(" ").length < 2) {
+    return { error: "Escribe tu nombre completo, con apellidos." };
+  }
+  if (name.length > 120) return { error: "Revisa tu nombre: es demasiado largo." };
+  if (!institucion) {
+    return {
+      error:
+        "Escoge tu institución de la lista. Si no está, pídele a la coordinación que la agregue.",
+    };
+  }
+  const school = institucion.school;
+  if (!emailKey) return { error: "Escribe tu correo. Con él reconocemos que eres tú." };
+  if (!areaId || !leaderId) return { error: "Escoge el área y tu líder de área." };
+
+  const revision = revisaReporte({ weekStart, weekEnd, horasTexto, activities });
+  if ("error" in revision) return revision;
+  const { minutos, weekStart: inicio, weekEnd: fin } = revision;
+
+  // El área y el líder tienen que ser de los que se ofrecen HOY: así lo que llega
+  // de fuera no puede sembrar una fila apuntando a un catálogo que ya se retiró.
+  const [area, leader] = await Promise.all([
+    prisma.serviceArea.findFirst({ where: { id: areaId, active: true }, select: { id: true } }),
+    prisma.serviceLeader.findFirst({ where: { id: leaderId, active: true }, select: { id: true } }),
+  ]);
+  if (!area || !leader) return { error: "Escoge el área y tu líder de área." };
+
+  const claves = clavesDePrestador(name, school, emailKey);
+
+  // A quién se le acreditan estas horas. El correo manda sobre el nombre: quien
+  // escribió "Paul Ramirz" pero puso su correo de siempre es la misma persona, y
+  // el reporte cae en SU ficha con su nombre bien escrito, no en una nueva.
+  //
+  // El nombre es el respaldo, para los prestadores que vienen de la hoja del
+  // formulario: esos no traen correo y sin esto se les partiría la ficha la
+  // primera vez que reportaran por la liga.
+  let prestador = await prisma.volunteer.findFirst({
+    where: { emailKey },
+    select: { id: true, name: true, emailKey: true },
+  });
+  if (!prestador) {
+    prestador = await prisma.volunteer.findFirst({
+      where: { nameKey: claves.nameKey },
+      select: { id: true, name: true, emailKey: true },
+    });
+    // Se le guarda el correo la primera vez que lo da: de ahí en adelante ya se
+    // le reconoce por ahí aunque escriba su nombre distinto.
+    if (prestador && !prestador.emailKey) {
+      await prisma.volunteer.update({
+        where: { id: prestador.id },
+        data: { email: texto(formData.get("email")), emailKey },
+      });
+    }
+  }
+
+  const volunteerId =
+    prestador?.id ??
+    (
+      await prisma.volunteer.create({
+        data: {
+          name,
+          school,
+          schoolId: institucion.schoolId,
+          email: texto(formData.get("email")),
+          ...claves,
+          areaId,
+          leaderId,
+          startDate: inicio,
+        },
+        select: { id: true },
+      })
+    ).id;
+
+  // El nombre que QUEDA es el de la ficha, no el que se acaba de teclear: si se
+  // le reconoció por el correo, su nombre bueno ya estaba guardado y volver a
+  // escribirlo con la errata de hoy sería echar a perder el que ya servía.
+  const nombreEnFicha = prestador?.name ?? name;
+
+  // Guarda contra el doble envío: el mismo reporte, mandado dos veces porque la
+  // página tardó o alguien le dio dos veces al botón, no debe contar doble.
+  const repetido = await prisma.serviceLog.findFirst({
+    where: { volunteerId, weekStart: inicio, weekEnd: fin, activities },
+    select: { id: true },
+  });
+  if (repetido) {
+    return { ok: true, nombre: nombreEnFicha };
+  }
+
+  await prisma.serviceLog.create({
+    data: {
+      volunteerId,
+      areaId,
+      leaderId,
+      weekStart: inicio,
+      weekEnd: fin,
+      reportedMinutes: minutos,
+      activities,
+      source: "LIGA_PUBLICA",
+    },
+  });
+
+  // Sin logAudit: la bitácora atribuye movimientos a una CUENTA, y aquí no hay
+  // ninguna. De dónde vino queda en `source`, que es lo honesto que se puede decir.
+  revalidatePath("/servicio-social");
+  // Se le devuelve a nombre de quién quedó: es la única manera de que se dé
+  // cuenta, ahí mismo, de que escribió su nombre distinto o el correo de alguien
+  // más. Solo después de un envío completo y válido, nunca mientras teclea.
+  return { ok: true, nombre: nombreEnFicha };
 }
 
 /**
@@ -359,30 +569,80 @@ export async function deleteServiceLog(formData: FormData) {
  * de quien las lleva. Se desactivan en vez de borrarse cuando ya tienen reportes
  * colgando: los de 2021 siguen nombrando áreas que hoy ya no se ofrecen.
  */
+type TipoCatalogo = "area" | "lider" | "escuela";
+
+const CATALOGO_LABEL: Record<TipoCatalogo, string> = {
+  area: "las áreas",
+  lider: "los líderes",
+  escuela: "las instituciones",
+};
+
+function esTipo(v: string): v is TipoCatalogo {
+  return v === "area" || v === "lider" || v === "escuela";
+}
+
+/**
+ * Los tres catálogos se manejan igual, así que comparten estas acciones en vez de
+ * estar escritas tres veces. Prisma no deja indexar sus delegados con un tipo
+ * suelto sin perder los tipos de cada modelo, por eso el `switch`: es explícito y
+ * el compilador sigue cuidando cada rama.
+ */
+async function upsertCatalogo(tipo: TipoCatalogo, name: string) {
+  const datos = { where: { name }, update: { active: true }, create: { name, order: 500 } };
+  if (tipo === "area") return prisma.serviceArea.upsert({ ...datos, select: { id: true } });
+  if (tipo === "lider") return prisma.serviceLeader.upsert({ ...datos, select: { id: true } });
+  return prisma.serviceSchool.upsert({ ...datos, select: { id: true } });
+}
+
+async function activaCatalogo(tipo: TipoCatalogo, id: string, active: boolean) {
+  const datos = { where: { id }, data: { active }, select: { name: true } };
+  if (tipo === "area") return prisma.serviceArea.update(datos);
+  if (tipo === "lider") return prisma.serviceLeader.update(datos);
+  return prisma.serviceSchool.update(datos);
+}
+
+async function borraCatalogo(tipo: TipoCatalogo, id: string) {
+  const datos = { where: { id }, select: { name: true } };
+  if (tipo === "area") return prisma.serviceArea.delete(datos);
+  if (tipo === "lider") return prisma.serviceLeader.delete(datos);
+  return prisma.serviceSchool.delete(datos);
+}
+
+/** ¿Alguien está usando esta entrada? Lo que se usa no se borra: se desactiva. */
+async function usosCatalogo(tipo: TipoCatalogo, id: string): Promise<number> {
+  if (tipo === "escuela") return prisma.volunteer.count({ where: { schoolId: id } });
+  const [logs, prestadores] = await Promise.all([
+    prisma.serviceLog.count({ where: tipo === "area" ? { areaId: id } : { leaderId: id } }),
+    prisma.volunteer.count({ where: tipo === "area" ? { areaId: id } : { leaderId: id } }),
+  ]);
+  return logs + prestadores;
+}
+
+function refrescaCatalogos() {
+  revalidatePath("/servicio-social/catalogos");
+  revalidatePath("/servicio-social");
+  // /reportar no se refresca aquí: se arma en cada visita, así que ya sale con
+  // estas listas al día.
+}
+
+/**
+ * Las áreas, los líderes y las instituciones son catálogos y no listas fijas en
+ * el código: las tres han cambiado varias veces y la casa las mueve sola. Lo que
+ * ya no se ofrece se desactiva en vez de borrarse cuando tiene algo colgando —los
+ * reportes siguen nombrando áreas que hoy ya no se usan.
+ */
 export async function createServiceCatalogEntry(formData: FormData) {
   await requireServiceManager();
   const tipo = texto(formData.get("tipo"));
   const name = texto(formData.get("name"));
-  if (!name || (tipo !== "area" && tipo !== "lider")) return;
+  if (!name || !esTipo(tipo)) return;
 
-  if (tipo === "area") {
-    await prisma.serviceArea.upsert({
-      where: { name },
-      update: { active: true },
-      create: { name, order: 500 },
-    });
-  } else {
-    await prisma.serviceLeader.upsert({
-      where: { name },
-      update: { active: true },
-      create: { name, order: 500 },
-    });
-  }
+  await upsertCatalogo(tipo, name);
   await logAudit({
     action: "servicio.catalogo.editar",
-    summary: `Agregó «${name}» a ${tipo === "area" ? "las áreas" : "los líderes"} de servicio social`,
+    summary: `Agregó «${name}» a ${CATALOGO_LABEL[tipo]} de servicio social`,
   });
-  revalidatePath("/servicio-social/catalogos");
+  refrescaCatalogos();
 }
 
 export async function setServiceCatalogActive(formData: FormData) {
@@ -390,21 +650,14 @@ export async function setServiceCatalogActive(formData: FormData) {
   const tipo = texto(formData.get("tipo"));
   const id = texto(formData.get("id"));
   const active = texto(formData.get("active")) === "true";
-  if (!id || (tipo !== "area" && tipo !== "lider")) return;
+  if (!id || !esTipo(tipo)) return;
 
-  const entry =
-    tipo === "area"
-      ? await prisma.serviceArea.update({ where: { id }, data: { active }, select: { name: true } })
-      : await prisma.serviceLeader.update({
-          where: { id },
-          data: { active },
-          select: { name: true },
-        });
+  const entry = await activaCatalogo(tipo, id, active);
   await logAudit({
     action: "servicio.catalogo.editar",
     summary: `${active ? "Reactivó" : "Desactivó"} «${entry.name}» en servicio social`,
   });
-  revalidatePath("/servicio-social/catalogos");
+  refrescaCatalogos();
 }
 
 /**
@@ -415,20 +668,14 @@ export async function deleteServiceCatalogEntry(formData: FormData) {
   await requireServiceManager();
   const tipo = texto(formData.get("tipo"));
   const id = texto(formData.get("id"));
-  if (!id || (tipo !== "area" && tipo !== "lider")) return;
+  if (!id || !esTipo(tipo)) return;
 
-  const enUso = await prisma.serviceLog.count({
-    where: tipo === "area" ? { areaId: id } : { leaderId: id },
-  });
-  if (enUso > 0) return;
+  if ((await usosCatalogo(tipo, id)) > 0) return;
 
-  const entry =
-    tipo === "area"
-      ? await prisma.serviceArea.delete({ where: { id }, select: { name: true } })
-      : await prisma.serviceLeader.delete({ where: { id }, select: { name: true } });
+  const entry = await borraCatalogo(tipo, id);
   await logAudit({
     action: "servicio.catalogo.editar",
     summary: `Quitó «${entry.name}» del catálogo de servicio social`,
   });
-  revalidatePath("/servicio-social/catalogos");
+  refrescaCatalogos();
 }

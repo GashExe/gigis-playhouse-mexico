@@ -7,6 +7,7 @@ import {
   canGrade,
   canManageService,
   canRunClasses,
+  canSeeService,
   coordinationScope,
   coversProgram,
   homePath,
@@ -44,6 +45,8 @@ export const getCurrentUser = cache(async () => {
       role: true,
       // De qué coordina (solo COORDINADOR). Acota lo que ve y lo que puede tocar.
       coordination: true,
+      // Lleva el servicio social además de su encargo principal.
+      leadsService: true,
       active: true,
       studentId: true,
       // Prestador ligado (solo para role VOLUNTARIO).
@@ -121,12 +124,26 @@ export async function requireStaff() {
 }
 
 /**
+ * VER servicio social. Entra quien lo lleva —por rol o por la bandera
+ * `leadsService`— y el LECTOR, que ve toda la plataforma. A los demás se les
+ * manda al panel: la pantalla no es suya.
+ */
+export async function requireServiceAccess() {
+  const user = await getCurrentUser();
+  if (!canSeeService(user)) {
+    redirect("/panel");
+  }
+  return user;
+}
+
+/**
  * ESCRIBIR en servicio social: dar de alta prestadores, editarlos y autorizar o
- * rechazar sus reportes de horas. Dirección y coordinación de servicio social.
+ * rechazar sus reportes de horas. A diferencia de la compuerta de ver, esta
+ * lanza: una acción sin permiso no debe "no hacer nada" en silencio.
  */
 export async function requireServiceManager() {
   const user = await getCurrentUser();
-  if (isReadOnly(user.role) || !canManageService(user.role)) {
+  if (!canManageService(user)) {
     throw new Error("No autorizado");
   }
   return user;

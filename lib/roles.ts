@@ -53,19 +53,46 @@ export const GRADER_ROLES: Role[] = ["DIRECTORA", "COORDINADOR", "TERAPEUTA"];
 export const ACCESS_ROLES: Role[] = ["DIRECTORA", "GESTORA_OPERACIONES"];
 
 /**
- * Roles que llevan el servicio social: dan de alta a los prestadores, les entregan
- * su acceso y autorizan o rechazan los reportes semanales de horas.
- *
- * Va aparte de MANAGER_ROLES a propósito. El coordinador de servicio social NO es
- * una coordinación de programas: lo suyo son los prestadores y sus horas, y darle
- * de paso los expedientes de los participantes sería regalarle un permiso que
- * nadie le pidió. Por eso tampoco está en MANAGER_ROLES ni en GRADER_ROLES.
+ * Roles cuyo encargo ES el servicio social. Va aparte de MANAGER_ROLES a
+ * propósito: el coordinador de servicio social NO es una coordinación de
+ * programas, y darle de paso los expedientes de los participantes sería regalarle
+ * un permiso que nadie le pidió. Por eso tampoco está en MANAGER_ROLES ni en
+ * GRADER_ROLES.
  */
 export const SERVICE_ROLES: Role[] = ["DIRECTORA", "COORDINADOR_SERVICIO_SOCIAL"];
 
-/** ¿Lleva el servicio social (prestadores, horas y autorizaciones)? */
-export function canManageService(role: Role): boolean {
-  return SERVICE_ROLES.includes(role);
+/** Lo mínimo que hay que saber de una cuenta para resolver el servicio social. */
+export type ServiceActor = { role: Role; leadsService?: boolean | null };
+
+/**
+ * ¿Lleva el servicio social —prestadores, horas y autorizaciones—?
+ *
+ * ES LA ÚNICA función que lo decide, y son tres caminos distintos al mismo
+ * permiso:
+ *
+ *  1. La DIRECTORA, siempre. Es el rol maestro y va nombrada aquí y no en cada
+ *     compuerta porque si dependiera de que alguien se acuerde de ponerla, tarde
+ *     o temprano se le olvida y se queda fuera de su propia plataforma.
+ *  2. Quien tiene el rol COORDINADOR_SERVICIO_SOCIAL: su único encargo es ese.
+ *  3. Quien lo lleva ADEMÁS de lo suyo (`leadsService`). En la casa pasa: la
+ *     misma terapeuta que da clases puede llevar el servicio social, y como
+ *     `role` es uno solo por cuenta, obligarla a escoger la dejaría sin la mitad
+ *     de su trabajo. La bandera se carga encima del rol, sin quitarle nada.
+ *
+ * El LECTOR no entra por ninguno: ve la pantalla completa —eso lo resuelven las
+ * compuertas de VER— y lo que no puede es escribir.
+ */
+export function canManageService(user: ServiceActor): boolean {
+  if (isReadOnly(user.role)) return false;
+  return SERVICE_ROLES.includes(user.role) || user.leadsService === true;
+}
+
+/**
+ * ¿Le enseñamos la pantalla de servicio social? Quien la lleva, más el LECTOR,
+ * cuyo encargo es ver toda la plataforma sin tocar nada.
+ */
+export function canSeeService(user: ServiceActor): boolean {
+  return isReadOnly(user.role) || canManageService(user);
 }
 
 /** Solo mira: ninguna escritura, en ninguna pantalla. */

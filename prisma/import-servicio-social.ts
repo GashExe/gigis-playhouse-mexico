@@ -2,12 +2,19 @@
  * Importa la hoja de respuestas del Google Form «Registro de horas "Servicio
  * Social"» (2021 en adelante) a las tablas de servicio social.
  *
- *   npm run db:import-servicio-social -- "<ruta.xlsx>" [--commit]
+ *   npm run db:import-servicio-social -- "<ruta.xlsx>" [--commit] [--desde 2026]
+ *
+ * Solo trae de 2026 en adelante (`--desde`). Lo pidió la casa: de 2025 para atrás
+ * son prestadores que hace años se liberaron, y arrastrarlos hace que el padrón
+ * de hoy no se pueda leer. De 3,339 filas con nombre, 622 son de 2026.
  *
  * Lo que hace, en orden:
- *   1. Arma el catálogo de áreas y de líderes. Las que el formulario todavía
- *      ofrece quedan activas; las que solo existen en filas viejas quedan
- *      INACTIVAS —no se borran— porque los reportes de entonces las nombran.
+ *   1. Arma el catálogo de instituciones con la lista que lleva la casa, y el de
+ *      áreas y líderes. Como solo se leen filas del año
+ *      de corte en adelante, todo lo que aparece está VIGENTE por definición, y
+ *      entra activo. Al final se avisa qué se usó que no está en la lista del
+ *      formulario, y qué de la lista no usó nadie: eso lo decide la coordinación
+ *      desde Áreas y líderes, no este archivo.
  *   2. Agrupa las filas por persona y crea un prestador por cada una.
  *   3. Mete cada fila como un reporte semanal, ya autorizado o rechazado según
  *      la columna "Autorizado (Si/NO)".
@@ -28,7 +35,15 @@ import "dotenv/config";
 import * as XLSX from "xlsx";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { leeAutorizacion, parseHorasAMinutos } from "../lib/servicio";
+import { INSTITUCIONES, institucionDe } from "../lib/instituciones";
+import {
+  claveDeBusqueda,
+  clavesDePrestador,
+  distanciaTexto,
+  esLaMismaPersona,
+  leeAutorizacion,
+  parseHorasAMinutos,
+} from "../lib/servicio";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -50,7 +65,7 @@ const COL = {
   autorizado: 10,
 } as const;
 
-/** Áreas que el formulario ofrece HOY, en su orden. Las demás quedan inactivas. */
+/** Áreas que el menú del formulario de Google ofrece HOY, en su orden. */
 const AREAS_VIGENTES = [
   "Redes sociales",
   "Programas educacionales (Planeaciones y/o materiales)",
@@ -64,7 +79,7 @@ const AREAS_VIGENTES = [
   "Coordinación Servicio Social",
 ];
 
-/** Líderes que el formulario ofrece HOY, en su orden. */
+/** Líderes que el menú del formulario de Google ofrece HOY, en su orden. */
 const LIDERES_VIGENTES = [
   "Paula Tornell",
   "Nadia Diaz",
@@ -80,53 +95,6 @@ const LIDERES_VIGENTES = [
 /* ── Utilidades de texto ───────────────────────────────────────────────────── */
 
 const limpia = (v: unknown) => String(v ?? "").replace(/\s+/g, " ").trim();
-
-/** Clave para comparar texto escrito a mano: sin acentos, minúsculas, sin puntos. */
-function clave(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** Distancia de edición, para reconocer un nombre mal tecleado. */
-function distancia(a: string, b: string): number {
-  const fila = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let previo = fila[0];
-    fila[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const temp = fila[j];
-      fila[j] = Math.min(fila[j] + 1, fila[j - 1] + 1, previo + (a[i - 1] === b[j - 1] ? 0 : 1));
-      previo = temp;
-    }
-  }
-  return fila[b.length];
-}
-
-/**
- * ¿Son la misma persona con el nombre mal tecleado? Solo cuando tienen las mismas
- * palabras, el mismo primer nombre y a lo más dos letras de diferencia: así
- * «David Hernpandez Garcilazo» se junta con «David Hernández Garcilazo», pero
- * «David Hernández» —que puede ser otro David— se queda aparte.
- *
- * Se peca de conservador a propósito: juntar a dos personas distintas le regala
- * horas a una y se las quita a la otra, y eso no se ve hasta que alguien reclama
- * su constancia. Lo que quede separado de más se junta después desde la
- * plataforma, que para eso está el botón de fusionar.
- */
-function mismaPersona(a: string, b: string): boolean {
-  const pa = a.split(" ");
-  const pb = b.split(" ");
-  if (pa.length !== pb.length || pa.length < 2) return false;
-  if (pa[0] !== pb[0]) return false;
-  if (a.length < 15) return false;
-  const d = distancia(a, b);
-  return d > 0 && d <= 2;
-}
 
 /** "8/16/21" o "8/23/2021 9:52:00" → Date a medianoche UTC (convención @db.Date). */
 function parseFecha(texto: string): Date | null {
@@ -206,14 +174,36 @@ async function armaCatalogo(
   vigentes: string[],
   usados: string[],
   escribe: boolean,
-): Promise<Map<string, string>> {
+): Promise<{ mapa: Map<string, string>; nuevos: string[] }> {
   const porClave = new Map<string, { name: string; active: boolean; order: number }>();
-  vigentes.forEach((name, i) => porClave.set(clave(name), { name, active: true, order: i }));
+  vigentes.forEach((name, i) => porClave.set(claveDeBusqueda(name), { name, active: true, order: i }));
 
+  // Un catálogo SÍ se puede corregir por parecido, al revés que los nombres de
+  // personas: "Malellely Martínez" es un dedazo de "Mallely Martínez" y no un
+  // líder nuevo. Aquí lo peor que pasa si se equivoca es que un reporte quede
+  // apuntando al área de junto —se cambia con un clic—; allá sería regalarle las
+  // horas de alguien a otro.
+  const comoVigente = (k: string): string | null => {
+    for (const vigente of porClave.keys()) {
+      if (k.length >= 8 && distanciaTexto(k, vigente) <= 2) return vigente;
+    }
+    return null;
+  };
+
+  // Lo que se usó en el periodo importado entra ACTIVO: si alguien reportó en
+  // esa área este año, el área existe, aunque el menú del formulario ya no la
+  // ofrezca. Apagarla de entrada escondería reportes que sí hay que revisar.
+  const erratas = new Map<string, string>();
   for (const crudo of usados) {
-    const k = clave(crudo);
+    const k = claveDeBusqueda(crudo);
     if (!k || k === "0" || porClave.has(k)) continue;
-    porClave.set(k, { name: crudo, active: false, order: 900 });
+    const vigente = comoVigente(k);
+    if (vigente) {
+      erratas.set(k, vigente);
+      console.log(`  ~ «${crudo}» se lee como «${porClave.get(vigente)!.name}»`);
+      continue;
+    }
+    porClave.set(k, { name: crudo, active: true, order: 900 });
   }
 
   const mapa = new Map<string, string>();
@@ -233,7 +223,17 @@ async function armaCatalogo(
     });
     mapa.set(k, row.id);
   }
-  return mapa;
+  // Las erratas apuntan a la misma fila que el nombre bueno.
+  for (const [errata, vigente] of erratas) {
+    const id = mapa.get(vigente);
+    if (id) mapa.set(errata, id);
+  }
+  // Lo que se usó y NO estaba en el menú del formulario, ya sin las erratas: eso
+  // es lo que de verdad hay que enseñarle a la coordinación.
+  const nuevos = [...porClave.entries()]
+    .filter(([, f]) => f.order === 900)
+    .map(([, f]) => f.name);
+  return { mapa, nuevos };
 }
 
 /* ── Importación ───────────────────────────────────────────────────────────── */
@@ -241,7 +241,9 @@ async function armaCatalogo(
 async function main() {
   const args = process.argv.slice(2);
   const dry = !args.includes("--commit");
-  const ruta = args.find((a) => !a.startsWith("--"));
+  const desdeArg = args[args.indexOf("--desde") + 1];
+  const desde = args.includes("--desde") && /^\d{4}$/.test(desdeArg ?? "") ? Number(desdeArg) : 2026;
+  const ruta = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--desde");
   if (!ruta) {
     console.error(
       'Falta la ruta del archivo.\n  npm run db:import-servicio-social -- "Registro de horas.xlsx" [--commit]',
@@ -253,25 +255,61 @@ async function main() {
   const problemas: string[] = [];
 
   // Filas que no se pueden usar: sin nombre no hay a quién acreditárselas.
+  let viejas = 0;
   const utiles = filas.filter((f) => {
     if (!f.nombre) return false;
     if (!f.inicio && !f.fin && !f.marca) {
       problemas.push(`línea ${f.linea}: «${f.nombre}» sin ninguna fecha legible; se omite`);
       return false;
     }
+    // El año de la semana reportada manda, no el de cuando se capturó: una semana
+    // de diciembre que se mandó tarde sigue siendo de ese diciembre.
+    const referencia = (f.fin ?? f.inicio ?? f.marca)!;
+    if (referencia.getUTCFullYear() < desde) {
+      viejas++;
+      return false;
+    }
     return true;
   });
-  console.log(`Filas en la hoja: ${filas.length} · con datos: ${utiles.length}`);
+  console.log(
+    `Filas en la hoja: ${filas.length} · de ${desde} en adelante: ${utiles.length}` +
+      ` · anteriores a ${desde} que NO se traen: ${viejas}`,
+  );
 
-  const areas = await armaCatalogo("serviceArea", AREAS_VIGENTES, utiles.map((f) => f.area), !dry);
-  const lideres = await armaCatalogo("serviceLeader", LIDERES_VIGENTES, utiles.map((f) => f.lider), !dry);
-  console.log(`Áreas en el catálogo: ${areas.size} · líderes: ${lideres.size}`);
+  // Las instituciones no salen de la hoja: salen de la lista que lleva la casa.
+  // Lo que la gente tecleó se EMPATA contra ella (ver lib/instituciones.ts): en
+  // 2026 hay 24 maneras de nombrar cinco escuelas, y guardar el texto tal cual
+  // haría imposible el conteo de voluntarios por institución.
+  const escuelas = new Map<string, string>();
+  for (const [i, inst] of INSTITUCIONES.entries()) {
+    if (dry) {
+      escuelas.set(inst.name, `dry:${inst.name}`);
+      continue;
+    }
+    const row = await prisma.serviceSchool.upsert({
+      where: { name: inst.name },
+      update: { order: i, active: true },
+      create: { name: inst.name, order: i },
+      select: { id: true },
+    });
+    escuelas.set(inst.name, row.id);
+  }
+  console.log(`Instituciones en el catálogo: ${escuelas.size}`);
+
+  const catAreas = await armaCatalogo("serviceArea", AREAS_VIGENTES, utiles.map((f) => f.area), !dry);
+  const catLideres = await armaCatalogo("serviceLeader", LIDERES_VIGENTES, utiles.map((f) => f.lider), !dry);
+  const areas = catAreas.mapa;
+  const lideres = catLideres.mapa;
+  console.log(
+    `Áreas en el catálogo: ${AREAS_VIGENTES.length + catAreas.nuevos.length}` +
+      ` · líderes: ${LIDERES_VIGENTES.length + catLideres.nuevos.length}`,
+  );
 
   /* Agrupa por persona. Primero por nombre idéntico y luego, con cuidado, los
      que solo difieren en una errata. */
   const grupos = new Map<string, Fila[]>();
   for (const f of utiles) {
-    const k = clave(f.nombre);
+    const k = claveDeBusqueda(f.nombre);
     const existente = grupos.get(k) ?? [];
     existente.push(f);
     grupos.set(k, existente);
@@ -283,7 +321,7 @@ async function main() {
     if (alias.has(k)) continue;
     alias.set(k, k);
     for (const otra of claves) {
-      if (alias.has(otra) || !mismaPersona(k, otra)) continue;
+      if (alias.has(otra) || !esLaMismaPersona(k, otra)) continue;
       alias.set(otra, k);
       console.log(`  ~ se juntan «${otra}» y «${k}» (misma persona, nombre mal tecleado)`);
     }
@@ -302,6 +340,7 @@ async function main() {
   const corte = new Date();
   corte.setUTCDate(corte.getUTCDate() - 120);
 
+  const sinInstitucion = new Set<string>();
   let altas = 0;
   let reportes = 0;
   let repetidos = 0;
@@ -316,8 +355,15 @@ async function main() {
     const inicio = semanas.reduce((a, b) => (a < b ? a : b));
     const fin = fines.reduce((a, b) => (a > b ? a : b));
 
-    const areaId = areas.get(clave(moda(lista.map((f) => f.area)))) ?? null;
-    const leaderId = lideres.get(clave(moda(lista.map((f) => f.lider)))) ?? null;
+    const institucion = institucionDe(claveDeBusqueda(escuela));
+    const schoolId = institucion ? (escuelas.get(institucion) ?? null) : null;
+    // Cuando empata, se guarda el nombre del catálogo; cuando no, el texto tal
+    // como lo escribió, para que la coordinación vea de dónde venía y lo arregle.
+    const escuelaFinal = institucion ?? escuela ?? "—";
+    if (!institucion && escuela) sinInstitucion.add(escuela);
+
+    const areaId = areas.get(claveDeBusqueda(moda(lista.map((f) => f.area)))) ?? null;
+    const leaderId = lideres.get(claveDeBusqueda(moda(lista.map((f) => f.lider)))) ?? null;
 
     if (dry) {
       altas++;
@@ -326,21 +372,35 @@ async function main() {
       continue;
     }
 
-    // Se reconoce por el nombre ya normalizado: correr esto dos veces no duplica.
+    // Se reconoce por `nameKey` —el nombre sin acentos ni mayúsculas— y no por el
+    // texto exacto. Importa: el nombre que se guarda es el que MÁS se repite en
+    // las filas leídas, así que al reimportar un rango distinto puede salir otra
+    // variante del mismo nombre, y emparejando por texto exacto esa persona
+    // quedaría duplicada en vez de actualizada.
+    const claves = clavesDePrestador(nombre, escuelaFinal);
     const yaEsta = await prisma.volunteer.findFirst({
-      where: { name: nombre },
+      where: { OR: [{ nameKey: claves.nameKey }, { name: nombre }] },
       select: { id: true },
     });
     const volunteer = yaEsta
       ? await prisma.volunteer.update({
           where: { id: yaEsta.id },
-          data: { school: escuela || "—", areaId, leaderId },
+          data: {
+            name: nombre,
+            school: escuelaFinal,
+            schoolId,
+            ...claves,
+            areaId,
+            leaderId,
+          },
           select: { id: true },
         })
       : await prisma.volunteer.create({
           data: {
             name: nombre,
-            school: escuela || "—",
+            school: escuelaFinal,
+            schoolId,
+            ...claves,
             areaId,
             leaderId,
             startDate: inicio,
@@ -376,8 +436,8 @@ async function main() {
       await prisma.serviceLog.create({
         data: {
           volunteerId: volunteer.id,
-          areaId: areas.get(clave(f.area)) ?? null,
-          leaderId: lideres.get(clave(f.lider)) ?? null,
+          areaId: areas.get(claveDeBusqueda(f.area)) ?? null,
+          leaderId: lideres.get(claveDeBusqueda(f.lider)) ?? null,
           weekStart,
           weekEnd,
           reportedMinutes: minutos ?? 0,
@@ -404,6 +464,38 @@ async function main() {
       (repetidos ? `\nReportes que ya estaban (no se repitieron): ${repetidos}` : "") +
       `\nReportes cuyas horas hay que capturar a mano: ${sinHoras}`,
   );
+  // Lo que la coordinación tiene que mirar: el menú del formulario y lo que de
+  // verdad se usó no son la misma lista, y ninguna de las dos manda sobre la otra.
+  const usadasArea = new Set(utiles.map((f) => claveDeBusqueda(f.area)).filter(Boolean));
+  const usadosLider = new Set(utiles.map((f) => claveDeBusqueda(f.lider)).filter(Boolean));
+  const usadaVigente = (k: string, vigentes: string[]) =>
+    vigentes.some((v) => claveDeBusqueda(v) === k || distanciaTexto(k, claveDeBusqueda(v)) <= 2);
+  const reporta = (titulo: string, lista: string[]) => {
+    if (!lista.length) return;
+    console.log(`\n${titulo}`);
+    lista.forEach((v) => console.log("  · " + v));
+  };
+  reporta(
+    `Escuelas que nadie pudo empatar con la lista de instituciones:`,
+    [...sinInstitucion],
+  );
+  reporta(
+    `Áreas usadas en ${desde} que NO están en el menú del formulario:`,
+    catAreas.nuevos,
+  );
+  reporta(
+    `Áreas del menú del formulario que NADIE usó en ${desde}:`,
+    AREAS_VIGENTES.filter((a) => !usadaVigente(claveDeBusqueda(a), [...usadasArea])),
+  );
+  reporta(
+    `Líderes que avalaron en ${desde} y NO están en el menú del formulario:`,
+    catLideres.nuevos,
+  );
+  reporta(
+    `Líderes del menú del formulario que NADIE avaló en ${desde}:`,
+    LIDERES_VIGENTES.filter((l) => !usadaVigente(claveDeBusqueda(l), [...usadosLider])),
+  );
+
   if (problemas.length) {
     console.log(`\nFilas omitidas (${problemas.length}):`);
     problemas.slice(0, 30).forEach((p) => console.log("  · " + p));

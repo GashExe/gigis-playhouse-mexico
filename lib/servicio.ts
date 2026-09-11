@@ -23,6 +23,139 @@ function plano(value: string): string {
     .trim();
 }
 
+/* ── Búsqueda ──────────────────────────────────────────────────────────────── */
+
+/**
+ * Nombre y escuela juntos, sin acentos y en minúsculas: lo que se guarda en
+ * `Volunteer.searchKey` y contra lo que se busca.
+ *
+ * Hace falta porque Postgres no sabe que "Ramírez" y "Ramirez" son la misma
+ * persona, y en esta lista lo son: el mismo prestador mandó su nombre con acentos
+ * y sin ellos. Buscando sobre el nombre tal cual, quien tecleaba "Ramirez" no
+ * encontraba a quien quedó guardado como "Ramírez", y parecía que no estaba.
+ */
+export function claveDeBusqueda(...partes: (string | null | undefined)[]): string {
+  return plano(partes.filter(Boolean).join(" "))
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Las palabras de lo que alguien tecleó en el buscador. Se parte en palabras
+ * porque los nombres se dicen cortos y se guardan largos: quien busca
+ * "Paul Ramírez" está buscando a "Paul Francisco Ramírez Jiménez", y una sola
+ * cadena no lo encuentra nunca. Cada palabra tiene que aparecer; el orden no.
+ */
+export function palabrasDeBusqueda(q: string | null | undefined): string[] {
+  const clave = claveDeBusqueda(q);
+  return clave ? clave.split(" ") : [];
+}
+
+/**
+ * El correo, normalizado para comparar: minúsculas y sin espacios. Devuelve null
+ * si no parece un correo — media identidad es peor que ninguna, porque hace creer
+ * que se reconoció a alguien.
+ */
+export function claveDeCorreo(email: string | null | undefined): string | null {
+  const limpio = String(email ?? "").trim().toLowerCase().replace(/\s+/g, "");
+  if (!limpio || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(limpio)) return null;
+  return limpio;
+}
+
+/** Las claves derivadas de un prestador, para guardarlas de un tiro. */
+export function clavesDePrestador(name: string, school: string, email?: string | null) {
+  return {
+    nameKey: claveDeBusqueda(name),
+    searchKey: claveDeBusqueda(name, school),
+    emailKey: claveDeCorreo(email),
+  };
+}
+
+/* ── Actividades ───────────────────────────────────────────────────────────── */
+
+/**
+ * Tope de palabras de las actividades de un reporte. Lo pidió la coordinación:
+ * lo que se lee para avalar horas tiene que caber de un vistazo.
+ *
+ * Para calibrar: de los 622 reportes de 2026, el promedio son 18 palabras y 57
+ * pasan de 50. O sea que frena a uno de cada once, y los que frena son los que
+ * hoy llegan como párrafos.
+ */
+export const MAX_PALABRAS_ACTIVIDADES = 50;
+
+/** Cuántas palabras trae un texto. */
+export function cuentaPalabras(texto: string | null | undefined): number {
+  return String(texto ?? "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+/** Distancia de edición, para reconocer un nombre mal tecleado. */
+export function distanciaTexto(a: string, b: string): number {
+  const fila = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let previo = fila[0];
+    fila[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = fila[j];
+      fila[j] = Math.min(
+        fila[j] + 1,
+        fila[j - 1] + 1,
+        previo + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      previo = temp;
+    }
+  }
+  return fila[b.length];
+}
+
+/**
+ * ¿Son la misma persona con el nombre mal tecleado? Se compara sobre claves ya
+ * normalizadas (`claveDeBusqueda`).
+ *
+ * Pide las mismas palabras, el mismo primer nombre y a lo más dos letras de
+ * diferencia: así «David Hernpandez Garcilazo» se junta con «David Hernández
+ * Garcilazo», pero «David Hernández» —que puede ser otro David— se queda aparte.
+ *
+ * Se peca de conservador a propósito, y esta es la razón: juntar a dos personas
+ * distintas le regala horas a una y se las quita a la otra, y eso no se ve hasta
+ * que alguien reclama su constancia. Lo que quede separado de más se junta
+ * después a mano, con alguien mirando.
+ */
+export function esLaMismaPersona(a: string, b: string): boolean {
+  const pa = a.split(" ");
+  const pb = b.split(" ");
+  if (pa.length !== pb.length || pa.length < 2) return false;
+  if (pa[0] !== pb[0]) return false;
+  if (a.length < 15) return false;
+  const d = distanciaTexto(a, b);
+  return d > 0 && d <= 2;
+}
+
+/**
+ * ¿Vale la pena que una persona MIRE si estas dos fichas son la misma? Más suelto
+ * que `esLaMismaPersona`: aquí no se junta nada solo, se sugiere.
+ *
+ * Da true cuando una es el nombre corto de la otra —«Paul Ramírez» dentro de
+ * «Paul Francisco Ramírez Jiménez»—, que es justo el caso que la regla estricta
+ * nunca junta y que en la hoja del formulario pasó decenas de veces.
+ */
+export function seParecen(a: string, b: string): boolean {
+  if (a === b) return false;
+  if (esLaMismaPersona(a, b)) return true;
+  const pa = a.split(" ");
+  const pb = b.split(" ");
+  if (pa[0] !== pb[0]) return false;
+  const [corto, largo] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
+  if (corto.length < 2) return false;
+  // Todas las palabras del nombre corto aparecen en el largo, en orden.
+  let i = 0;
+  for (const palabra of largo) {
+    if (palabra === corto[i]) i++;
+    if (i === corto.length) return true;
+  }
+  return false;
+}
+
 /* ── Horas ─────────────────────────────────────────────────────────────────── */
 
 /**
@@ -96,25 +229,6 @@ export function horasLabel(minutos: number | null | undefined): string {
 
 /* ── "Autorizado (Si/NO)" ──────────────────────────────────────────────────── */
 
-/** Distancia de edición, acotada: para leer "Aotorizado" como "Autorizado". */
-function distancia(a: string, b: string): number {
-  const fila = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let previo = fila[0];
-    fila[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const temp = fila[j];
-      fila[j] = Math.min(
-        fila[j] + 1,
-        fila[j - 1] + 1,
-        previo + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-      previo = temp;
-    }
-  }
-  return fila[b.length];
-}
-
 export type LecturaAutorizacion = {
   status: ServiceLogStatus;
   /** Horas que la coordinación dejó pasar, cuando escribió un número distinto. */
@@ -164,7 +278,7 @@ export function leeAutorizacion(raw: string | null | undefined): LecturaAutoriza
 
   // "autorizado (si)", "autorizados", "AUTORIZO*", y sus erratas.
   const primera = soloLetras.split(" ")[0] ?? "";
-  if (distancia(primera, "autorizado") <= 2 || distancia(primera, "autorizo") <= 2) {
+  if (distanciaTexto(primera, "autorizado") <= 2 || distanciaTexto(primera, "autorizo") <= 2) {
     return { status: "AUTORIZADO", horasAutorizadas: null, nota: notaSiDiceMas(original) };
   }
 

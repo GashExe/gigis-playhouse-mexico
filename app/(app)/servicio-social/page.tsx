@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import {
   HandHeart,
   Clock,
@@ -7,16 +8,20 @@ import {
   CaretRight,
   UserPlus,
   Sliders,
+  ArrowsMerge,
+  Warning,
   GraduationCap,
 } from "@phosphor-icons/react/dist/ssr";
-import { requireRole } from "@/lib/dal";
+import { requireServiceAccess } from "@/lib/dal";
 import { canManageService } from "@/lib/roles";
 import {
   getServiceStats,
   listPendingServiceLogs,
   listServiceAreas,
   listServiceLeaders,
+  listServiceSchools,
   listVolunteers,
+  listPossibleDuplicateVolunteers,
 } from "@/lib/queries";
 import { createVolunteer } from "@/lib/actions/servicio";
 import { horasLabel, VOLUNTEER_STATUS_LABEL } from "@/lib/servicio";
@@ -30,6 +35,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchInput } from "@/components/search-input";
 import { ServiceLogDecision } from "@/components/service-log-decision";
+import { PublicLinkCard } from "@/components/public-link-card";
 
 export const metadata = { title: "Servicio social" };
 
@@ -40,20 +46,32 @@ export default async function ServicioSocialPage({
 }: {
   searchParams: Promise<{ q?: string; estado?: string }>;
 }) {
-  // La lleva la coordinación de servicio social. La directora y el lector pasan
-  // siempre (requireRole); el lector ve todo y no resuelve nada.
-  const me = await requireRole("COORDINADOR_SERVICIO_SOCIAL");
-  const puedeResolver = canManageService(me.role);
+  // Entra quien lleva el servicio social: la directora, quien tiene el rol, y
+  // quien lo lleva además de lo suyo. El lector también, y no resuelve nada.
+  const me = await requireServiceAccess();
+  const puedeResolver = canManageService(me);
 
   const { q, estado } = await searchParams;
+
+  // La liga pública, armada con el host de esta misma petición: la que se copia
+  // es la de donde está corriendo la plataforma, sin depender de una variable de
+  // entorno que alguien tenga que acordarse de cambiar al mover el despliegue.
+  const cabeceras = await headers();
+  const host = cabeceras.get("x-forwarded-host") ?? cabeceras.get("host") ?? "";
+  const protocolo = cabeceras.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const ligaPublica = `${protocolo}://${host}/reportar`;
+
   const filtro = ESTADOS.includes(estado as (typeof ESTADOS)[number]) ? estado! : "ACTIVO";
 
-  const [stats, pendientes, volunteers, areas, lideres] = await Promise.all([
+  const [stats, pendientes, volunteers, areas, lideres, duplicados, escuelas] =
+    await Promise.all([
     getServiceStats(),
     listPendingServiceLogs(),
     listVolunteers({ q, status: filtro }),
     listServiceAreas(),
     listServiceLeaders(),
+    listPossibleDuplicateVolunteers(),
+    listServiceSchools(),
   ]);
 
   return (
@@ -97,11 +115,52 @@ export default async function ServicioSocialPage({
             label: "En el padrón",
             value: volunteers.length,
             icon: <GraduationCap weight="fill" className="size-5" />,
-            hint: filtro === "TODOS" ? "Todos" : VOLUNTEER_STATUS_LABEL[filtro as "ACTIVO"],
+            hint: q
+              ? "Resultados de la búsqueda"
+              : filtro === "TODOS"
+                ? "Todos"
+                : VOLUNTEER_STATUS_LABEL[filtro as "ACTIVO"],
             tone: "blue",
           },
         ]}
       />
+
+      {puedeResolver && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <PublicLinkCard url={ligaPublica} />
+
+          {/* Se enseña solo cuando hay algo que revisar: una tarjeta que siempre
+              dice "ninguno" acaba siendo parte del decorado y deja de leerse. */}
+          {duplicados.length > 0 && (
+            <Card className="p-5">
+              <h2 className="flex items-center gap-2 text-sm font-bold text-ink">
+                <ArrowsMerge weight="bold" className="size-4 text-warning-strong" />
+                Fichas que podrían ser la misma persona
+              </h2>
+              <p className="mt-1 text-xs text-muted">
+                Nadie las juntó solo: un nombre corto y uno largo pueden ser dos personas.
+                Abre una y usa «Juntar con otra ficha» si de verdad son la misma.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {duplicados.map(({ a, b }) => (
+                  <li
+                    key={`${a.id}-${b.id}`}
+                    className="rounded-[var(--radius-control)] border border-border bg-surface-2 px-3 py-2 text-xs"
+                  >
+                    <Link href={`/servicio-social/${a.id}`} className="font-semibold text-ink hover:text-primary-strong">
+                      {a.name}
+                    </Link>
+                    <span className="text-subtle"> · </span>
+                    <Link href={`/servicio-social/${b.id}`} className="font-semibold text-ink hover:text-primary-strong">
+                      {b.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* ── Bandeja: lo que está esperando respuesta ───────────────────────── */}
       <section className="mt-8">
@@ -144,6 +203,14 @@ export default async function ServicioSocialPage({
                       {log.area && <span>{log.area.name}</span>}
                       {log.leader && <span>Líder: {log.leader.name}</span>}
                       {log.source === "FORMULARIO" && <Badge tone="neutral">Del formulario</Badge>}
+                      {/* Lo que entra por la liga no trae a nadie identificado
+                          detrás: quien autoriza tiene que saberlo. */}
+                      {log.source === "LIGA_PUBLICA" && (
+                        <Badge tone="warning">
+                          <Warning weight="fill" className="size-3" />
+                          Por la liga, sin cuenta
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-2 text-sm whitespace-pre-line text-muted">{log.activities}</p>
                   </div>
@@ -174,22 +241,32 @@ export default async function ServicioSocialPage({
           <SearchInput placeholder="Buscar por nombre o escuela…" />
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {ESTADOS.map((e) => (
-            <Link
-              key={e}
-              href={`/servicio-social?estado=${e}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
-              className={
-                (e === filtro
-                  ? "bg-primary-weak text-primary-strong "
-                  : "text-muted hover:bg-surface-2 hover:text-ink ") +
-                "rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-semibold transition-colors"
-              }
-            >
-              {e === "TODOS" ? "Todos" : VOLUNTEER_STATUS_LABEL[e]}
-            </Link>
-          ))}
-        </div>
+        {/* Al buscar no se enseña el filtro: la búsqueda pasa por encima de él a
+            propósito, y dejar las pestañas puestas haría creer que el resultado
+            está acotado a una de ellas. */}
+        {q ? (
+          <p className="mt-3 text-xs text-muted">
+            Buscando <span className="font-semibold text-ink">«{q}»</span> entre activos,
+            concluidos y bajas.
+          </p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {ESTADOS.map((e) => (
+              <Link
+                key={e}
+                href={`/servicio-social?estado=${e}`}
+                className={
+                  (e === filtro
+                    ? "bg-primary-weak text-primary-strong "
+                    : "text-muted hover:bg-surface-2 hover:text-ink ") +
+                  "rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-semibold transition-colors"
+                }
+              >
+                {e === "TODOS" ? "Todos" : VOLUNTEER_STATUS_LABEL[e]}
+              </Link>
+            ))}
+          </div>
+        )}
 
         {puedeResolver && (
           <details className="mt-4">
@@ -203,8 +280,17 @@ export default async function ServicioSocialPage({
                   <Field label="Nombre completo" htmlFor="v-name" required>
                     <Input id="v-name" name="name" required placeholder="Ej. Ana Sofía Ruiz Pérez" />
                   </Field>
-                  <Field label="¿De qué escuela viene?" htmlFor="v-school" required>
-                    <Input id="v-school" name="school" required placeholder="Ej. Anáhuac Querétaro" />
+                  <Field label="¿De qué institución viene?" htmlFor="v-school" required>
+                    <Select id="v-school" name="schoolId" defaultValue="" required>
+                      <option value="" disabled>
+                        Escoge una institución…
+                      </option>
+                      {escuelas.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.name}
+                        </option>
+                      ))}
+                    </Select>
                   </Field>
                   <Field label="Área en la que apoya" htmlFor="v-area">
                     <Select id="v-area" name="areaId" defaultValue="">

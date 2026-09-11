@@ -35,6 +35,8 @@ type UserRow = {
   role: Role;
   /** De qué coordina (solo COORDINADOR). */
   coordination: Coordination | null;
+  /** Lleva el servicio social además de su encargo principal. */
+  leadsService: boolean;
   active: boolean;
   createdAt: Date;
   /** Contraseña inicial sin usar todavía. Solo llega llena para la directora. */
@@ -267,6 +269,30 @@ function UserForm({
               </Select>
             </Field>
           )}
+          {/* El servicio social se carga ENCIMA del encargo de cada quien: la
+              misma terapeuta que da clases puede llevarlo. Por eso es una casilla
+              y no otro rol —`role` es uno solo por cuenta— y no se le pregunta a
+              quien ya tiene el rol de coordinador de servicio social. */}
+          {role !== "COORDINADOR_SERVICIO_SOCIAL" && (
+            <label className="flex cursor-pointer items-start gap-2.5 self-end rounded-[var(--radius-control)] border border-border bg-surface-2 p-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                name="leadsService"
+                defaultChecked={defaults?.leadsService ?? false}
+                className="mt-0.5 size-4 accent-[var(--primary)]"
+              />
+              <span className="text-sm">
+                <span className="font-semibold text-ink">
+                  Además lleva el servicio social
+                </span>
+                <span className="mt-0.5 block text-xs text-muted">
+                  Le abre la pantalla de servicio social —prestadores, horas y
+                  autorizaciones— sin quitarle nada de lo que ya hace.
+                </span>
+              </span>
+            </label>
+          )}
+
           <Field
             label={isEdit ? "Nueva contraseña" : "Contraseña inicial"}
             htmlFor="password"

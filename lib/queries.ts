@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { Coordination, Role, StudentStatus } from "@/lib/generated/prisma/client";
 import { ageFrom, meetsAgeRequirement } from "@/lib/utils";
+import { palabrasDeBusqueda, seParecen } from "@/lib/servicio";
 
 // Se re-exporta para no tocar las pantallas y acciones que ya la piden de aquí.
 export { meetsAgeRequirement };
@@ -1390,9 +1391,10 @@ export async function listAuditLog(opts?: { studentId?: string; take?: number })
 
 export async function listUsers() {
   return prisma.user.findMany({
-    // Solo cuentas del equipo. Las cuentas de alumno se administran desde
-    // el módulo de estudiantes (son cientos y tienen otro flujo).
-    where: { role: { not: "ALUMNO" } },
+    // Solo cuentas del equipo. Las de alumno se administran desde el módulo de
+    // estudiantes (son cientos y tienen otro flujo) y las de prestador desde
+    // servicio social: ninguna de las dos es del equipo y aquí solo harían ruido.
+    where: { role: { notIn: ["ALUMNO", "VOLUNTARIO"] } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -1401,6 +1403,7 @@ export async function listUsers() {
       email: true,
       role: true,
       coordination: true,
+      leadsService: true,
       active: true,
       createdAt: true,
       // Contraseña inicial de la cuenta, para poder entregarla. Confidencial: la
@@ -2544,22 +2547,28 @@ async function minutosAutorizadosPorPrestador(
 
 /**
  * Los prestadores de servicio social, con sus horas autorizadas y cuántos
- * reportes traen esperando. `q` busca por nombre o escuela.
+ * reportes traen esperando.
+ *
+ * `q` busca palabra por palabra sobre `searchKey` (nombre y escuela sin acentos),
+ * y TODAS tienen que aparecer. Así "Paul Ramírez" encuentra a "Paul Francisco
+ * Ramírez Jiménez": los nombres se dicen cortos y se guardan largos, y buscando
+ * la frase completa como una sola cadena esa persona no aparecía nunca.
+ *
+ * Buscar además IGNORA el filtro de estado. Es a propósito: quien escribe un
+ * nombre lo está buscando en toda la casa, y esconderle a alguien que sí está
+ * —porque concluyó su servicio y el filtro venía en "Activo"— se lee como que la
+ * plataforma perdió a esa persona.
  */
 export async function listVolunteers(opts: { q?: string; status?: string } = {}) {
-  const q = opts.q?.trim();
+  const palabras = palabrasDeBusqueda(opts.q);
+  const buscando = palabras.length > 0;
   const volunteers = await prisma.volunteer.findMany({
     where: {
-      ...(opts.status && opts.status !== "TODOS"
+      ...(!buscando && opts.status && opts.status !== "TODOS"
         ? { status: opts.status as "ACTIVO" | "CONCLUIDO" | "BAJA" }
         : {}),
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" as const } },
-              { school: { contains: q, mode: "insensitive" as const } },
-            ],
-          }
+      ...(buscando
+        ? { AND: palabras.map((p) => ({ searchKey: { contains: p } })) }
         : {}),
     },
     orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -2604,6 +2613,7 @@ export async function getVolunteer(id: string) {
       notes: true,
       areaId: true,
       leaderId: true,
+      schoolId: true,
       area: { select: { id: true, name: true } },
       leader: { select: { id: true, name: true } },
       user: { select: { id: true, username: true, active: true, initialPassword: true } },
@@ -2683,6 +2693,28 @@ export async function listServiceAreas(todas = false) {
   });
 }
 
+/**
+ * El catálogo de instituciones, con cuántos prestadores manda cada una.
+ *
+ * Ese conteo ES el reporte que la casa venía llevando a mano en Excel
+ * ("Instituciones / Número de voluntarios"). Sale solo porque la institución es
+ * una llave y no el texto que cada quien teclea: contando por texto, las cuatro
+ * escuelas de 2026 dan veinticuatro.
+ */
+export async function listServiceSchools(todas = false) {
+  return prisma.serviceSchool.findMany({
+    where: todas ? {} : { active: true },
+    orderBy: [{ active: "desc" }, { order: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      active: true,
+      order: true,
+      _count: { select: { volunteers: true } },
+    },
+  });
+}
+
 /** El catálogo de líderes de área. */
 export async function listServiceLeaders(todas = false) {
   return prisma.serviceLeader.findMany({
@@ -2697,4 +2729,30 @@ export async function listServiceLeaders(todas = false) {
       _count: { select: { logs: true, volunteers: true } },
     },
   });
+}
+
+/**
+ * Fichas que se parecen tanto que probablemente son la misma persona.
+ *
+ * No junta nada: sugiere. El importador y la liga abierta solo reconocen a
+ * alguien cuando su nombre queda EXACTAMENTE igual una vez quitados los acentos,
+ * y eso deja fuera el caso más común —"Paul Ramírez" y "Paul Francisco Ramírez
+ * Jiménez" son la misma persona, pero también podrían ser dos—. Decidirlo es de
+ * una persona, no de una regla; esto nada más se lo pone enfrente.
+ */
+export async function listPossibleDuplicateVolunteers(limit = 15) {
+  const volunteers = await prisma.volunteer.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, school: true, nameKey: true },
+  });
+
+  const pares: { a: (typeof volunteers)[number]; b: (typeof volunteers)[number] }[] = [];
+  for (let i = 0; i < volunteers.length && pares.length < limit; i++) {
+    for (let j = i + 1; j < volunteers.length && pares.length < limit; j++) {
+      if (seParecen(volunteers[i].nameKey, volunteers[j].nameKey)) {
+        pares.push({ a: volunteers[i], b: volunteers[j] });
+      }
+    }
+  }
+  return pares;
 }
