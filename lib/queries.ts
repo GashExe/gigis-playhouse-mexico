@@ -2644,10 +2644,50 @@ export async function getVolunteer(id: string) {
   return { ...volunteer, minutosAutorizados: minutos.get(id) ?? 0 };
 }
 
-/** La bandeja de la coordinación: lo que está esperando respuesta, lo viejo primero. */
-export async function listPendingServiceLogs(limit = 100) {
-  return prisma.serviceLog.findMany({
+/**
+ * Cuántos reportes trae esperando cada líder de área. Sirve para el filtro de la
+ * bandeja: con sesenta pendientes de nueve líderes, revisar de corrido obliga a
+ * ir saltando de un área a otra; filtrando, se resuelve un líder de un tirón.
+ */
+export async function countPendingServiceLogsByLeader() {
+  const grupos = await prisma.serviceLog.groupBy({
+    by: ["leaderId"],
     where: { status: "PENDIENTE" },
+    _count: true,
+  });
+  const lideres = await prisma.serviceLeader.findMany({
+    where: { id: { in: grupos.map((g) => g.leaderId).filter(Boolean) as string[] } },
+    select: { id: true, name: true },
+  });
+  const nombre = new Map(lideres.map((l) => [l.id, l.name]));
+  return grupos
+    .map((g) => ({
+      // Los reportes viejos de la hoja pueden no traer líder: se agrupan aparte
+      // en vez de esconderse, porque también hay que revisarlos.
+      id: g.leaderId ?? "",
+      name: g.leaderId ? (nombre.get(g.leaderId) ?? "—") : "Sin líder",
+      total: g._count,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+/** La bandeja de la coordinación: lo que está esperando respuesta, lo viejo primero. */
+export async function listPendingServiceLogs(
+  opts: { leaderId?: string; limit?: number } = {},
+) {
+  const { leaderId, limit = 100 } = opts;
+  return prisma.serviceLog.findMany({
+    where: {
+      status: "PENDIENTE",
+      // "sin-lider" es un filtro de verdad, no la ausencia de filtro: los
+      // reportes viejos que no traen líder son justo los que se pierden si no se
+      // pueden pedir aparte.
+      ...(leaderId === "sin-lider"
+        ? { leaderId: null }
+        : leaderId
+          ? { leaderId }
+          : {}),
+    },
     orderBy: [{ weekEnd: "asc" }, { createdAt: "asc" }],
     take: limit,
     select: {

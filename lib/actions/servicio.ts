@@ -10,6 +10,7 @@ import {
   claveDeCorreo,
   clavesDePrestador,
   cuentaPalabras,
+  seParecen,
   horasLabel,
   MAX_PALABRAS_ACTIVIDADES,
   parseHorasAMinutos,
@@ -381,13 +382,24 @@ export async function submitPublicServiceLog(
 
   const claves = clavesDePrestador(name, school, emailKey);
 
-  // A quién se le acreditan estas horas. El correo manda sobre el nombre: quien
-  // escribió "Paul Ramirz" pero puso su correo de siempre es la misma persona, y
-  // el reporte cae en SU ficha con su nombre bien escrito, no en una nueva.
+  // A quién se le acreditan estas horas. Se busca en tres pasos, del más seguro
+  // al menos seguro, y el primero que da algo manda:
   //
-  // El nombre es el respaldo, para los prestadores que vienen de la hoja del
-  // formulario: esos no traen correo y sin esto se les partiría la ficha la
-  // primera vez que reportaran por la liga.
+  //   1. El MISMO correo. Quien escribió "Paul Ramirz" pero puso su correo de
+  //      siempre es la misma persona, y su reporte cae en SU ficha.
+  //
+  //   2. El MISMO nombre, para quien todavía no ha dado correo. Casi todas las
+  //      fichas vienen de la hoja del formulario y ninguna trae uno.
+  //
+  //   3. Un nombre que se PARECE, y solo si hay exactamente una candidata. Este
+  //      paso existe porque los dos primeros fallan juntos más seguido de lo que
+  //      parece: basta un dedazo en el correo —"paul.ramirezij@" en vez de
+  //      "paul.ramirezji@"— para que el paso 1 no encuentre nada, y entonces
+  //      "Paul Ramirez" tampoco empata con "Paul Francisco Ramirez Jimenez". Así
+  //      nació una ficha repetida de alguien que ya estaba.
+  //
+  // Si se parecen DOS o más, no se escoge ninguna: con varias candidatas, cargarle
+  // las horas a la que tocó sería quitárselas a la otra.
   let prestador = await prisma.volunteer.findFirst({
     where: { emailKey },
     select: { id: true, name: true, emailKey: true },
@@ -397,14 +409,27 @@ export async function submitPublicServiceLog(
       where: { nameKey: claves.nameKey },
       select: { id: true, name: true, emailKey: true },
     });
-    // Se le guarda el correo la primera vez que lo da: de ahí en adelante ya se
-    // le reconoce por ahí aunque escriba su nombre distinto.
-    if (prestador && !prestador.emailKey) {
-      await prisma.volunteer.update({
-        where: { id: prestador.id },
-        data: { email: texto(formData.get("email")), emailKey },
-      });
-    }
+  }
+  if (!prestador) {
+    // Se acota por el primer nombre para no bajar el padrón entero.
+    const primerNombre = claves.nameKey.split(" ")[0] ?? "";
+    const cercanas = primerNombre
+      ? await prisma.volunteer.findMany({
+          where: { nameKey: { startsWith: `${primerNombre} ` } },
+          select: { id: true, name: true, nameKey: true, emailKey: true },
+        })
+      : [];
+    const parecidas = cercanas.filter((c) => seParecen(c.nameKey, claves.nameKey));
+    if (parecidas.length === 1) prestador = parecidas[0];
+  }
+  // Se le guarda el correo la primera vez que lo da: de ahí en adelante ya se le
+  // reconoce por ahí aunque escriba su nombre distinto. No se le pisa el que ya
+  // tenga: si son dos distintos, eso lo mira una persona.
+  if (prestador && !prestador.emailKey) {
+    await prisma.volunteer.update({
+      where: { id: prestador.id },
+      data: { email: texto(formData.get("email")), emailKey },
+    });
   }
 
   const volunteerId =
