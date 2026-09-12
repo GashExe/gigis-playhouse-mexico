@@ -1,8 +1,19 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
-import { Warning, CheckCircle, PaperPlaneTilt } from "@phosphor-icons/react";
-import { submitPublicServiceLog, type ReporteState } from "@/lib/actions/servicio";
+import { useActionState, useEffect, useState } from "react";
+import {
+  Warning,
+  CheckCircle,
+  PaperPlaneTilt,
+  MagnifyingGlass,
+  UserCircle,
+} from "@phosphor-icons/react";
+import {
+  submitPublicServiceLog,
+  validarCorreo,
+  type ReporteState,
+  type ValidaCorreoState,
+} from "@/lib/actions/servicio";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { ActivitiesField } from "@/components/activities-field";
@@ -12,15 +23,14 @@ type Opcion = { id: string; name: string };
 /**
  * El reporte semanal por la liga abierta: el Google Form, en casa y sin cuenta.
  *
- * Las preguntas y su orden son los del formulario a propósito. Quien lo llena
- * lleva años llenando el otro; cambiarle el orden o la redacción "porque se ve
- * mejor" solo lograría que se equivoque de campo.
+ * El CORREO va primero, antes que el nombre, y eso no es un capricho de orden.
+ * En la hoja vieja la misma persona escribía su nombre de tres maneras y acababa
+ * con tres fichas y sus horas repartidas. Preguntando primero el correo se le
+ * pueden devolver sus propios datos ya escritos —nombre, institución, área y
+ * líder— y entonces no hay nada que teclear distinto. El nombre deja de ser la
+ * llave; pasa a ser un dato que la plataforma recuerda por él.
  *
- * Lo único que se agregó es el correo, y es lo que arregla el problema de fondo
- * de la hoja vieja: ahí la misma persona escribía su nombre de tres maneras y
- * acababa con tres fichas y sus horas repartidas. El correo no se teclea
- * distinto, así que con él se reconoce a quién acreditarle la semana aunque el
- * nombre venga con erratas.
+ * Quien no esté registrado llena todo, igual que antes.
  */
 export function PublicServiceLogForm({
   areas,
@@ -35,17 +45,38 @@ export function PublicServiceLogForm({
     submitPublicServiceLog,
     undefined,
   );
-  const form = useRef<HTMLFormElement>(null);
+  const [busqueda, buscar, buscando] = useActionState<ValidaCorreoState, FormData>(
+    validarCorreo,
+    undefined,
+  );
+
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
-    if (state?.ok) {
-      form.current?.reset();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [state?.ok]);
+    if (state?.ok) window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [state?.enviados, state?.ok]);
+
+  const encontrado = busqueda?.estado === "encontrado" ? busqueda : null;
+  const yaValidado = busqueda?.estado === "encontrado" || busqueda?.estado === "nuevo";
+
+  /**
+   * La identidad del formulario de abajo. Al cambiar, React lo vuelve a montar y
+   * los campos se rellenan solos con lo que traiga la validación.
+   *
+   * Va así, y no copiando los datos a estado dentro de un efecto, porque esa
+   * copia es la que se desincroniza: en cuanto alguien edita un campo y vuelve a
+   * validar, hay dos versiones del mismo dato y una gana por accidente. Con la
+   * llave hay una sola fuente, y además se limpia lo de la semana en cada envío
+   * —lo de la persona no, que casi siempre viene a mandar otra semana seguida.
+   */
+  const llave = [
+    busqueda?.estado ?? "sin-validar",
+    encontrado?.name ?? "",
+    state?.enviados ?? 0,
+  ].join("|");
 
   return (
-    <form ref={form} action={action} className="space-y-4">
+    <div className="space-y-4">
       {state?.error && (
         <div
           role="alert"
@@ -65,8 +96,7 @@ export function PublicServiceLogForm({
             Listo, tu reporte ya llegó
             {state.nombre ? (
               <>
-                {" "}y quedó a nombre de{" "}
-                <span className="font-bold">{state.nombre}</span>
+                {" "}y quedó a nombre de <span className="font-bold">{state.nombre}</span>
               </>
             ) : null}
             . La coordinación de servicio social lo revisa y autoriza tus horas. Si te
@@ -75,100 +105,165 @@ export function PublicServiceLogForm({
         </div>
       )}
 
-      <Field label="Nombre completo" htmlFor="p-name" required>
-        <Input id="p-name" name="name" required autoComplete="name" maxLength={120} />
-      </Field>
-
-      <Field
-        label="Correo"
-        htmlFor="p-email"
-        required
-        hint="Usa SIEMPRE el mismo. Con él sabemos que eres tú y tus horas se acumulan juntas, aunque un día escribas tu nombre distinto."
-      >
-        <Input
-          id="p-email"
-          name="email"
-          type="email"
+      {/* ── Paso 1: quién eres ──────────────────────────────────────────────
+          Va en su propio formulario, y no dentro del grande, para que validar el
+          correo no arrastre ni valide el resto de los campos todavía vacíos. */}
+      <form action={buscar} className="rounded-[var(--radius-control)] border border-border bg-surface-2 p-4">
+        <Field
+          label="Tu correo"
+          htmlFor="p-email"
           required
-          autoComplete="email"
-          maxLength={160}
-          placeholder="tucorreo@escuela.mx"
+          hint="Usa SIEMPRE el mismo. Con él te reconocemos y tus horas se acumulan juntas."
+        >
+          <div className="flex flex-wrap gap-2">
+            <Input
+              id="p-email"
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              maxLength={160}
+              placeholder="tucorreo@escuela.mx"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="min-w-48 flex-1"
+            />
+            <Button type="submit" variant="secondary" loading={buscando} disabled={buscando}>
+              <MagnifyingGlass className="size-4" />
+              Validar correo
+            </Button>
+          </div>
+        </Field>
+
+        {busqueda?.estado === "invalido" && (
+          <p className="mt-2 text-xs font-semibold text-danger-strong">
+            Ese correo no se ve bien. Revísalo.
+          </p>
+        )}
+        {busqueda?.estado === "encontrado" && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-success-strong">
+            <UserCircle weight="fill" className="size-4" />
+            Hola de nuevo. Ya llenamos tus datos abajo — revísalos por si algo cambió.
+          </p>
+        )}
+        {busqueda?.estado === "nuevo" && (
+          <p className="mt-2 text-xs text-muted">
+            Es tu primer reporte con este correo. Llena tus datos abajo y con eso quedas
+            registrado; la próxima vez ya salen solos.
+          </p>
+        )}
+      </form>
+
+      {/* ── Paso 2: el reporte ─────────────────────────────────────────────── */}
+      <form key={llave} action={action} className="space-y-4">
+        <input type="hidden" name="email" value={email} />
+
+        <Field label="Nombre completo" htmlFor="p-name" required>
+          <Input
+            id="p-name"
+            name="name"
+            required
+            autoComplete="name"
+            maxLength={120}
+            defaultValue={encontrado?.name ?? ""}
+          />
+        </Field>
+
+        <Field label="¿De qué institución provienes?" htmlFor="p-school" required>
+          <Select
+            id="p-school"
+            name="schoolId"
+            required
+            defaultValue={encontrado?.schoolId ?? ""}
+          >
+            <option value="" disabled>
+              Escoge tu institución…
+            </option>
+            {escuelas.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Área en la que apoyas" htmlFor="p-area" required>
+            <Select
+              id="p-area"
+              name="areaId"
+              required
+              defaultValue={encontrado?.areaId ?? ""}
+            >
+              <option value="" disabled>
+                Escoge un área…
+              </option>
+              {areas.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Nombre del líder de área" htmlFor="p-leader" required>
+            <Select
+              id="p-leader"
+              name="leaderId"
+              required
+              defaultValue={encontrado?.leaderId ?? ""}
+            >
+              <option value="" disabled>
+                Escoge a tu líder…
+              </option>
+              {lideres.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Fecha de inicio de semana a reportar" htmlFor="p-start" required>
+            <Input id="p-start" name="weekStart" type="date" required />
+          </Field>
+
+          <Field label="Fecha de término de semana a reportar" htmlFor="p-end" required>
+            <Input id="p-end" name="weekEnd" type="date" required />
+          </Field>
+        </div>
+
+        <Field
+          label="Horas totales a reportar"
+          htmlFor="p-hours"
+          required
+          hint="Un número: 6, 8.5 o 10:30 si fueron diez y media. Solo de esta semana."
+        >
+          <Input id="p-hours" name="hours" required inputMode="decimal" placeholder="Ej. 8" />
+        </Field>
+
+        <ActivitiesField
+          id="p-activities"
+          rows={5}
+          hint="Al grano: es lo que tu líder de área lee para avalarte las horas."
         />
-      </Field>
 
-      <Field
-        label="¿De qué institución provienes?"
-        htmlFor="p-school"
-        required
-        hint="Si la tuya no aparece, pídele a la coordinación de servicio social que la agregue."
-      >
-        <Select id="p-school" name="schoolId" defaultValue="" required>
-          <option value="" disabled>
-            Escoge tu institución…
-          </option>
-          {escuelas.map((e) => (
-            <option key={e.id} value={e.id}>
-              {e.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Área en la que apoyas" htmlFor="p-area" required>
-          <Select id="p-area" name="areaId" defaultValue="" required>
-            <option value="" disabled>
-              Escoge un área…
-            </option>
-            {areas.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field label="Nombre del líder de área" htmlFor="p-leader" required>
-          <Select id="p-leader" name="leaderId" defaultValue="" required>
-            <option value="" disabled>
-              Escoge a tu líder…
-            </option>
-            {lideres.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-
-        <Field label="Fecha de inicio de semana a reportar" htmlFor="p-start" required>
-          <Input id="p-start" name="weekStart" type="date" required />
-        </Field>
-
-        <Field label="Fecha de término de semana a reportar" htmlFor="p-end" required>
-          <Input id="p-end" name="weekEnd" type="date" required />
-        </Field>
-      </div>
-
-      <Field
-        label="Horas totales a reportar"
-        htmlFor="p-hours"
-        required
-        hint="Un número: 6, 8.5 o 10:30 si fueron diez y media. Solo de esta semana."
-      >
-        <Input id="p-hours" name="hours" required inputMode="decimal" placeholder="Ej. 8" />
-      </Field>
-
-      <ActivitiesField
-        id="p-activities"
-        rows={5}
-        hint="Al grano: es lo que tu líder de área lee para avalarte las horas."
-      />
-
-      <Button type="submit" loading={pending} disabled={pending} className="w-full" size="lg">
-        <PaperPlaneTilt weight="fill" className="size-4" />
-        Mandar mi reporte
-      </Button>
-    </form>
+        <Button
+          type="submit"
+          loading={pending}
+          disabled={pending || !yaValidado}
+          className="w-full"
+          size="lg"
+        >
+          <PaperPlaneTilt weight="fill" className="size-4" />
+          Mandar mi reporte
+        </Button>
+        {!yaValidado && (
+          <p className="text-center text-xs text-subtle">
+            Primero valida tu correo, arriba.
+          </p>
+        )}
+      </form>
+    </div>
   );
 }
