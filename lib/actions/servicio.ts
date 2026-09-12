@@ -224,12 +224,68 @@ export async function mergeVolunteers(formData: FormData) {
 
 /* ── Reportes de horas ─────────────────────────────────────────────────────── */
 
+/**
+ * Lo que la liga abierta contesta al validar un correo. Solo lleva lo que el
+ * formulario necesita para rellenarse: el nombre y los tres ids de sus listas.
+ * Nada de horas, ni de historial, ni del resto del expediente.
+ */
+export type ValidaCorreoState =
+  | { estado: "nuevo" }
+  | {
+      estado: "encontrado";
+      name: string;
+      schoolId: string | null;
+      areaId: string | null;
+      leaderId: string | null;
+    }
+  | { estado: "invalido" }
+  | undefined;
+
+/**
+ * Busca al prestador por su correo para rellenarle el formulario.
+ *
+ * Es deliberadamente cortita: pide el correo COMPLETO y exacto, no busca por
+ * nombre ni por partes, y solo devuelve lo que se va a pintar en los campos.
+ * Aun así, sí dice si un correo está registrado o no —no hay manera de rellenar
+ * un formulario sin decirlo—, y eso lo pidió la casa a sabiendas: quien ya
+ * conoce el correo de alguien puede confirmar que colabora aquí. Por eso la
+ * coincidencia es exacta: sirve para reconocerse, no para ir probando.
+ */
+export async function validarCorreo(
+  _prev: ValidaCorreoState,
+  formData: FormData,
+): Promise<ValidaCorreoState> {
+  const emailKey = claveDeCorreo(texto(formData.get("email")));
+  if (!emailKey) return { estado: "invalido" };
+
+  const prestador = await prisma.volunteer.findFirst({
+    where: { emailKey },
+    select: { name: true, schoolId: true, areaId: true, leaderId: true },
+  });
+  if (!prestador) return { estado: "nuevo" };
+
+  return {
+    estado: "encontrado",
+    name: prestador.name,
+    schoolId: prestador.schoolId,
+    areaId: prestador.areaId,
+    leaderId: prestador.leaderId,
+  };
+}
+
 export type ReporteState =
   | {
       error?: string;
       ok?: boolean;
       /** A nombre de quién quedó el reporte, para devolvérselo a quien lo mandó. */
       nombre?: string;
+      /**
+       * Cuántos van en esta sesión. Suena a adorno y no lo es: es lo que le
+       * permite al formulario saber que hubo un envío NUEVO y limpiar los campos
+       * de la semana. Sin un valor que cambie, el segundo envío se ve igual que
+       * el primero y el formulario se queda lleno, invitando a mandarlo de nuevo.
+       */
+      enviados?: number;
     }
   | undefined;
 
@@ -404,6 +460,7 @@ export async function submitPublicServiceLog(
     where: { emailKey },
     select: { id: true, name: true, emailKey: true },
   });
+  const reconocidoPorCorreo = prestador != null;
   if (!prestador) {
     prestador = await prisma.volunteer.findFirst({
       where: { nameKey: claves.nameKey },
@@ -450,10 +507,20 @@ export async function submitPublicServiceLog(
       })
     ).id;
 
-  // El nombre que QUEDA es el de la ficha, no el que se acaba de teclear: si se
-  // le reconoció por el correo, su nombre bueno ya estaba guardado y volver a
-  // escribirlo con la errata de hoy sería echar a perder el que ya servía.
-  const nombreEnFicha = prestador?.name ?? name;
+  // Qué nombre queda. Cuando se le reconoció POR SU CORREO —identidad fuerte, la
+  // tecleó él mismo y empató exacta— se le hace caso si lo corrigió: nadie más
+  // que uno sabe cómo se escribe su nombre. Cuando se le reconoció por parecido
+  // de nombre, NO: ahí la identidad es una suposición, y dejar que reescriba el
+  // nombre de otra ficha con lo de hoy es justo cómo se echa a perder el que ya
+  // servía.
+  const porCorreo = prestador != null && reconocidoPorCorreo;
+  const nombreEnFicha = porCorreo ? name : (prestador?.name ?? name);
+  if (prestador && porCorreo && prestador.name !== name) {
+    await prisma.volunteer.update({
+      where: { id: prestador.id },
+      data: { name, ...clavesDePrestador(name, school, emailKey) },
+    });
+  }
 
   // Guarda contra el doble envío: el mismo reporte, mandado dos veces porque la
   // página tardó o alguien le dio dos veces al botón, no debe contar doble.
@@ -462,7 +529,7 @@ export async function submitPublicServiceLog(
     select: { id: true },
   });
   if (repetido) {
-    return { ok: true, nombre: nombreEnFicha };
+    return { ok: true, nombre: nombreEnFicha, enviados: (_prev?.enviados ?? 0) + 1 };
   }
 
   await prisma.serviceLog.create({
@@ -484,7 +551,7 @@ export async function submitPublicServiceLog(
   // Se le devuelve a nombre de quién quedó: es la única manera de que se dé
   // cuenta, ahí mismo, de que escribió su nombre distinto o el correo de alguien
   // más. Solo después de un envío completo y válido, nunca mientras teclea.
-  return { ok: true, nombre: nombreEnFicha };
+  return { ok: true, nombre: nombreEnFicha, enviados: (_prev?.enviados ?? 0) + 1 };
 }
 
 /**
