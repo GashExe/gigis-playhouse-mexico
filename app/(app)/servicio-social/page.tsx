@@ -22,6 +22,7 @@ import {
   listServiceSchools,
   listVolunteers,
   listPossibleDuplicateVolunteers,
+  countPendingServiceLogsByLeader,
 } from "@/lib/queries";
 import { createVolunteer } from "@/lib/actions/servicio";
 import { horasLabel, VOLUNTEER_STATUS_LABEL } from "@/lib/servicio";
@@ -44,14 +45,14 @@ const ESTADOS = ["TODOS", "ACTIVO", "CONCLUIDO", "BAJA"] as const;
 export default async function ServicioSocialPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; estado?: string }>;
+  searchParams: Promise<{ q?: string; estado?: string; lider?: string }>;
 }) {
   // Entra quien lleva el servicio social: la directora, quien tiene el rol, y
   // quien lo lleva además de lo suyo. El lector también, y no resuelve nada.
   const me = await requireServiceAccess();
   const puedeResolver = canManageService(me);
 
-  const { q, estado } = await searchParams;
+  const { q, estado, lider } = await searchParams;
 
   // La liga pública, armada con el host de esta misma petición: la que se copia
   // es la de donde está corriendo la plataforma, sin depender de una variable de
@@ -63,16 +64,26 @@ export default async function ServicioSocialPage({
 
   const filtro = ESTADOS.includes(estado as (typeof ESTADOS)[number]) ? estado! : "ACTIVO";
 
-  const [stats, pendientes, volunteers, areas, lideres, duplicados, escuelas] =
+  const [stats, pendientes, volunteers, areas, lideres, duplicados, escuelas, porLider] =
     await Promise.all([
     getServiceStats(),
-    listPendingServiceLogs(),
+    listPendingServiceLogs({ leaderId: lider }),
     listVolunteers({ q, status: filtro }),
     listServiceAreas(),
     listServiceLeaders(),
     listPossibleDuplicateVolunteers(),
     listServiceSchools(),
+    countPendingServiceLogsByLeader(),
   ]);
+
+  /** Liga a esta misma pantalla cambiando un filtro y respetando los demás. */
+  const liga = (cambios: Record<string, string | undefined>) => {
+    const sp = new URLSearchParams();
+    const base: Record<string, string | undefined> = { q, estado, lider, ...cambios };
+    for (const [k, v] of Object.entries(base)) if (v) sp.set(k, v);
+    const cola = sp.toString();
+    return cola ? `/servicio-social?${cola}` : "/servicio-social";
+  };
 
   return (
     <div>
@@ -178,12 +189,53 @@ export default async function ServicioSocialPage({
           Lo más viejo primero: quien reportó hace más tiempo lleva más esperando su respuesta.
         </p>
 
+        {/* Filtro por líder de área. Revisar sesenta pendientes de nueve líderes
+            de corrido obliga a ir saltando de un área a otra; así se resuelve un
+            líder de un tirón. Solo aparecen los que traen algo pendiente: una
+            lista con ceros sería un montón de clics que no llevan a nada. */}
+        {porLider.length > 1 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <Link
+              href={liga({ lider: undefined })}
+              className={
+                (!lider
+                  ? "bg-primary-weak text-primary-strong "
+                  : "text-muted hover:bg-surface-2 hover:text-ink ") +
+                "rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-semibold transition-colors"
+              }
+            >
+              Todos ({stats.pendientes})
+            </Link>
+            {porLider.map((l) => {
+              const valor = l.id || "sin-lider";
+              return (
+                <Link
+                  key={valor}
+                  href={liga({ lider: valor })}
+                  className={
+                    (lider === valor
+                      ? "bg-primary-weak text-primary-strong "
+                      : "text-muted hover:bg-surface-2 hover:text-ink ") +
+                    "rounded-[var(--radius-control)] px-3 py-1.5 text-xs font-semibold transition-colors"
+                  }
+                >
+                  {l.name} ({l.total})
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
         <div className="mt-3 space-y-3">
           {pendientes.length === 0 ? (
             <EmptyState
               icon={<CheckCircle weight="fill" className="size-6" />}
-              title="Nada por revisar"
-              description="Todos los reportes de horas ya tienen respuesta."
+              title={lider ? "Nada por revisar de este líder" : "Nada por revisar"}
+              description={
+                lider
+                  ? "Los reportes de esta área ya tienen respuesta. Quita el filtro para ver los demás."
+                  : "Todos los reportes de horas ya tienen respuesta."
+              }
             />
           ) : (
             pendientes.map((log) => (
@@ -259,7 +311,7 @@ export default async function ServicioSocialPage({
             {ESTADOS.map((e) => (
               <Link
                 key={e}
-                href={`/servicio-social?estado=${e}`}
+                href={liga({ estado: e, q: undefined })}
                 className={
                   (e === filtro
                     ? "bg-primary-weak text-primary-strong "

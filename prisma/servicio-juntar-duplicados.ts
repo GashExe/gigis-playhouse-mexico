@@ -121,6 +121,26 @@ async function main() {
     const school = queda.schoolId ? queda.school : (salen.find((f) => f.schoolId)?.school ?? queda.school);
     const email = primero(queda.email, ...salen.map((f) => f.email));
 
+    // Cuando las fichas traen correos DISTINTOS, uno de los dos es un dedazo
+    // —así nació esta repetición— y no hay manera de saber cuál desde aquí.
+    // Adivinar cambiaría el correo con el que esa persona entra. Se queda el de
+    // la ficha que sobrevive y el otro se anota, para que una persona lo mire y
+    // lo corrija en vez de que desaparezca sin que nadie se entere.
+    const otrosCorreos = [...new Set(racimo.map((f) => f.email).filter(Boolean))].filter(
+      (c) => c !== email,
+    );
+    const nota = [
+      primero(queda.notes, ...salen.map((f) => f.notes)),
+      otrosCorreos.length
+        ? `También reportó con: ${otrosCorreos.join(", ")} — revisa cuál es el bueno.`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    if (otrosCorreos.length) {
+      console.log(`    ojo: reportó con dos correos · queda «${email}» · también «${otrosCorreos.join(", ")}»`);
+    }
+
     await prisma.$transaction([
       ...salen.map((f) =>
         prisma.serviceLog.updateMany({ where: { volunteerId: f.id }, data: { volunteerId: queda.id } }),
@@ -138,7 +158,7 @@ async function main() {
           endDate: finales.length ? new Date(Math.max(...finales.map((d) => +d))) : null,
           areaId: primero(queda.areaId, ...salen.map((f) => f.areaId)),
           leaderId: primero(queda.leaderId, ...salen.map((f) => f.leaderId)),
-          notes: primero(queda.notes, ...salen.map((f) => f.notes)),
+          notes: nota || null,
         },
       }),
       // Las cuentas de acceso de las fichas que se van: sin ficha no entran.
