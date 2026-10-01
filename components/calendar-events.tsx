@@ -69,7 +69,7 @@ export function EventChip({
 
   const body = (
     <>
-      <p className="flex items-center gap-1.5 text-[0.65rem] font-bold uppercase tracking-wide text-subtle">
+      <p className="flex items-center gap-1.5 text-[0.7rem] font-bold uppercase tracking-wide text-muted">
         <Briefcase weight="fill" className="size-3" />
         Interno
       </p>

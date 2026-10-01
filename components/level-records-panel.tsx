@@ -200,7 +200,7 @@ function LevelRow({
           href={`/estudiantes/${studentId}/calificar/${r.program.id}?ciclo=${cycleId}`}
           aria-label="Poner calificación"
           title="Calificación inicial y final"
-          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ListChecks className="size-4" />
         </Link>
@@ -209,7 +209,7 @@ function LevelRow({
         <button
           onClick={() => setEditing((v) => !v)}
           aria-label="Editar nivel"
-          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <PencilSimple className="size-4" />
         </button>

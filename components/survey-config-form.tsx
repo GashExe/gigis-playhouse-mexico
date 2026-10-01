@@ -57,7 +57,7 @@ export function SurveyConfigForm({
               onChange={(e) => update(i, { text: e.target.value })}
               placeholder="Escribe la pregunta…"
               readOnly={readOnly}
-              className="h-9 min-w-0 flex-1 rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm text-ink"
+              className="h-9 min-w-0 flex-1 rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
               required
             />
             <select
@@ -74,7 +74,7 @@ export function SurveyConfigForm({
                 type="button"
                 onClick={() => setQuestions((prev) => prev.filter((_, j) => j !== i))}
                 aria-label="Quitar pregunta"
-                className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
               >
                 <X className="size-4" />
               </button>

@@ -50,7 +50,7 @@ export function DonationCountdown({ target }: { target: string }) {
       <span className="min-w-[2ch] rounded-[var(--radius-input)] bg-warning-weak px-1.5 py-1 text-center text-base font-extrabold tabular-nums text-warning-strong">
         {String(value).padStart(2, "0")}
       </span>
-      <span className="mt-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-subtle">
+      <span className="mt-0.5 text-[0.7rem] font-semibold uppercase tracking-wide text-muted">
         {label}
       </span>
     </span>

@@ -74,7 +74,7 @@ export default async function PrestadorPage({ params }: { params: Promise<{ id: 
     <div>
       <Link
         href="/servicio-social"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink print:hidden"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink print:hidden"
       >
         <ArrowLeft className="size-4" />
         Servicio social
@@ -417,7 +417,7 @@ export default async function PrestadorPage({ params }: { params: Promise<{ id: 
                         <button
                           type="submit"
                           aria-label="Eliminar reporte"
-                          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                          className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
                         >
                           <Trash className="size-4" />
                         </button>

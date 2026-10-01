@@ -98,7 +98,7 @@ export function UsersManager({
               >
                 <span
                   aria-hidden
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-weak text-sm font-bold text-primary-strong"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-[30%] bg-primary-weak text-sm font-semibold tracking-tight text-primary-strong"
                 >
                   {initials(u.name)}
                 </span>
@@ -133,7 +133,7 @@ export function UsersManager({
                   <button
                     onClick={() => setEditingId(u.id)}
                     aria-label="Editar cuenta"
-                    className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                    className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
                   >
                     <PencilSimple className="size-[1.05rem]" />
                   </button>
@@ -201,7 +201,7 @@ function UserForm({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle hover:bg-surface-2 hover:text-ink"
+            className="tap flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle hover:bg-surface-2 hover:text-ink"
           >
             <X className="size-4" />
           </button>

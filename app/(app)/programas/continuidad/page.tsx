@@ -65,7 +65,7 @@ export default async function ContinuidadPage({
     <div>
       <Link
         href="/programas"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-4" />
         Programas
@@ -168,7 +168,7 @@ function CyclePicker({
             {c.active && (
               <span
                 title="Ciclo activo"
-                className={`size-1.5 rounded-full ${isSel ? "bg-surface" : "bg-[#1D9E75]"}`}
+                className={`size-1.5 rounded-full ${isSel ? "bg-surface" : "bg-success"}`}
               />
             )}
           </Link>

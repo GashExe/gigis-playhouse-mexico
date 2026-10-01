@@ -54,7 +54,7 @@ function Catalogo({
             name="name"
             required
             placeholder={placeholder}
-            className="h-10 flex-1 rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm"
+            className="h-10 flex-1 rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
           />
           <Button type="submit" size="sm" variant="secondary">
             <Plus className="size-4" />
@@ -92,7 +92,7 @@ function Catalogo({
                       type="submit"
                       aria-label={e.active ? "Dejar de ofrecer" : "Volver a ofrecer"}
                       title={e.active ? "Dejar de ofrecer" : "Volver a ofrecer"}
-                      className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                      className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
                     >
                       {e.active ? <EyeSlash className="size-4" /> : <Eye className="size-4" />}
                     </button>
@@ -106,7 +106,7 @@ function Catalogo({
                       <button
                         type="submit"
                         aria-label="Eliminar"
-                        className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                        className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
                       >
                         <Trash className="size-4" />
                       </button>
@@ -135,7 +135,7 @@ export default async function CatalogosPage() {
     <div>
       <Link
         href="/servicio-social"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-4" />
         Servicio social

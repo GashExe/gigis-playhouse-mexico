@@ -45,18 +45,19 @@ export function StatBar({ stats }: { stats: Stat[] }) {
               i % 2 === 0 && "border-r border-border sm:border-r-0",
             )}
           >
+            {/* El ícono va suelto y en el color de marca apagado: el cuadrito
+                pastel detrás de cada ícono era la parte más "de plantilla". */}
             <span
-              className="flex size-9 items-center justify-center rounded-[var(--radius-input)]"
-              style={{
-                backgroundColor: `color-mix(in oklch, ${color} 16%, var(--surface))`,
-                color,
-              }}
+              className="flex size-5 items-center"
+              style={{ color: `color-mix(in oklch, ${color} 78%, var(--ink))` }}
             >
               {s.icon}
             </span>
             <div>
-              <p className="tnum text-2xl font-extrabold text-ink">{s.value}</p>
-              <p className="text-xs font-semibold text-muted">{s.label}</p>
+              <p className="tnum font-[family-name:var(--font-display)] text-[1.75rem] leading-none font-semibold tracking-tight text-ink">
+                {s.value}
+              </p>
+              <p className="mt-1.5 text-[0.8125rem] font-medium text-muted">{s.label}</p>
             </div>
           </div>
         );

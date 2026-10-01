@@ -212,7 +212,7 @@ export function AnnouncementsManager({
                       <button
                         type="submit"
                         aria-label="Borrar aviso"
-                        className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                        className="tap flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
                       >
                         <Trash className="size-4" />
                       </button>

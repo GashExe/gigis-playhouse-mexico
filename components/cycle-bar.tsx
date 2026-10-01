@@ -61,7 +61,7 @@ export function CycleBar({
               {c.active && (
                 <span
                   title="Ciclo activo"
-                  className={`size-1.5 rounded-full ${isSel ? "bg-surface" : "bg-[#1D9E75]"}`}
+                  className={`size-1.5 rounded-full ${isSel ? "bg-surface" : "bg-success"}`}
                 />
               )}
               <span className={`tnum text-xs ${isSel ? "opacity-70" : "text-subtle"}`}>

@@ -91,7 +91,7 @@ export default async function ReportesPage({
   const genderColors: Record<string, string> = {
     FEMENINO: "var(--brand-purple)",
     MASCULINO: "var(--brand-teal)",
-    OTRO: "#F2A541",
+    OTRO: "var(--brand-orange)",
     "Sin dato": "var(--border-strong)",
   };
 
@@ -133,7 +133,7 @@ export default async function ReportesPage({
           <select
             name="programa"
             defaultValue={selectedProgramId}
-            className="h-10 rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm text-ink"
+            className="h-10 rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
           >
             {programs.map((p) => (
               <option key={p.id} value={p.id}>
@@ -147,7 +147,7 @@ export default async function ReportesPage({
           <select
             name="ciclo"
             defaultValue={selectedCycleId}
-            className="h-10 rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm text-ink"
+            className="h-10 rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
           >
             {cycles.map((c) => (
               <option key={c.id} value={c.id}>

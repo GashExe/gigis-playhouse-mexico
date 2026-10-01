@@ -40,7 +40,7 @@ export default async function BitacorasPage({
     <div className="mx-auto max-w-3xl">
       <Link
         href={`/calendario/${program.id}`}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-4" />
         Panel de clase
@@ -95,7 +95,7 @@ export default async function BitacorasPage({
                   className="block rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-[var(--shadow-sm)] transition-colors hover:border-border-strong"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-bold capitalize text-ink">{fechaDia(s.date)}</p>
+                    <p className="text-sm font-bold text-ink first-letter:uppercase">{fechaDia(s.date)}</p>
                     {s.canceled ? (
                       <span className="flex items-center gap-1 rounded-full bg-warning-weak px-2.5 py-0.5 text-xs font-bold text-warning-strong">
                         <CalendarX weight="bold" className="size-3.5" />

@@ -27,7 +27,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label="Cambiar entre tema claro y oscuro"
       title="Cambiar entre tema claro y oscuro"
       className={cn(
-        "flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink",
+        "tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink",
         className,
       )}
     >

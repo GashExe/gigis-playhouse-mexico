@@ -215,7 +215,7 @@ export function ScoreChip({ label, value }: { label: string; value: number | nul
       >
         {value ?? "—"}
       </span>
-      <span className="mt-0.5 text-[0.65rem] font-semibold text-subtle">{label}</span>
+      <span className="mt-0.5 text-[0.7rem] font-semibold text-muted">{label}</span>
     </span>
   );
 }

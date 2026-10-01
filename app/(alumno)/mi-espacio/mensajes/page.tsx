@@ -39,7 +39,7 @@ export default async function MensajesPage() {
       <div>
         <Link
           href="/mi-espacio"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"
+          className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"
         >
           <ArrowLeft className="size-4" />
           Mi espacio
