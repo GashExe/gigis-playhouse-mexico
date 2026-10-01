@@ -26,7 +26,7 @@ export default async function HealthPage({
     <div className="mx-auto max-w-3xl">
       <Link
         href={`/estudiantes/${id}`}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-4" />
         {student.firstName} {student.lastName}

@@ -1,12 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Instrument_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
+// Texto: Instrument Sans (precisa en tamaños chicos, cifras tabulares).
+// Títulos: Bricolage Grotesque (carácter cálido sin volverse infantil).
+const sans = Instrument_Sans({
+  variable: "--font-sans-base",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const display = Bricolage_Grotesque({
+  variable: "--font-display",
+  subsets: ["latin"],
   display: "swap",
 });
 
@@ -24,8 +31,8 @@ export const viewport: Viewport = {
   // safe-areas (notch arriba, barra de gestos abajo) vía env(safe-area-inset-*).
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7fbfb" },
-    { media: "(prefers-color-scheme: dark)", color: "#1b2027" },
+    { media: "(prefers-color-scheme: light)", color: "#faf9f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1a17" },
   ],
 };
 
@@ -56,7 +63,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${jakarta.variable} h-full antialiased`}
+      className={`${sans.variable} ${display.variable} h-full antialiased`}
       // El script de tema modifica <html> antes de que React hidrate.
       suppressHydrationWarning
     >

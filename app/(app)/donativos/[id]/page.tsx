@@ -34,7 +34,7 @@ export default async function CampaignDetailPage({
     <div>
       <Link
         href="/donativos"
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted hover:text-ink"
       >
         <ArrowLeft className="size-4" />
         Campañas

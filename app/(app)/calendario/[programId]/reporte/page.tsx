@@ -63,7 +63,7 @@ export default async function ReporteMateriaPage({
       <div className="mb-5 print:hidden">
         <Link
           href={`/calendario/${programId}${group ? `?grupo=${group.id}` : ""}`}
-          className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+          className="tap mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-4" />
           Panel de clase

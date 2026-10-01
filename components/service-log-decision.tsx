@@ -44,7 +44,7 @@ export function ServiceLogDecision({
             name="hours"
             required
             placeholder="Ej. 6, 8.5 o 10:30"
-            className="h-9 flex-1 rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm"
+            className="h-9 flex-1 rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
           />
           <Button type="submit" size="sm" variant="secondary">
             Guardar horas
@@ -96,14 +96,14 @@ export function ServiceLogDecision({
                   name="approvedHours"
                   required
                   placeholder={`Menos de ${horasLabel(reportedMinutes)}`}
-                  className="mt-1 h-9 w-full rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm font-normal"
+                  className="mt-1 h-9 w-full rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)] font-normal"
                 />
               </label>
               <input
                 name="decisionNote"
                 required
                 placeholder="Por qué se le cuentan menos (lo lee el prestador)"
-                className="h-9 w-full rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm"
+                className="h-9 w-full rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
               />
               <Button type="submit" size="sm" variant="secondary">
                 Autorizar con recorte
@@ -117,7 +117,7 @@ export function ServiceLogDecision({
                 name="decisionNote"
                 required
                 placeholder="Por qué no se autoriza (lo lee el prestador)"
-                className="h-9 w-full rounded-[var(--radius-input)] border border-border bg-surface px-3 text-sm"
+                className="h-9 w-full rounded-[var(--radius-input)] border border-border-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-[border,box-shadow] duration-150 focus:outline-none focus:border-primary focus:ring-4 focus:ring-[var(--primary-ring)]"
               />
               <Button type="submit" size="sm" variant="danger">
                 <XCircle weight="fill" className="size-4" />

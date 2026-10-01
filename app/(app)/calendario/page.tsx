@@ -123,7 +123,7 @@ export default async function CalendarioPage({
         >
           <CaretRight className="size-4" />
         </Link>
-        <span className="ml-1 text-sm font-bold capitalize text-ink">{weekLabel}</span>
+        <span className="ml-1 inline-block text-sm font-bold text-ink first-letter:uppercase">{weekLabel}</span>
         <Link
           href="/calendario"
           className="ml-auto rounded-[var(--radius-input)] border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-ink"
@@ -239,7 +239,7 @@ export default async function CalendarioPage({
                               </p>
                             )}
                             {isCanceled && (
-                              <span className="mt-0.5 inline-block rounded-full bg-warning-weak px-2 py-0.5 text-[0.65rem] font-bold text-warning-strong">
+                              <span className="mt-0.5 inline-block rounded-full bg-warning-weak px-2 py-0.5 text-[0.7rem] font-bold text-warning-strong">
                                 Suspendida
                               </span>
                             )}

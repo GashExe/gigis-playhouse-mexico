@@ -63,7 +63,7 @@ export default async function ListaAsistenciaPage({
       <div className="mb-5 print:hidden">
         <Link
           href={`/calendario/${programId}?fecha=${dateKey}${grupo ? `&grupo=${grupo}` : ""}`}
-          className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+          className="tap mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-4" />
           Panel de clase
@@ -72,7 +72,7 @@ export default async function ListaAsistenciaPage({
           <h1 className="text-xl font-extrabold tracking-tight text-ink">
             Lista de asistencia
           </h1>
-          <span className="text-sm capitalize text-muted">{dateLabel}</span>
+          <span className="inline-block text-sm text-muted first-letter:uppercase">{dateLabel}</span>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Link
               href={`/calendario/${programId}/lista?fecha=${dateKey}${grupo ? `&grupo=${grupo}` : ""}&membrete=${conMembrete ? "0" : "1"}`}

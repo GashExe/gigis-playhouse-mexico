@@ -138,7 +138,7 @@ export function ProgramGroups({
                         setEditing(g.id);
                       }}
                       aria-label={`Editar grupo ${g.name}`}
-                      className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface hover:text-ink"
+                      className="tap flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface hover:text-ink"
                     >
                       <PencilSimple className="size-3.5" />
                     </button>
@@ -146,7 +146,7 @@ export function ProgramGroups({
                       type="button"
                       onClick={() => borrar(g.id)}
                       aria-label={`Borrar grupo ${g.name}`}
-                      className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                      className="tap flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
                     >
                       <Trash className="size-3.5" />
                     </button>

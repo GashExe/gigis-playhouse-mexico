@@ -157,7 +157,7 @@ export default async function DonativosPage() {
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       <Link
                         href={`/donativos/${c.id}`}
-                        className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                        className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
                         aria-label="Ver familias"
                       >
                         <CaretRight className="size-4" />
@@ -169,7 +169,7 @@ export default async function DonativosPage() {
                         <button
                           type="submit"
                           aria-label={c.active ? "Cerrar campaña" : "Reabrir campaña"}
-                          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                          className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
                         >
                           {c.active ? (
                             <Archive className="size-4" />
@@ -185,7 +185,7 @@ export default async function DonativosPage() {
                         <button
                           type="submit"
                           aria-label="Eliminar campaña"
-                          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                          className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
                         >
                           <Trash className="size-4" />
                         </button>

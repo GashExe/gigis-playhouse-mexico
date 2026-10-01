@@ -71,7 +71,7 @@ export default async function PanelPage() {
       {/* Bienvenida */}
       <div className="flex flex-col gap-1">
         <p className="text-sm font-semibold text-primary-strong">
-          {saludo()}, {firstName} 👋
+          {saludo()}, {firstName}
         </p>
         <h1 className="text-2xl font-extrabold tracking-tight text-ink">
           {user.role === "DIRECTORA"

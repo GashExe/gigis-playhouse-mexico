@@ -37,7 +37,7 @@ export default async function StudentHistoryPage({
     <div>
       <Link
         href={`/estudiantes/${id}`}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+        className="tap mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
       >
         <ArrowLeft className="size-4" />
         {student.firstName} {student.lastName}

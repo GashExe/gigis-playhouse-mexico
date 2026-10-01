@@ -8,7 +8,8 @@
 /* =========================================================================
    Plataforma Gigi's Playhouse México — Sistema de diseño
    Mood: salón soleado, cálido y ordenado. Estrategia: Restrained.
-   Marca: teal (confianza, calma) + ámbar (alegría). Superficie casi pura.
+   Marca: teal (confianza, calma) + ámbar (alegría). Base: papel cálido con
+   grises de la misma familia (hue ~70), no blanco clínico ni gris azulado.
    Colores en OKLCH.
    ========================================================================= */
 
@@ -16,17 +17,17 @@
   color-scheme: light;
 
   /* Superficies / neutros */
-  --bg: oklch(0.985 0.006 195);          /* lienzo de la app (near-white teal-tint) */
-  --surface: oklch(1 0 0);               /* tarjetas / contenido */
-  --surface-2: oklch(0.972 0.008 195);   /* hover / zonas elevadas sutiles */
-  --sidebar: oklch(0.995 0.004 195);     /* barra lateral */
-  --border: oklch(0.918 0.008 200);
-  --border-strong: oklch(0.86 0.011 200);
+  --bg: oklch(0.982 0.005 80);           /* lienzo: papel cálido */
+  --surface: oklch(0.998 0.002 80);      /* tarjetas / contenido */
+  --surface-2: oklch(0.966 0.006 78);    /* hover / zonas elevadas sutiles */
+  --sidebar: oklch(0.974 0.006 78);      /* barra lateral, un tono bajo el lienzo */
+  --border: oklch(0.912 0.007 75);
+  --border-strong: oklch(0.85 0.009 72);
 
   /* Texto (tinta) — verificado para contraste sobre superficies claras */
-  --ink: oklch(0.24 0.015 225);          /* principal */
-  --ink-muted: oklch(0.47 0.016 225);    /* secundario (≥4.5:1 sobre blanco) */
-  --ink-subtle: oklch(0.58 0.014 225);   /* terciario (texto grande / no crítico) */
+  --ink: oklch(0.235 0.012 60);          /* principal */
+  --ink-muted: oklch(0.46 0.012 62);     /* secundario (≥4.5:1 sobre blanco) */
+  --ink-subtle: oklch(0.535 0.011 65);   /* terciario (≥4.5:1 sobre lienzo y tarjetas) */
   --ink-on-brand: oklch(0.99 0.005 195); /* texto sobre teal/ámbar oscuros */
 
   /* Marca — primaria (teal) */
@@ -88,30 +89,32 @@
 
   /* Sombras tintadas al hue de marca */
   --shadow-color: 200 30% 22%;
-  --shadow-sm: 0 1px 2px oklch(0.4 0.03 220 / 0.06), 0 1px 3px oklch(0.4 0.03 220 / 0.05);
-  --shadow-md: 0 2px 4px oklch(0.4 0.03 220 / 0.05), 0 6px 16px oklch(0.4 0.03 220 / 0.08);
-  --shadow-lg: 0 4px 8px oklch(0.4 0.03 220 / 0.06), 0 16px 40px oklch(0.4 0.03 220 / 0.12);
+  --shadow-sm: 0 1px 0 oklch(0.35 0.02 60 / 0.045);
+  --shadow-md: 0 1px 2px oklch(0.35 0.02 60 / 0.06), 0 8px 20px -6px oklch(0.35 0.02 60 / 0.12);
+  --shadow-lg: 0 2px 6px oklch(0.35 0.02 60 / 0.07), 0 20px 44px -12px oklch(0.35 0.02 60 / 0.2);
 
-  /* Radios — regla: tarjetas 16px, controles 10px, inputs 8px, píldoras full */
-  --radius-card: 16px;
-  --radius-control: 10px;
+  /* Radios — de afuera hacia adentro: tarjetas 14px, controles 9px, inputs 8px,
+     etiquetas 6px. Píldora solo para chips de filtro y avatares de lista. */
+  --radius-card: 14px;
+  --radius-control: 9px;
   --radius-input: 8px;
+  --radius-tag: 6px;
   --radius-pill: 9999px;
 }
 
 :root[data-theme="dark"] {
     color-scheme: dark;
 
-    --bg: oklch(0.205 0.014 235);
-    --surface: oklch(0.245 0.015 235);
-    --surface-2: oklch(0.285 0.016 235);
-    --sidebar: oklch(0.185 0.013 235);
-    --border: oklch(0.33 0.017 235);
-    --border-strong: oklch(0.42 0.02 235);
+    --bg: oklch(0.195 0.006 65);
+    --surface: oklch(0.232 0.007 65);
+    --surface-2: oklch(0.27 0.008 65);
+    --sidebar: oklch(0.178 0.006 65);
+    --border: oklch(0.315 0.008 65);
+    --border-strong: oklch(0.4 0.01 65);
 
-    --ink: oklch(0.95 0.008 220);
-    --ink-muted: oklch(0.75 0.012 220);
-    --ink-subtle: oklch(0.62 0.012 220);
+    --ink: oklch(0.95 0.006 80);
+    --ink-muted: oklch(0.76 0.009 75);
+    --ink-subtle: oklch(0.67 0.009 75);
     --ink-on-brand: oklch(0.99 0.005 195);
 
     --primary: oklch(0.68 0.12 194);
@@ -205,7 +208,9 @@
   --radius-control: var(--radius-control);
   --radius-input: var(--radius-input);
 
-  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-sans-base), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-display), var(--font-sans-base), ui-sans-serif, sans-serif;
+  --radius-tag: var(--radius-tag);
 
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
@@ -223,10 +228,34 @@ html {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings: "cv11", "ss01";
+  font-family: var(--font-sans-base), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* Títulos con la fuente de display. El peso lo baja un punto: Bricolage en 800
+   se ve gritón; en 700/650 conserva presencia con más oficio. */
+/* En @layer base para que cualquier utilidad (truncate, font-*, whitespace-*)
+   siga mandando: fuera de capa le ganarían a Tailwind y moverían renglones. */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), var(--font-sans-base), ui-sans-serif, sans-serif;
+    font-optical-sizing: auto;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+h1.font-extrabold,
+h2.font-extrabold {
+  font-weight: 700;
+}
+h2.font-bold,
+h3.font-bold {
+  font-weight: 650;
 }
 
 /* Números tabulares para datos y calificaciones */
@@ -304,5 +333,19 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Área de toque mínima (~44px alto × 40px ancho) para controles chicos, sin
+   cambiar cómo se ven ni dónde están: un ::after invisible agranda la zona que
+   responde al dedo. Si el control ya es grande, no hace nada. */
+@layer utilities {
+  .tap {
+    position: relative;
+  }
+  .tap::after {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc((100% - 44px) / 2)) min(0px, calc((100% - 40px) / 2));
   }
 }

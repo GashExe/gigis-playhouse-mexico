@@ -198,14 +198,14 @@ function NodeRow({
               <button
                 onClick={() => setAddingChild((v) => !v)}
                 aria-label="Agregar debajo"
-                className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 <Plus className="size-4" />
               </button>
               <button
                 onClick={() => setEditing((v) => !v)}
                 aria-label="Editar"
-                className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 <PencilSimple className="size-4" />
               </button>

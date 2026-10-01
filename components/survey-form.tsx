@@ -49,7 +49,7 @@ export function SurveyForm({ questions }: { questions: SurveyQuestion[] }) {
                       className="sr-only"
                     />
                     <span className="text-lg font-extrabold text-ink">{n}</span>
-                    <span className="text-[0.65rem] font-medium leading-tight text-muted">
+                    <span className="text-[0.7rem] font-medium leading-tight text-muted">
                       {SCALE_LABELS[n]}
                     </span>
                   </label>

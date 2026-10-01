@@ -293,7 +293,7 @@ function ProgramCard({
                 <button
                   type="submit"
                   aria-label={p.active ? "Desactivar programa" : "Activar programa"}
-                  className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                  className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
                 >
                   {p.active ? <EyeSlash className="size-[1.05rem]" /> : <Eye className="size-[1.05rem]" />}
                 </button>
@@ -301,7 +301,7 @@ function ProgramCard({
               <button
                 onClick={onEdit}
                 aria-label="Editar programa"
-                className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+                className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
               >
                 <PencilSimple className="size-[1.05rem]" />
               </button>
@@ -394,7 +394,7 @@ function SlotsEditor({ initial, levels = [] }: { initial: ScheduleSlot[]; levels
               type="button"
               onClick={() => setSlots((prev) => prev.filter((_, j) => j !== i))}
               aria-label="Quitar día"
-              className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+              className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
             >
               <X className="size-4" />
             </button>
@@ -462,7 +462,7 @@ function ProgramForm({
             type="button"
             onClick={onClose}
             aria-label="Cerrar"
-            className="flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle hover:bg-surface-2 hover:text-ink"
+            className="tap flex size-7 items-center justify-center rounded-[var(--radius-input)] text-subtle hover:bg-surface-2 hover:text-ink"
           >
             <X className="size-4" />
           </button>

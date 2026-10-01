@@ -164,7 +164,7 @@ export function CancelClassControl({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-warning-weak hover:text-warning-strong"
+        className="tap ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-warning-weak hover:text-warning-strong"
       >
         <CalendarX className="size-4" />
         Suspender esta clase
@@ -346,7 +346,7 @@ function AttendanceItem({
         >
           <span
             aria-hidden
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-weak text-xs font-bold text-primary-strong"
+            className="flex size-9 shrink-0 items-center justify-center rounded-[30%] bg-primary-weak text-xs font-semibold tracking-tight text-primary-strong"
           >
             {initials(`${s.firstName} ${s.lastName}`)}
           </span>
@@ -393,7 +393,7 @@ function AttendanceItem({
             hidden={readOnly}
             disabled={!row}
             title={row ? "Agregar detalle" : "Marca asistencia primero"}
-            className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40"
+            className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40"
           >
             <NotePencil className="size-4" />
           </button>
@@ -633,7 +633,7 @@ function NoteItem({ note: n, showStudent }: { note: Note; showStudent: boolean }
           {showStudent ? `${n.student.firstName} ${n.student.lastName}` : fechaLabel(n.createdAt)}
         </p>
         <div className="flex items-center gap-1.5">
-          <Badge tone={n.visibleToFamily ? "success" : "neutral"} className="text-[0.65rem]">
+          <Badge tone={n.visibleToFamily ? "success" : "neutral"} className="text-[0.7rem]">
             {n.visibleToFamily ? (
               <>
                 <Users className="size-3" /> Familia
@@ -649,7 +649,7 @@ function NoteItem({ note: n, showStudent }: { note: Note; showStudent: boolean }
               <button
                 type="submit"
                 aria-label="Borrar anotación"
-                className="flex size-6 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+                className="tap flex size-6 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
               >
                 <Trash className="size-3.5" />
               </button>

@@ -165,7 +165,7 @@ export default async function ClassPanelPage({
       <div>
         <Link
           href="/calendario"
-          className="mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+          className="tap mb-3 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-4" />
           Calendario
@@ -217,7 +217,7 @@ export default async function ClassPanelPage({
         >
           <CaretRight className="size-4" />
         </Link>
-        <span className="ml-1 text-sm font-bold capitalize text-ink">{dateLabel}</span>
+        <span className="ml-1 inline-block text-sm font-bold text-ink first-letter:uppercase">{dateLabel}</span>
         {daySlots.length > 0 && (
           <span className="tnum text-sm font-semibold" style={{ color }}>
             {daySlots.map((s) => `${s.startTime}–${s.endTime}`).join(" y ")}
@@ -231,21 +231,21 @@ export default async function ClassPanelPage({
         {/* La lista en papel está siempre a la mano, no solo cuando se llena el cupo. */}
         <Link
           href={`/calendario/${program.id}/lista?fecha=${dateKey}${group ? `&grupo=${group.id}` : ""}`}
-          className="ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          className="tap ml-auto flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <Printer className="size-4" />
           Imprimir lista
         </Link>
         <Link
           href={`/calendario/${program.id}/reporte${group ? `?grupo=${group.id}` : ""}`}
-          className="flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          className="tap flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ChartBar className="size-4" />
           Reporte del grupo
         </Link>
         <Link
           href={`/calendario/${program.id}/bitacoras`}
-          className="flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
+          className="tap flex items-center gap-1.5 rounded-[var(--radius-input)] px-2.5 py-1.5 text-xs font-semibold text-subtle transition-colors hover:bg-surface-2 hover:text-ink"
         >
           <ClockCounterClockwise className="size-4" />
           Historial de bitácoras

@@ -22,13 +22,13 @@ export function Avatar({
     <span
       aria-hidden
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full font-bold ring-1 ring-inset ring-black/5",
+        "inline-flex shrink-0 items-center justify-center rounded-[30%] font-semibold tracking-tight",
         sizeMap[size],
         className,
       )}
       style={{
-        backgroundColor: `oklch(0.94 0.055 ${hue})`,
-        color: `oklch(0.42 0.12 ${hue})`,
+        backgroundColor: `oklch(0.935 0.035 ${hue})`,
+        color: `oklch(0.42 0.08 ${hue})`,
       }}
     >
       {initials(name)}

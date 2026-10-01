@@ -188,7 +188,7 @@ function UserCard({ name, role }: { name: string; role: Role }) {
     <div className="flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-surface px-2.5 py-2.5">
       <span
         aria-hidden
-        className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-weak text-sm font-bold text-primary-strong"
+        className="flex size-9 shrink-0 items-center justify-center rounded-[30%] bg-primary-weak text-sm font-semibold tracking-tight text-primary-strong"
       >
         {initials(name)}
       </span>
@@ -204,7 +204,7 @@ function UserCard({ name, role }: { name: string; role: Role }) {
           type="submit"
           aria-label="Cerrar sesión"
           title="Cerrar sesión"
-          className="flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
+          className="tap flex size-8 items-center justify-center rounded-[var(--radius-input)] text-subtle transition-colors hover:bg-danger-weak hover:text-danger-strong"
         >
           <SignOut className="size-[1.1rem]" />
         </button>
@@ -318,7 +318,7 @@ function GlassTabBar({ user }: { user: NavUser }) {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-0.5 py-2 transition-colors",
+              "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-0 py-2 transition-colors",
               active ? "text-primary-strong" : "text-muted hover:text-ink",
             )}
           >
@@ -332,7 +332,7 @@ function GlassTabBar({ user }: { user: NavUser }) {
               weight={active ? "fill" : "regular"}
               className={cn("relative size-[1.4rem]", active ? "text-primary" : "text-subtle")}
             />
-            <span className="relative w-full truncate text-center text-[0.58rem] font-semibold leading-none">
+            <span className="relative w-full truncate text-center text-[10.5px] font-medium leading-none tracking-tight">
               {item.label}
             </span>
           </Link>
@@ -346,7 +346,7 @@ function GlassTabBar({ user }: { user: NavUser }) {
             aria-expanded={moreOpen}
             aria-label="Más secciones"
             className={cn(
-              "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-0.5 py-2 transition-colors",
+              "relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[1.2rem] px-0 py-2 transition-colors",
               moreOpen || overflowActive
                 ? "text-primary-strong"
                 : "text-muted hover:text-ink",
@@ -365,7 +365,7 @@ function GlassTabBar({ user }: { user: NavUser }) {
                 moreOpen || overflowActive ? "text-primary" : "text-subtle",
               )}
             />
-            <span className="relative w-full truncate text-center text-[0.58rem] font-semibold leading-none">
+            <span className="relative w-full truncate text-center text-[10.5px] font-medium leading-none tracking-tight">
               Más
             </span>
           </button>

@@ -23,7 +23,7 @@ export default async function ManualAlumnoPage() {
       <div>
         <Link
           href="/mi-espacio"
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+          className="tap inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-4" />
           Mi espacio
