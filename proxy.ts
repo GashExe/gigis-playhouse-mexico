@@ -10,7 +10,12 @@ const encodedKey = new TextEncoder().encode(process.env.SESSION_SECRET);
 // mandan su semana sin cuenta, igual que en el Google Form. Lo que se puede hacer
 // ahí lo acota la acción del servidor (solo crea reportes, y siempre pendientes),
 // no esta lista.
-const PUBLIC_PATHS = ["/login", "/reportar"];
+//
+// El manifest y el service worker los pide el navegador por su cuenta (al instalar
+// la app o al despertar para mostrar una notificación), a veces sin la cookie de
+// sesión: si los mandáramos al login, la instalación y las notificaciones fallan.
+// No llevan datos de nadie.
+const PUBLIC_PATHS = ["/login", "/reportar", "/manifest.webmanifest", "/sw.js"];
 
 // De éstas se saca a quien YA tiene sesión: no hay nada que hacer en el login si
 // ya entraste. /reportar no está aquí a propósito — la coordinación necesita

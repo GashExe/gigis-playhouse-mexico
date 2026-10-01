@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireWriter } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
+import { notificarFamilias, notificarFamiliasActivas, resumen } from "@/lib/push";
 
 /**
  * Campañas de donativos. Las arma y administra la DIRECCIÓN. El cumplimiento se
@@ -43,6 +44,15 @@ export async function createCampaign(formData: FormData) {
   const data = fields(formData);
   if (!data.title) return;
   const campaign = await prisma.donationCampaign.create({ data });
+  notificarFamiliasActivas({
+    title: data.mandatory ? `Donativo obligatorio: ${campaign.title}` : `Nueva campaña de donativos: ${campaign.title}`,
+    body: resumen(
+      [data.description, data.goalLabel && `Mínimo: ${data.goalLabel}`].filter(Boolean).join(" · ") ||
+        "Revisa los detalles en Mi espacio.",
+    ),
+    url: "/mi-espacio",
+    tag: `campana-${campaign.id}`,
+  });
   await logAudit({
     action: "donativo.campana.alta",
     summary: `Creó la campaña de donativos «${campaign.title}»${data.mandatory ? " (obligatoria)" : ""}`,
@@ -119,11 +129,25 @@ export async function markContributionDone(formData: FormData) {
   const amount = parseAmount(formData.get("amount"));
   const note = String(formData.get("note") ?? "").trim() || null;
 
-  await prisma.donationContribution.upsert({
+  const antes = await prisma.donationContribution.findUnique({
+    where: { campaignId_studentId: { campaignId, studentId } },
+    select: { status: true },
+  });
+  const aporte = await prisma.donationContribution.upsert({
     where: { campaignId_studentId: { campaignId, studentId } },
     update: { status: "CUMPLIDO", amount, note, graceUntil: null },
     create: { campaignId, studentId, status: "CUMPLIDO", amount, note },
+    select: { campaign: { select: { title: true } } },
   });
+  // Solo al pasar a cumplido (corregir el monto de algo ya cumplido no avisa otra vez).
+  if (antes?.status !== "CUMPLIDO") {
+    notificarFamilias([studentId], {
+      title: "Recibimos tu donativo",
+      body: `Gracias por tu aporte a «${aporte.campaign.title}». Ya quedó registrado.`,
+      url: "/mi-espacio",
+      tag: `donativo-${campaignId}`,
+    });
+  }
   await logAudit({
     action: "donativo.cumplido",
     summary: "Marcó el donativo como cumplido",
@@ -144,10 +168,20 @@ export async function grantContributionGrace(formData: FormData) {
   const graceUntil = parseDateInput(formData.get("graceUntil"));
   if (!campaignId || !studentId || !graceUntil) return;
 
-  await prisma.donationContribution.upsert({
+  const aporte = await prisma.donationContribution.upsert({
     where: { campaignId_studentId: { campaignId, studentId } },
     update: { status: "GRACIA", graceUntil },
     create: { campaignId, studentId, status: "GRACIA", graceUntil },
+    select: { campaign: { select: { title: true } } },
+  });
+  const hasta = new Intl.DateTimeFormat("es-MX", { timeZone: "UTC", day: "numeric", month: "long" }).format(
+    graceUntil,
+  );
+  notificarFamilias([studentId], {
+    title: "Te dimos una prórroga",
+    body: `Tienes hasta el ${hasta} para el donativo de «${aporte.campaign.title}».`,
+    url: "/mi-espacio",
+    tag: `donativo-${campaignId}`,
   });
   await logAudit({
     action: "donativo.gracia",

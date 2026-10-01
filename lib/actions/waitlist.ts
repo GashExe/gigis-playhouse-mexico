@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { coversProgramId, getCurrentUser, requireWriter } from "@/lib/dal";
 import { getActiveCycle, familyDonationHold, meetsAgeRequirement } from "@/lib/queries";
 import { logAudit } from "@/lib/audit";
+import { notificarFamilias } from "@/lib/push";
 import { enrollStudent, occupiedSeats } from "@/lib/enroll";
 import { groupOptionsForStudent, occupiedGroupSeats } from "@/lib/groups";
 import { resolvePlacement } from "@/lib/placement";
@@ -270,6 +271,14 @@ export async function acceptWaitlist(
     },
   });
 
+  notificarFamilias([studentId], {
+    title: `Ya tienes lugar en ${program.name}`,
+    body: grupo
+      ? `${request.student.firstName} quedó inscrito: ${grupo.scheduleLabel}.`
+      : `${request.student.firstName} quedó inscrito desde la lista de espera.`,
+    url: "/mi-espacio",
+    tag: `espera-${requestId}`,
+  });
   revalidatePath("/lista-espera");
   revalidatePath("/mi-espacio");
   revalidatePath("/mi-espacio/lista-espera");

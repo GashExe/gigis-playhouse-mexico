@@ -3,8 +3,16 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { MagnifyingGlass, CircleNotch, X } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
 
-export function SearchInput({ placeholder = "Buscar…" }: { placeholder?: string }) {
+export function SearchInput({
+  placeholder = "Buscar…",
+  className,
+}: {
+  placeholder?: string;
+  /** Para cambiar el ancho donde el buscador comparte fila con otros filtros. */
+  className?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -34,7 +42,7 @@ export function SearchInput({ placeholder = "Buscar…" }: { placeholder?: strin
   }
 
   return (
-    <div className="relative w-full sm:max-w-xs">
+    <div className={cn("relative w-full sm:max-w-xs", className)}>
       <MagnifyingGlass className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-subtle" />
       <input
         type="search"

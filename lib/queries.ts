@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import type { Coordination, Role, StudentStatus } from "@/lib/generated/prisma/client";
+import type { Coordination, Prisma, Role, StudentStatus } from "@/lib/generated/prisma/client";
+import { AUDIT_CATEGORIES, AUDIT_PERIODS, type AuditCategory, type AuditPeriod } from "@/lib/audit-categories";
 import { ageFrom, meetsAgeRequirement } from "@/lib/utils";
 import { palabrasDeBusqueda, seParecen } from "@/lib/servicio";
 
@@ -1387,6 +1388,104 @@ export async function listAuditLog(opts?: { studentId?: string; take?: number })
       student: { select: { id: true, firstName: true, lastName: true } },
     },
   });
+}
+
+/** Medianoche de hoy en Querétaro (UTC-6 todo el año desde 2022), como instante UTC. */
+function inicioDeHoyMx(): Date {
+  const hoy = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date()); // "2026-09-30"
+  return new Date(`${hoy}T00:00:00-06:00`);
+}
+
+/**
+ * Bitácora con filtros: familia de movimiento, persona, periodo y búsqueda en el
+ * texto o en el nombre del participante. Devuelve también los conteos por familia y
+ * por persona CON los demás filtros aplicados, para que cada pestaña diga cuántos
+ * movimientos hay si la escoges.
+ */
+export async function listAuditLogFiltered(f: {
+  category?: AuditCategory;
+  actor?: string;
+  period?: AuditPeriod;
+  q?: string;
+  take: number;
+}) {
+  const days = AUDIT_PERIODS.find((p) => p.value === f.period)?.days ?? null;
+  const since =
+    days === null ? null : days === 1 ? inicioDeHoyMx() : new Date(inicioDeHoyMx().getTime() - (days - 1) * 86_400_000);
+
+  const q = f.q?.trim();
+  const base: Prisma.AuditLogWhereInput[] = [];
+  if (since) base.push({ createdAt: { gte: since } });
+  if (q) {
+    base.push({
+      OR: [
+        { summary: { contains: q, mode: "insensitive" } },
+        { student: { firstName: { contains: q, mode: "insensitive" } } },
+        { student: { lastName: { contains: q, mode: "insensitive" } } },
+      ],
+    });
+  }
+  const byCategory = (c: AuditCategory): Prisma.AuditLogWhereInput => ({
+    OR: AUDIT_CATEGORIES.find((x) => x.value === c)!.prefixes.map((p) => ({
+      action: { startsWith: p },
+    })),
+  });
+  const byActor: Prisma.AuditLogWhereInput | null = f.actor ? { actorName: f.actor } : null;
+
+  const where: Prisma.AuditLogWhereInput = {
+    AND: [...base, ...(f.category ? [byCategory(f.category)] : []), ...(byActor ? [byActor] : [])],
+  };
+
+  const [entries, total, porAccion, porPersona] = await Promise.all([
+    prisma.auditLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: f.take,
+      select: {
+        id: true,
+        action: true,
+        summary: true,
+        actorName: true,
+        actorRole: true,
+        createdAt: true,
+        student: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    prisma.auditLog.count({ where }),
+    // Conteo por familia: respeta persona/periodo/búsqueda, ignora la familia elegida.
+    prisma.auditLog.groupBy({
+      by: ["action"],
+      where: { AND: [...base, ...(byActor ? [byActor] : [])] },
+      _count: { _all: true },
+    }),
+    // Conteo por persona: respeta familia/periodo/búsqueda, ignora la persona elegida.
+    prisma.auditLog.groupBy({
+      by: ["actorName"],
+      where: { AND: [...base, ...(f.category ? [byCategory(f.category)] : [])] },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const categoryCounts = Object.fromEntries(AUDIT_CATEGORIES.map((c) => [c.value, 0])) as Record<
+    AuditCategory,
+    number
+  >;
+  let allCount = 0;
+  for (const row of porAccion) {
+    allCount += row._count._all;
+    const c = AUDIT_CATEGORIES.find((x) => x.prefixes.some((p) => row.action.startsWith(p)));
+    if (c) categoryCounts[c.value] += row._count._all;
+  }
+  const actors = porPersona
+    .map((r) => ({ name: r.actorName, count: r._count._all }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "es"));
+
+  return { entries, total, categoryCounts, allCount, actors };
 }
 
 export async function listUsers() {

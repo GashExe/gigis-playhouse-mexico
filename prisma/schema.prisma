@@ -50,6 +50,9 @@ model User {
   // desde el celular y luego desde otra computadora, ya los leyó ella.
   messagesSeenAt DateTime?
 
+  // Celulares/navegadores donde la cuenta aceptó notificaciones (ver lib/push.ts).
+  pushSubscriptions PushSubscription[]
+
   // Cuenta ligada a un participante (solo para role ALUMNO).
   studentId String?  @unique
   student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
@@ -1112,4 +1115,25 @@ enum ServiceLogSource {
   PLATAFORMA // Lo mandó el prestador desde su espacio, con su cuenta
   LIGA_PUBLICA // Llegó por la liga abierta, sin cuenta: nadie verificó quién lo mandó
   FORMULARIO // Importado de la hoja del Google Form (2021–2026)
+}
+
+/// Un celular o navegador donde la cuenta aceptó notificaciones. Una familia puede
+/// tener varios (el de mamá y el de papá entran con la misma cuenta), así que es
+/// una fila por dispositivo. Cuando el servicio de notificaciones contesta que la
+/// suscripción ya no existe (desinstalaron la app o quitaron el permiso), la fila
+/// se borra sola al intentar mandar (ver lib/push.ts).
+model PushSubscription {
+  id       String @id @default(cuid())
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String
+  endpoint String @unique // URL del servicio de push del navegador (identifica al dispositivo)
+  p256dh   String // Llave pública del navegador para cifrar el mensaje
+  auth     String // Secreto de autenticación del navegador
+
+  userAgent String? // Para saber si es Android, iPhone o computadora al revisar
+
+  createdAt  DateTime  @default(now())
+  lastSentAt DateTime? // Último envío exitoso
+
+  @@index([userId])
 }

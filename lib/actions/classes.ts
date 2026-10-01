@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireClassManagerForProgram } from "@/lib/dal";
 import { isDateKey } from "@/lib/schedule";
+import { notificarFamilias, notificarFamiliasDePrograma, resumen } from "@/lib/push";
 
 /**
  * Acciones del panel de clase (calendario): asistencia, bitácora de la sesión y
@@ -13,6 +14,28 @@ import { isDateKey } from "@/lib/schedule";
 
 const STATUSES = ["PRESENTE", "AUSENTE", "JUSTIFICADO", "RETARDO"] as const;
 type Status = (typeof STATUSES)[number];
+
+/** Hoy en Querétaro como clave AAAA-MM-DD (para no avisar de clases que ya pasaron). */
+function hoyMx(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Mexico_City",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** "lunes 5 de octubre" a partir de la clave de fecha. */
+function diaLegible(dateKey: string): string {
+  return new Intl.DateTimeFormat("es-MX", {
+    timeZone: "UTC",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  })
+    .format(new Date(`${dateKey}T12:00:00.000Z`))
+    .replace(",", "");
+}
 
 /** La sesión se guarda como fecha pura (@db.Date): siempre desde la clave, en UTC. */
 function sessionDate(dateKey: string): Date {
@@ -92,11 +115,35 @@ export async function setClassCanceled(
   const reason = String(formData.get("reason") ?? "").trim() || null;
 
   const date = sessionDate(dateKey);
-  await prisma.classSession.upsert({
+  const antes = await prisma.classSession.findUnique({
+    where: { programId_date: { programId, date } },
+    select: { canceled: true },
+  });
+  const sesion = await prisma.classSession.upsert({
     where: { programId_date: { programId, date } },
     update: { canceled, cancelReason: canceled ? reason : null },
     create: { programId, date, canceled, cancelReason: canceled ? reason : null },
+    select: { program: { select: { name: true } } },
   });
+
+  // Aviso a las familias solo si de verdad cambió y la clase todavía no pasa:
+  // suspender algo de la semana pasada (para ordenar el registro) no le sirve a nadie.
+  const cambio = (antes?.canceled ?? false) !== canceled;
+  if (cambio && dateKey >= hoyMx()) {
+    const dia = diaLegible(dateKey);
+    notificarFamiliasDePrograma(programId, {
+      title: canceled
+        ? `Se suspende ${sesion.program.name} el ${dia}`
+        : `Sí hay clase de ${sesion.program.name} el ${dia}`,
+      body: canceled
+        ? reason
+          ? resumen(reason)
+          : "Esa clase no se da. Revisa Mi espacio para más detalles."
+        : "La clase que estaba suspendida se vuelve a dar como siempre.",
+      url: "/mi-espacio",
+      tag: `clase-${programId}-${dateKey}`,
+    });
+  }
   revalidatePath(`/calendario/${programId}`);
   revalidatePath("/calendario");
   revalidatePath("/mi-espacio");
@@ -138,9 +185,18 @@ export async function addStudentNote(programId: string, formData: FormData) {
   });
   if (!enrolled) return;
 
-  await prisma.studentNote.create({
+  const nota = await prisma.studentNote.create({
     data: { studentId, programId, authorId: user.id, body, visibleToFamily },
+    select: { id: true, program: { select: { name: true } } },
   });
+  if (visibleToFamily) {
+    notificarFamilias([studentId], {
+      title: nota.program ? `Anotación de ${nota.program.name}` : "Nueva anotación de Gigi's",
+      body: resumen(body),
+      url: "/mi-espacio/mensajes",
+      tag: `nota-${nota.id}`,
+    });
+  }
   revalidatePath(`/calendario/${programId}`);
   revalidatePath(`/estudiantes/${studentId}`);
   // La anotación visible es un mensaje para la familia: sin esto tardaba en

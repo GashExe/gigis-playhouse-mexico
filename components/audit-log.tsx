@@ -11,6 +11,7 @@ import {
   ArrowsClockwise,
   Key,
   ClockCounterClockwise,
+  HandHeart,
 } from "@phosphor-icons/react/dist/ssr";
 import { haceTiempo } from "@/lib/format";
 import { roleLabel } from "@/lib/utils";
@@ -24,6 +25,14 @@ export type AuditEntry = {
   createdAt: Date;
   student: { id: string; firstName: string; lastName: string } | null;
 };
+
+function horaMx(d: Date): string {
+  return new Intl.DateTimeFormat("es-MX", {
+    timeZone: "America/Mexico_City",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(d);
+}
 
 /** Ícono y tono según la familia de la acción. */
 function actionStyle(action: string): {
@@ -46,6 +55,9 @@ function actionStyle(action: string): {
   if (action === "alumno.editar") return { icon: PencilSimple, cls: "bg-info-weak text-info" };
   if (action === "alumno.estado") return { icon: ToggleLeft, cls: "bg-warning-weak text-warning-strong" };
   if (action === "ciclo.continuidad") return { icon: ArrowsClockwise, cls: "bg-accent-weak text-accent-strong" };
+  if (action === "donativo.cumplido") return { icon: HandHeart, cls: "bg-success-weak text-success-strong" };
+  if (action === "donativo.gracia") return { icon: HandHeart, cls: "bg-warning-weak text-warning-strong" };
+  if (action.startsWith("donativo.")) return { icon: HandHeart, cls: "bg-accent-weak text-accent-strong" };
   if (action === "acceso.repone-contrasena") return { icon: Key, cls: "bg-warning-weak text-warning-strong" };
   return { icon: ClockCounterClockwise, cls: "bg-surface-2 text-muted" };
 }
@@ -58,9 +70,13 @@ function actionStyle(action: string): {
 export function AuditLog({
   entries,
   showStudent = true,
+  withTime = false,
 }: {
   entries: AuditEntry[];
   showStudent?: boolean;
+  /** Muestra la hora ("4:15 p. m.") en vez de "hace 3 días": úsalo cuando la lista ya
+   *  viene agrupada por día y el "hace…" repetiría lo que dice el encabezado. */
+  withTime?: boolean;
 }) {
   return (
     <ul className="divide-y divide-border overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-sm)]">
@@ -78,7 +94,8 @@ export function AuditLog({
               <p className="text-sm text-ink">{e.summary}</p>
               <p className="mt-0.5 text-xs text-subtle">
                 <span className="font-semibold text-muted">{e.actorName}</span>
-                {e.actorRole ? ` · ${roleLabel(e.actorRole)}` : ""} · {haceTiempo(e.createdAt)}
+                {e.actorRole ? ` · ${roleLabel(e.actorRole)}` : ""} ·{" "}
+                {withTime ? horaMx(e.createdAt) : haceTiempo(e.createdAt)}
                 {showStudent && e.student ? (
                   <>
                     {" · "}

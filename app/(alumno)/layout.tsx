@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { logout } from "@/lib/actions/auth";
 import { LogoLockup } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { InstallAppCard } from "@/components/install-app-card";
 
 export default async function AlumnoLayout({
   children,
@@ -43,6 +44,7 @@ export default async function AlumnoLayout({
         </div>
       </header>
       <main className="mx-auto w-full max-w-3xl px-4 pt-6 pb-[calc(env(safe-area-inset-bottom)+3rem)] sm:px-6 lg:pt-9">
+        <InstallAppCard />
         {children}
       </main>
     </div>

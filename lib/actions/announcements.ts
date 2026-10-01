@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireWriter } from "@/lib/dal";
+import { notificarFamilias, notificarFamiliasActivas, resumen } from "@/lib/push";
 
 /**
  * Anuncios de la dirección para las familias: a todos los participantes activos
@@ -29,7 +30,7 @@ export async function createAnnouncement(
     return { error: "Elige al menos un participante, o mándalo a todos los activos." };
   }
 
-  await prisma.announcement.create({
+  const anuncio = await prisma.announcement.create({
     data: {
       authorId: user.id,
       title,
@@ -43,7 +44,11 @@ export async function createAnnouncement(
             },
           }),
     },
+    select: { id: true },
   });
+  const aviso = { title, body: resumen(body), url: "/mi-espacio/mensajes", tag: `anuncio-${anuncio.id}` };
+  if (audience === "all") notificarFamiliasActivas(aviso);
+  else notificarFamilias(recipientIds, aviso);
   revalidatePath("/avisos");
   revalidatePath("/mi-espacio");
   return { ok: true };

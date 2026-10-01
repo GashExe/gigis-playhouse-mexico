@@ -340,7 +340,9 @@ h3.font-bold {
    cambiar cómo se ven ni dónde están: un ::after invisible agranda la zona que
    responde al dedo. Si el control ya es grande, no hace nada. */
 @layer utilities {
-  .tap {
+  /* Solo si no viene ya posicionado: un `absolute`/`fixed`/`sticky` ya sirve de
+     referencia para el ::after, y forzarle `relative` lo sacaría de su lugar. */
+  .tap:not(.absolute, .fixed, .sticky) {
     position: relative;
   }
   .tap::after {
