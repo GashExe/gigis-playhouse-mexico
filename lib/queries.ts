@@ -24,6 +24,7 @@ export async function getDashboardStats(cycleId?: string) {
     evaluationsThisMonth,
     recentEvaluations,
     programsWithCounts,
+    cycleParticipants,
   ] = await Promise.all([
     prisma.student.count({ where: { status: "ACTIVO" } }),
     prisma.student.count(),
@@ -60,6 +61,12 @@ export async function getDashboardStats(cycleId?: string) {
       },
       orderBy: { enrollments: { _count: "desc" } },
     }),
+    // Participantes con al menos una clase activa en el ciclo (null sin ciclo).
+    cycleId
+      ? prisma.student.count({
+          where: { enrollments: { some: { cycleId, status: "ACTIVA" } } },
+        })
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -70,6 +77,7 @@ export async function getDashboardStats(cycleId?: string) {
     evaluationsThisMonth,
     recentEvaluations,
     programsWithCounts,
+    cycleParticipants,
   };
 }
 
@@ -1103,6 +1111,67 @@ export async function listRecentFamilyReservations(limit = 8) {
         : null,
     };
   });
+}
+
+/**
+ * Quién está de verdad en el ciclo: los participantes con al menos una clase
+ * ACTIVA en él, cada uno con sus clases (programa y grupo). "Participantes
+ * activos" del panel cuenta el estado del expediente, que no dice si el niño
+ * viene este ciclo. La búsqueda pide que cada palabra esté en el nombre o en los
+ * apellidos, para que "Frida Aguilar" encuentre a Frida Mabel Aguilar Soto.
+ */
+export async function listCycleParticipants(cycleId: string, query?: string) {
+  const palabras = query?.trim().split(/\s+/).filter(Boolean) ?? [];
+  const students = await prisma.student.findMany({
+    where: {
+      enrollments: { some: { cycleId, status: "ACTIVA" } },
+      AND: palabras.map((w) => ({
+        OR: [
+          { firstName: { contains: w, mode: "insensitive" as const } },
+          { lastName: { contains: w, mode: "insensitive" as const } },
+        ],
+      })),
+    },
+    orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      matricula: true,
+      birthDate: true,
+      enrollments: {
+        where: { cycleId, status: "ACTIVA" },
+        orderBy: { program: { name: "asc" } },
+        select: {
+          id: true,
+          program: { select: { id: true, name: true, color: true } },
+          group: {
+            select: {
+              name: true,
+              level: { select: { name: true } },
+              slots: { select: { weekday: true, startTime: true, endTime: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  return students.map((s) => ({
+    ...s,
+    classes: s.enrollments.map((e) => ({
+      id: e.id,
+      program: e.program,
+      groupLabel: e.group
+        ? [
+            e.group.level?.name,
+            e.group.name === e.group.level?.name ? null : e.group.name,
+            slotsLabel(e.group.slots),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : null,
+    })),
+  }));
 }
 
 /**

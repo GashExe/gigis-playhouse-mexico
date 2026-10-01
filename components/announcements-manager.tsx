@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { RichText } from "@/components/ui/rich-text";
 
 type StudentLite = { id: string; firstName: string; lastName: string };
 type Announcement = {
@@ -221,7 +222,7 @@ export function AnnouncementsManager({
                 </div>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted">
-                {a.body}
+                <RichText text={a.body} />
               </p>
               {!a.toAllActive && a.recipients.length > 0 && (
                 <p className="mt-2 text-xs text-subtle">

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/dal";
 import { listFamilyMessages } from "@/lib/queries";
 import { fecha } from "@/lib/format";
+import { RichText } from "@/components/ui/rich-text";
 
 export const metadata: Metadata = { title: "Mensajes" };
 
@@ -102,7 +103,7 @@ export default async function MensajesPage() {
                   <h2 className="mt-1.5 font-bold text-ink">{m.title}</h2>
                 )}
                 <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-ink">
-                  {m.body}
+                  <RichText text={m.body} />
                 </p>
                 <p className="mt-1.5 text-xs text-subtle">— {m.author}</p>
               </li>
