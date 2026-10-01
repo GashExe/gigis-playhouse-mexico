@@ -19,6 +19,7 @@ import { Field, Input, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { fechaDia } from "@/lib/format";
+import { RichText } from "@/components/ui/rich-text";
 
 export const metadata = { title: "Donativos" };
 
@@ -141,7 +142,9 @@ export default async function DonativosPage() {
                         {!c.active && <Badge tone="neutral">Cerrada</Badge>}
                       </div>
                       {c.description && (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted">{c.description}</p>
+                        <p className="mt-1 line-clamp-2 text-sm text-muted">
+                          <RichText text={c.description} />
+                        </p>
                       )}
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
                         {c.goalLabel && <span>Mínimo: {c.goalLabel}</span>}

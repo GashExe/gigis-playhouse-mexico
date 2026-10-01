@@ -12,6 +12,7 @@ import { Field, Input, Textarea } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { CampaignFamilies } from "@/components/campaign-families";
 import { fechaDia } from "@/lib/format";
+import { RichText } from "@/components/ui/rich-text";
 
 export const metadata = { title: "Campaña de donativos" };
 
@@ -42,7 +43,7 @@ export default async function CampaignDetailPage({
 
       <PageHeader
         title={campaign.title}
-        subtitle={campaign.description ?? undefined}
+        subtitle={campaign.description ? <RichText text={campaign.description} /> : undefined}
         actions={
           <div className="flex items-center gap-2">
             {campaign.mandatory && (

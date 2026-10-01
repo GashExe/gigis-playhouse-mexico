@@ -33,6 +33,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { DonationCountdown } from "@/components/donation-countdown";
 import { TutorialVideo } from "@/components/tutorial-video";
 import { FamilyEnrollmentPicker } from "@/components/family-enrollment-picker";
+import { RichText } from "@/components/ui/rich-text";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -192,7 +193,7 @@ export default async function MiEspacioPage() {
                 </div>
                 {c.description && (
                   <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-muted">
-                    {c.description}
+                    <RichText text={c.description} />
                   </p>
                 )}
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
@@ -273,7 +274,7 @@ export default async function MiEspacioPage() {
               <h3 className="mt-1.5 font-bold text-ink">{ultimoMensaje.title}</h3>
             )}
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-ink">
-              {ultimoMensaje.body}
+              <RichText text={ultimoMensaje.body} />
             </p>
             <p className="mt-1.5 text-xs text-subtle">— {ultimoMensaje.author}</p>
           </article>

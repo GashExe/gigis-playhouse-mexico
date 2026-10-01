@@ -117,6 +117,31 @@ export default async function PanelPage() {
         ]}
       />
 
+      {/* Quién está de verdad en el ciclo: el número de arriba es el padrón, no
+          quién viene. La lista completa con sus clases vive en su propia hoja. */}
+      {cycle && stats.cycleParticipants !== null && (
+        <Link
+          href="/panel/participantes"
+          className="flex items-center gap-3 rounded-[var(--radius-card)] border border-border bg-surface px-5 py-4 shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-2"
+        >
+          <UsersThree weight="fill" className="size-5 shrink-0 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-ink">{`Participantes de ${cycle.label}`}</p>
+            <p className="text-xs text-muted">
+              <span className="tnum font-semibold text-ink">{stats.cycleParticipants}</span>
+              {stats.cycleParticipants === 1
+                ? " participante con clase en el ciclo"
+                : " participantes con clase en el ciclo"}
+              {" · ve quién está y a qué clases va"}
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-primary-strong">
+            Ver lista
+            <ArrowRight className="size-4" />
+          </span>
+        </Link>
+      )}
+
       {/* Inscripciones que las familias hicieron por su cuenta (enterado, no aprobación) */}
       {reservations.length > 0 && (
         <Card>
