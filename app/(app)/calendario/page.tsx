@@ -43,11 +43,28 @@ export default async function CalendarioPage({
   // La terapeuta ve sus clases; la coordinación con área asignada, las de su
   // coordinación; el resto del equipo ve todo el calendario.
   const onlyMine = me.role === "TERAPEUTA";
-  const programs = await listCalendarPrograms(
+  const allPrograms = await listCalendarPrograms(
     cycle?.id,
     onlyMine ? me.id : undefined,
     coordinationScope(me),
   );
+  // Un programa lo dan varias: a la terapeuta solo le tocan SUS horas. La de un
+  // grupo con terapeuta propia es de esa; las demás, de la titular del programa y
+  // de las que lo dan junto con ella.
+  // Si de un programa con horario no le queda ninguna, ese programa no es suyo esta
+  // semana: no debe salirle como "sin horario".
+  const programs = onlyMine
+    ? allPrograms.flatMap((p) => {
+        const mias = p.scheduleSlots.filter((s) =>
+          s.group?.teacher
+            ? s.group.teacher.id === me.id
+            : p.teacher?.id === me.id || p.coTeachers.some((t) => t.id === me.id),
+        );
+        return p.scheduleSlots.length > 0 && mias.length === 0
+          ? []
+          : [{ ...p, scheduleSlots: mias }];
+      })
+    : allPrograms;
 
   const today = new Date();
   const monday = mondayOf(semana && isDateKey(semana) ? fromDateKey(semana) : today);
@@ -206,6 +223,15 @@ export default async function CalendarioPage({
                     {classes.map(({ program: p, slot }, i) => {
                       const color = p.color ?? "var(--primary)";
                       const isCanceled = canceledSet.has(`${p.id}:${key}`);
+                      // Quién da esta hora: la del grupo, o la titular y las que lo
+                      // dan con ella.
+                      const quienes = (
+                        slot.group?.teacher
+                          ? [slot.group.teacher]
+                          : [p.teacher, ...p.coTeachers].filter((t) => t != null)
+                      )
+                        .map((t) => t.name.split(" ")[0])
+                        .join(", ");
                       return (
                         <li key={`${p.id}-${i}`}>
                           <Link
@@ -247,10 +273,10 @@ export default async function CalendarioPage({
                               {slot.startTime}–{slot.endTime}
                             </p>
                             <p className="mt-1 flex items-center gap-3 text-[0.7rem] text-muted">
-                              {p.teacher && (
+                              {quienes && (
                                 <span className="flex min-w-0 items-center gap-1">
                                   <ChalkboardTeacher className="size-3 shrink-0" />
-                                  <span className="truncate">{p.teacher.name.split(" ")[0]}</span>
+                                  <span className="truncate">{quienes}</span>
                                 </span>
                               )}
                               <span className="flex items-center gap-1">

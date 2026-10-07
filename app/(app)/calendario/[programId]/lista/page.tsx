@@ -10,6 +10,7 @@ import { fromDateKey, isDateKey, toDateKey } from "@/lib/schedule";
 import { fechaDia } from "@/lib/format";
 import { HojaMembretada } from "@/components/documento-membretado";
 import { PrintButton } from "@/components/print-button";
+import { teacherNames } from "@/lib/teaching";
 
 export const metadata = { title: "Lista de asistencia" };
 
@@ -111,7 +112,14 @@ export default async function ListaAsistenciaPage({
               <Dato label="Ciclo" value={sheet.cycle.label} />
               <Dato
                 label="Terapeuta"
-                value={sheet.program.teacher?.name ?? "Sin asignar"}
+                value={
+                  // La hoja de un grupo con terapeuta propia lleva la suya.
+                  sheet.program.scheduleSlots.find(
+                    (slot) => s.groupId && slot.programGroupId === s.groupId,
+                  )?.group?.teacher?.name ??
+                  teacherNames(sheet.program.teacher, sheet.program.coTeachers) ??
+                  "Sin asignar"
+                }
               />
               <Dato
                 label="Día y hora"

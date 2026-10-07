@@ -8,6 +8,7 @@ import { palabrasDeBusqueda, seParecen } from "@/lib/servicio";
 export { meetsAgeRequirement };
 import { effectiveSlots } from "@/lib/enrollment-rules";
 import { groupOptionsForPrograms } from "@/lib/groups";
+import { teachesProgram } from "@/lib/teaching";
 import { buildAttendanceSheets, fromDateKey, slotsLabel } from "@/lib/schedule";
 
 /**
@@ -95,12 +96,21 @@ export async function getDashboardStats(cycleId?: string) {
 export async function getFinalGradingProgress(cycleId: string) {
   const [programs, enrollments, graded] = await Promise.all([
     prisma.program.findMany({
-      where: { active: true, teacherId: { not: null }, cycles: { some: { id: cycleId } } },
-      select: { id: true, teacherId: true, teacher: { select: { id: true, name: true } } },
+      where: { active: true, cycles: { some: { id: cycleId } } },
+      select: {
+        id: true,
+        teacher: { select: { id: true, name: true } },
+        coTeachers: { select: { id: true, name: true } },
+      },
     }),
     prisma.enrollment.findMany({
       where: { cycleId, status: "ACTIVA" },
-      select: { studentId: true, programId: true },
+      select: {
+        studentId: true,
+        programId: true,
+        // A quien va en un grupo con terapeuta propia lo califica esa, no la titular.
+        group: { select: { teacher: { select: { id: true, name: true } } } },
+      },
     }),
     // Solo las que ya tienen nota final: las demás no dicen nada aquí.
     prisma.levelRecord.findMany({
@@ -109,17 +119,24 @@ export async function getFinalGradingProgress(cycleId: string) {
     }),
   ]);
 
-  const teacherOf = new Map(programs.map((p) => [p.id, p.teacher!]));
+  // Sin grupo propio, al participante lo califican la titular y las que dan el
+  // programa con ella: a cada una le cuenta como suyo.
+  const teachersOf = new Map(
+    programs.map((p) => [p.id, [p.teacher, ...p.coTeachers].filter((t) => t != null)]),
+  );
   const calificado = new Set(graded.map((g) => `${g.studentId}:${g.programId}`));
 
   // Por terapeuta: cuántos le tocan y cuántos lleva.
   const total = new Map<string, { name: string; pendientes: number }>();
   for (const e of enrollments) {
-    const teacher = teacherOf.get(e.programId);
-    if (!teacher) continue; // programa sin terapeuta a cargo: no es de nadie
-    const fila = total.get(teacher.id) ?? { name: teacher.name, pendientes: 0 };
-    if (!calificado.has(`${e.studentId}:${e.programId}`)) fila.pendientes++;
-    total.set(teacher.id, fila);
+    const delPrograma = teachersOf.get(e.programId);
+    if (!delPrograma) continue; // programa fuera de la oferta o inactivo
+    // Sin nadie asignada, el participante no es de nadie.
+    for (const teacher of e.group?.teacher ? [e.group.teacher] : delPrograma) {
+      const fila = total.get(teacher.id) ?? { name: teacher.name, pendientes: 0 };
+      if (!calificado.has(`${e.studentId}:${e.programId}`)) fila.pendientes++;
+      total.set(teacher.id, fila);
+    }
   }
 
   const conPendientes = [...total.values()].filter((t) => t.pendientes > 0).length;
@@ -253,6 +270,8 @@ export async function getStudentSpace(studentId: string, activeCycleId?: string)
         orderBy: { startDate: "desc" },
         select: {
           id: true,
+          // Su grupo puede darlo otra terapeuta que la titular del programa.
+          group: { select: { teacher: { select: { name: true } } } },
           program: {
             select: {
               id: true,
@@ -260,6 +279,7 @@ export async function getStudentSpace(studentId: string, activeCycleId?: string)
               color: true,
               area: true,
               teacher: { select: { name: true } },
+              coTeachers: { orderBy: { name: "asc" }, select: { name: true } },
               scheduleSlots: {
                 orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
                 select: {
@@ -302,6 +322,7 @@ export async function listPrograms(cycleId?: string) {
     orderBy: [{ active: "desc" }, { name: "asc" }],
     include: {
       teacher: { select: { id: true, name: true } },
+      coTeachers: { orderBy: { name: "asc" }, select: { id: true, name: true } },
       cycles: { select: { id: true } },
       levels: {
         orderBy: { order: "asc" },
@@ -329,6 +350,9 @@ export async function listPrograms(cycleId?: string) {
           ageMax: true,
           studentCapacity: true,
           programLevelId: true,
+          active: true,
+          teacherId: true,
+          teacher: { select: { id: true, name: true } },
           level: { select: { id: true, name: true } },
           slots: {
             orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
@@ -754,7 +778,9 @@ export async function listProgramsWithLevels() {
       name: true,
       color: true,
       area: true,
-      teacherId: true, // para acotar a la terapeuta a los programas a su cargo
+      teacherId: true, // para acotar a la terapeuta a los programas que da
+      coTeachers: { select: { id: true } }, // (a cargo, junto con la titular
+      groups: { select: { teacherId: true, active: true } }, // o con un grupo suyo)
       coordination: true, // y a la coordinación a los de la suya
       levels: { orderBy: { order: "asc" }, select: { id: true, name: true, order: true, description: true } },
     },
@@ -763,7 +789,7 @@ export async function listProgramsWithLevels() {
 
 /**
  * Programas para el calendario del equipo: activos, de la oferta del ciclo y con
- * su horario estructurado. Se puede acotar a los de una terapeuta (teacherId) o a
+ * su horario estructurado. Se puede acotar a los que da una terapeuta (teacherId) o a
  * los de una coordinación —incluyendo siempre los que no tienen ninguna asignada,
  * para que un campo vacío no deje un programa sin quien lo vea.
  */
@@ -776,7 +802,7 @@ export async function listCalendarPrograms(
     where: {
       active: true,
       ...(cycleId ? { cycles: { some: { id: cycleId } } } : {}),
-      ...(teacherId ? { teacherId } : {}),
+      ...(teacherId ? { AND: [teachesProgram(teacherId)] } : {}),
       ...(coordination ? { OR: [{ coordination }, { coordination: null }] } : {}),
     },
     orderBy: { name: "asc" },
@@ -786,6 +812,7 @@ export async function listCalendarPrograms(
       color: true,
       area: true,
       teacher: { select: { id: true, name: true } },
+      coTeachers: { select: { id: true, name: true } },
       scheduleSlots: {
         orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
         select: {
@@ -802,6 +829,8 @@ export async function listCalendarPrograms(
               id: true,
               name: true,
               studentCapacity: true,
+              // Quién lo da, cuando no es la del programa.
+              teacher: { select: { id: true, name: true } },
               level: { select: { name: true } },
               _count: {
                 select: {
@@ -842,6 +871,7 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
         area: true,
         schedule: true,
         teacher: { select: { name: true } },
+        coTeachers: { orderBy: { name: "asc" }, select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
           select: {
@@ -860,6 +890,7 @@ export async function getClassPanel(programId: string, dateKey: string, cycleId?
             id: true,
             name: true,
             studentCapacity: true,
+            teacher: { select: { id: true, name: true } },
             level: { select: { name: true } },
             slots: {
               orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
@@ -957,6 +988,7 @@ export async function getFamilyOffer(studentId: string, cycleId: string) {
         studentCapacity: true,
         allowFamilyEnroll: true,
         teacher: { select: { name: true } },
+        coTeachers: { orderBy: { name: "asc" }, select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
           select: {
@@ -1178,7 +1210,7 @@ export async function listCycleParticipants(cycleId: string, query?: string) {
  * Alumnos con AUSENCIAS SEGUIDAS (3+) en un programa, mirando las últimas
  * sesiones registradas. Las sesiones donde no se les marcó nada no rompen la
  * racha (una lista sin pasar no es una asistencia). Si se da teacherId, se
- * acota a los programas de esa terapeuta.
+ * acota a los programas que da esa terapeuta.
  */
 export async function getAbsenceAlerts(teacherId?: string) {
   const since = new Date();
@@ -1187,7 +1219,7 @@ export async function getAbsenceAlerts(teacherId?: string) {
     where: {
       date: { gte: since },
       canceled: false,
-      ...(teacherId ? { program: { teacherId } } : {}),
+      ...(teacherId ? { program: teachesProgram(teacherId) } : {}),
     },
     orderBy: { date: "desc" },
     select: {
@@ -1566,6 +1598,7 @@ export async function getAttendanceSheet(
         color: true,
         area: true,
         teacher: { select: { name: true } },
+        coTeachers: { orderBy: { name: "asc" }, select: { name: true } },
         levels: { select: { id: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
@@ -1576,7 +1609,7 @@ export async function getAttendanceSheet(
             programLevelId: true,
             programGroupId: true,
             level: { select: { name: true } },
-            group: { select: { name: true } },
+            group: { select: { name: true, teacher: { select: { name: true } } } },
           },
         },
       },
@@ -1671,12 +1704,14 @@ export async function getProgramAcademicReport(
         color: true,
         area: true,
         teacher: { select: { name: true } },
+        coTeachers: { orderBy: { name: "asc" }, select: { name: true } },
         groups: {
           where: { active: true },
           orderBy: [{ level: { order: "asc" } }, { name: "asc" }],
           select: {
             id: true,
             name: true,
+            teacher: { select: { name: true } },
             level: { select: { name: true } },
             slots: {
               orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
@@ -1992,20 +2027,39 @@ export async function getOrgChart(): Promise<OrgNodeView[]> {
     userIds.length > 0
       ? await prisma.program.findMany({
           where: {
-            teacherId: { in: userIds },
+            OR: [
+              { teacherId: { in: userIds } },
+              { coTeachers: { some: { id: { in: userIds } } } },
+              { groups: { some: { teacherId: { in: userIds }, active: true } } },
+            ],
             active: true,
             ...(cycle ? { cycles: { some: { id: cycle.id } } } : {}),
           },
           orderBy: { name: "asc" },
-          select: { id: true, name: true, color: true, teacherId: true },
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            teacherId: true,
+            coTeachers: { select: { id: true } },
+            groups: { where: { active: true }, select: { teacherId: true } },
+          },
         })
       : [];
+  // Cada programa le cuenta a su titular, a las que lo dan con ella y a quien dé
+  // alguno de sus grupos.
   const porTerapeuta = new Map<string, { id: string; name: string; color: string | null }[]>();
   for (const p of programs) {
-    if (!p.teacherId) continue;
-    const list = porTerapeuta.get(p.teacherId) ?? [];
-    list.push({ id: p.id, name: p.name, color: p.color });
-    porTerapeuta.set(p.teacherId, list);
+    const quienes = new Set(
+      [p.teacherId, ...p.coTeachers.map((t) => t.id), ...p.groups.map((g) => g.teacherId)].filter(
+        (id): id is string => !!id,
+      ),
+    );
+    for (const id of quienes) {
+      const list = porTerapeuta.get(id) ?? [];
+      list.push({ id: p.id, name: p.name, color: p.color });
+      porTerapeuta.set(id, list);
+    }
   }
 
   const view = new Map<string, OrgNodeView>(
@@ -2062,6 +2116,7 @@ export async function getFamilyWaitlistBoard(studentId: string, cycleId: string)
         studentCapacity: true,
         allowFamilyEnroll: true,
         teacher: { select: { name: true } },
+        coTeachers: { orderBy: { name: "asc" }, select: { name: true } },
         scheduleSlots: {
           orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
           select: { weekday: true, startTime: true, endTime: true, programLevelId: true },

@@ -60,6 +60,8 @@ model User {
 
   evaluations         Evaluation[]      @relation("EvaluadorEvaluaciones")
   programs            Program[]         @relation("MaestroPrograma") // Programas/actividades a su cargo
+  groupsTaught        ProgramGroup[]    @relation("TerapeutaGrupo") // Grupos que da dentro de programas de otra
+  coPrograms          Program[]         @relation("TerapeutasAdicionales") // Programas sin grupos que da junto con la titular
   studentNotes        StudentNote[]     @relation("AutorAnotaciones") // Anotaciones que ha escrito
   announcements       Announcement[]    @relation("AutorAnuncios") // Anuncios que ha publicado
   reservationsDecided Reservation[]     @relation("DecideReservas") // Reservas que resolvió
@@ -212,6 +214,11 @@ model Program {
   teacher   User?   @relation("MaestroPrograma", fields: [teacherId], references: [id], onDelete: SetNull)
   teacherId String?
 
+  /// Las que lo dan ADEMÁS de la titular. Es para los programas sin grupos, donde no
+  /// hay grupo al cual asignarle a cada quien: Matemáticas lo dan Mariana y Adrián
+  /// con los mismos participantes. Con grupos se usa la terapeuta de cada grupo.
+  coTeachers User[] @relation("TerapeutasAdicionales")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -287,6 +294,13 @@ model ProgramGroup {
   ageMax          Int?
   studentCapacity Int? // null = el del programa
 
+  /// Quién da ESTE grupo. Un programa tiene a su terapeuta a cargo, pero no siempre
+  /// es la única que lo da: en Lectura la de Prerrequisitos es otra persona que en
+  /// los demás niveles. null = la del programa. Tener un grupo basta para que el
+  /// programa le aparezca y pueda pasar lista y calificar en él (lib/teaching.ts).
+  teacher   User?   @relation("TerapeutaGrupo", fields: [teacherId], references: [id], onDelete: SetNull)
+  teacherId String?
+
   active Boolean @default(true)
 
   slots       ScheduleSlot[] // Su horario (normalmente uno; el grupo es esa hora)
@@ -297,6 +311,7 @@ model ProgramGroup {
 
   @@index([programId])
   @@index([programLevelId])
+  @@index([teacherId])
 }
 
 /// Ciclo escolar por temporada. Los cursos corren en tres ciclos al año:

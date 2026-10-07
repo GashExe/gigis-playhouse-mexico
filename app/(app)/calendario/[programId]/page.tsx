@@ -25,6 +25,7 @@ import {
   type Slot,
 } from "@/lib/schedule";
 import { ClassPanel, CancelClassControl } from "@/components/class-panel";
+import { teacherNames } from "@/lib/teaching";
 
 export const metadata = { title: "Panel de clase" };
 
@@ -106,20 +107,29 @@ export default async function ClassPanelPage({
     .sort((a, b) => startOnDay(a, date.getDay()).localeCompare(startOnDay(b, date.getDay())));
   // Si ese día no toca ninguno (clase repuesta, día fuera de horario) se ofrecen todos.
   const groupChoices = dayGroups.length > 0 ? dayGroups : program.groups;
+  // La terapeuta que da algunos grupos de un programa ajeno cae primero en los suyos.
+  const misGrupos =
+    me.role === "TERAPEUTA" ? groupChoices.filter((g) => g.teacher?.id === me.id) : [];
+  const candidatos = misGrupos.length > 0 ? misGrupos : groupChoices;
   // Sin elección explícita: el grupo que corre a esta hora cuando el día es HOY, y el
   // primero del día en cualquier otro caso. Así la terapeuta abre el panel y ya está
   // en la lista que va a pasar.
   const ahora = nowHHMM();
   const porDefecto =
     dateKey === toDateKey(new Date())
-      ? groupChoices.find((g) =>
+      ? candidatos.find((g) =>
           g.slots.some((s) => s.weekday === date.getDay() && s.endTime >= ahora),
-        ) ?? groupChoices[groupChoices.length - 1]
-      : groupChoices[0];
+        ) ?? candidatos[candidatos.length - 1]
+      : candidatos[0];
   const verTodos = grupo === "todos" || program.groups.length === 0;
   const group = verTodos
     ? null
     : (grupo ? program.groups.find((g) => g.id === grupo) : null) ?? porDefecto ?? null;
+
+  // Quién da la clase que se está viendo: la del grupo, o las del programa.
+  const quienDa = group?.teacher
+    ? group.teacher.name
+    : teacherNames(program.teacher, program.coTeachers);
 
   // Los alumnos del grupo, y su asistencia. La sesión del día es una sola por
   // programa, así que las marcas de los otros grupos se quedan guardadas: aquí solo
@@ -187,10 +197,10 @@ export default async function ClassPanelPage({
               {slotsLabel(slots)}
             </span>
           )}
-          {program.teacher && (
+          {quienDa && (
             <span className="flex items-center gap-1.5">
               <ChalkboardTeacher className="size-4 text-subtle" />
-              {program.teacher.name}
+              {quienDa}
             </span>
           )}
           <span className="flex items-center gap-1.5">

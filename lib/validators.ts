@@ -121,6 +121,7 @@ export const ProgramGroupSchema = z.object({
   ageMin: z.string().trim().optional().or(z.literal("")),
   ageMax: z.string().trim().optional().or(z.literal("")),
   studentCapacity: z.string().trim().optional().or(z.literal("")),
+  teacherId: z.string().trim().optional().or(z.literal("")),
   weekday: z.string().trim().min(1, { message: "Escoge el día." }),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "Hora de inicio inválida." }),
   endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { message: "Hora de fin inválida." }),
