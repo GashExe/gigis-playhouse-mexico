@@ -1,7 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { Plus, PencilSimple, Trash, X, Warning } from "@phosphor-icons/react";
+import {
+  Plus,
+  PencilSimple,
+  Trash,
+  X,
+  Warning,
+  ChalkboardTeacher,
+} from "@phosphor-icons/react";
 import {
   saveProgramGroup,
   deleteProgramGroup,
@@ -18,12 +25,15 @@ export type GroupRow = {
   ageMax: number | null;
   studentCapacity: number | null;
   programLevelId: string | null;
+  teacherId: string | null;
+  teacher: { id: string; name: string } | null;
   level: { id: string; name: string } | null;
   slots: { weekday: number; startTime: string; endTime: string }[];
   _count: { enrollments: number };
 };
 
 type Level = { id: string; name: string; order: number };
+type Teacher = { id: string; name: string };
 
 function edadLabel(min: number | null, max: number | null): string {
   if (min != null && max != null) return `${min}–${max} años`;
@@ -47,6 +57,8 @@ export function ProgramGroups({
   levels,
   groups,
   canManage,
+  programTeacher,
+  teachers,
 }: {
   programId: string;
   /** Cupo del programa: el que hereda un grupo que no trae el suyo. */
@@ -54,6 +66,9 @@ export function ProgramGroups({
   levels: Level[];
   groups: GroupRow[];
   canManage: boolean;
+  /** La titular del programa: la que da los grupos que no traen terapeuta propia. */
+  programTeacher: Teacher | null;
+  teachers: Teacher[];
 }) {
   // null = cerrado · "nuevo" = alta · un id = editando ese grupo
   const [editing, setEditing] = useState<string | null>(null);
@@ -106,6 +121,8 @@ export function ProgramGroups({
                   group={g}
                   levels={levels}
                   programCapacity={programCapacity}
+                  programTeacher={programTeacher}
+                  teachers={teachers}
                   onDone={() => setEditing(null)}
                 />
               </li>
@@ -123,6 +140,13 @@ export function ProgramGroups({
                   {slotsLabel(g.slots) || "sin horario"}
                 </span>
                 <span className="text-muted">{edadLabel(g.ageMin, g.ageMax)}</span>
+                {/* Solo cuando lo da otra: si es la titular, ya se lee arriba. */}
+                {g.teacher && g.teacher.id !== programTeacher?.id && (
+                  <span className="flex items-center gap-1 font-semibold text-ink">
+                    <ChalkboardTeacher className="size-3.5 text-subtle" />
+                    {g.teacher.name}
+                  </span>
+                )}
                 <span className="tnum ml-auto font-semibold text-ink">
                   {g._count.enrollments}
                   <span className="font-normal text-muted">
@@ -165,6 +189,8 @@ export function ProgramGroups({
             group={null}
             levels={levels}
             programCapacity={programCapacity}
+            programTeacher={programTeacher}
+            teachers={teachers}
             onDone={() => setEditing(null)}
           />
         </div>
@@ -178,12 +204,16 @@ function GroupForm({
   group,
   levels,
   programCapacity,
+  programTeacher,
+  teachers,
   onDone,
 }: {
   programId: string;
   group: GroupRow | null;
   levels: Level[];
   programCapacity: number;
+  programTeacher: Teacher | null;
+  teachers: Teacher[];
   onDone: () => void;
 }) {
   const [state, action, pending] = useActionState<GroupFormState, FormData>(
@@ -308,6 +338,26 @@ function GroupForm({
             max={99}
             defaultValue={group?.studentCapacity ?? ""}
           />
+        </Field>
+        <Field
+          label="Terapeuta"
+          htmlFor={`terapeuta-${group?.id ?? "nuevo"}`}
+          hint="Cuando este grupo lo da otra persona que la titular del programa."
+        >
+          <Select
+            id={`terapeuta-${group?.id ?? "nuevo"}`}
+            name="teacherId"
+            defaultValue={group?.teacherId ?? ""}
+          >
+            <option value="">
+              {programTeacher ? `La del programa (${programTeacher.name})` : "La del programa"}
+            </option>
+            {teachers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
         </Field>
       </div>
 

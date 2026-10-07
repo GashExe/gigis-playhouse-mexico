@@ -7,6 +7,7 @@ import { getActiveCycle, getProgramAcademicReport, listCycles } from "@/lib/quer
 import { fechaDia } from "@/lib/format";
 import { PrintButton } from "@/components/print-button";
 import { ScorePair, SCORE_MEANING } from "@/components/grade-report";
+import { teacherNames } from "@/lib/teaching";
 
 export const metadata = { title: "Reporte del grupo" };
 
@@ -135,7 +136,14 @@ export default async function ReporteMateriaPage({
           </h2>
           <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
             <Dato label="Ciclo" value={cycle.label} />
-            <Dato label="Terapeuta" value={program.teacher?.name ?? "Sin asignar"} />
+            <Dato
+              label="Terapeuta"
+              value={
+                group?.teacher?.name ??
+                teacherNames(program.teacher, program.coTeachers) ??
+                "Sin asignar"
+              }
+            />
             {group && <Dato label="Grupo" value={groupLabel(group)} />}
             <Dato label="Participantes" value={String(totals.total)} />
             <Dato

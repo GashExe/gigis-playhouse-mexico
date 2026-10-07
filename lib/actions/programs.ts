@@ -58,6 +58,18 @@ function parseSlots(formData: FormData) {
   }
 }
 
+/**
+ * Las que lo dan además de la titular (casillas "coTeacherIds"). La titular no se
+ * repite aquí: ya está a cargo.
+ */
+function parseCoTeachers(formData: FormData, teacherId: string | undefined) {
+  const ids = formData
+    .getAll("coTeacherIds")
+    .map((v) => String(v).trim())
+    .filter((id) => id && id !== teacherId);
+  return [...new Set(ids)].map((id) => ({ id }));
+}
+
 /** Campos de actividad comunes a crear/editar. */
 function activityData(d: ReturnType<typeof ProgramSchema.parse>) {
   return {
@@ -94,6 +106,7 @@ export async function createProgram(
       area: d.area || null,
       color: d.color || PALETTE[count % PALETTE.length],
       ...activityData(d),
+      coTeachers: { connect: parseCoTeachers(formData, d.teacherId) },
       ...(cycle ? { cycles: { connect: { id: cycle.id } } } : {}),
     },
   });
@@ -137,6 +150,7 @@ export async function updateProgram(
       area: d.area || null,
       color: d.color || null,
       ...activityData(d),
+      coTeachers: { set: parseCoTeachers(formData, d.teacherId) },
     },
   });
 
@@ -203,6 +217,7 @@ export async function saveProgramGroup(
     ageMin: formData.get("ageMin") ?? "",
     ageMax: formData.get("ageMax") ?? "",
     studentCapacity: formData.get("studentCapacity") ?? "",
+    teacherId: formData.get("teacherId") ?? "",
     weekday: formData.get("weekday") ?? "",
     startTime: formData.get("startTime") ?? "",
     endTime: formData.get("endTime") ?? "",
@@ -231,6 +246,8 @@ export async function saveProgramGroup(
     ageMin: toInt(d.ageMin),
     ageMax: toInt(d.ageMax),
     studentCapacity: toInt(d.studentCapacity),
+    // Vacío = lo da la terapeuta del programa.
+    teacherId: d.teacherId || null,
   };
   const slot = {
     programId,

@@ -18,6 +18,7 @@ import {
 import { requestWaitlist, cancelWaitlist } from "@/lib/actions/waitlist";
 import { slotsLabel } from "@/lib/schedule";
 import { fechaDia } from "@/lib/format";
+import { teacherNames } from "@/lib/teaching";
 
 export const metadata: Metadata = { title: "Lista de espera" };
 
@@ -136,7 +137,9 @@ export default async function ListaEsperaPage() {
                       {!p.ageOk && ` · fuera de la edad de ${firstName}`}
                     </p>
                   )}
-                  {p.teacher && <p>Con {p.teacher.name}</p>}
+                  {teacherNames(p.teacher, p.coTeachers) && (
+                    <p>Con {teacherNames(p.teacher, p.coTeachers)}</p>
+                  )}
                 </div>
 
                 <div className="mt-auto pt-1">

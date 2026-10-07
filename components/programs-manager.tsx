@@ -53,6 +53,8 @@ type Program = {
   coordination: Coordination | null;
   teacherId: string | null;
   teacher: { id: string; name: string } | null;
+  /** Las que lo dan además de la titular (programas sin grupos). */
+  coTeachers: Teacher[];
   /** Grupos de la actividad: la hora, la edad y los lugares de cada uno. */
   groups: GroupRow[];
   _count: { enrollments: number; evaluations: number };
@@ -153,6 +155,7 @@ export function ProgramsManager({
                 program={p}
                 onEdit={() => setEditingId(p.id)}
                 canManage={canManage}
+                teachers={teachers}
               />
             ),
           )}
@@ -166,10 +169,12 @@ function ProgramCard({
   program: p,
   onEdit,
   canManage,
+  teachers,
 }: {
   program: Program;
   onEdit: () => void;
   canManage: boolean;
+  teachers: Teacher[];
 }) {
   const color = p.color ?? "var(--primary)";
   return (
@@ -250,8 +255,22 @@ function ProgramCard({
         <div className="flex items-center gap-2">
           <ChalkboardTeacher className="size-4 shrink-0 text-subtle" />
           <span>
-            {p.teacher ? (
-              <>Terapeuta: <span className="font-medium text-ink">{p.teacher.name}</span></>
+            {p.teacher || p.coTeachers.length > 0 ? (
+              <>
+                {p.teacher && (
+                  <>
+                    Terapeuta: <span className="font-medium text-ink">{p.teacher.name}</span>
+                  </>
+                )}
+                {p.coTeachers.length > 0 && (
+                  <>
+                    {p.teacher ? " · También: " : "Terapeutas: "}
+                    <span className="font-medium text-ink">
+                      {p.coTeachers.map((t) => t.name).join(", ")}
+                    </span>
+                  </>
+                )}
+              </>
             ) : (
               <span className="italic">Sin terapeuta asignada</span>
             )}
@@ -265,6 +284,8 @@ function ProgramCard({
         levels={p.levels}
         groups={p.groups}
         canManage={canManage}
+        programTeacher={p.teacher}
+        teachers={teachers}
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-sm text-muted">
@@ -555,6 +576,30 @@ function ProgramForm({
             </Select>
           </Field>
         </div>
+
+        {/* Varias terapeutas en un programa SIN grupos (Matemáticas: Mariana y
+            Adrián). Con grupos, cada quien se asigna en su grupo. */}
+        <fieldset>
+          <legend className="text-sm font-semibold text-ink">También lo dan</legend>
+          <p className="mt-0.5 text-xs text-muted">
+            Para los programas sin grupos que llevan varias terapeutas. Si el programa tiene
+            grupos, asígnala en cada grupo.
+          </p>
+          <div className="mt-2 grid max-h-48 gap-x-4 gap-y-1.5 overflow-y-auto rounded-[var(--radius-control)] border border-border bg-surface-2/50 p-3 sm:grid-cols-2">
+            {teachers.map((t) => (
+              <label key={t.id} className="flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  name="coTeacherIds"
+                  value={t.id}
+                  defaultChecked={defaults?.coTeachers?.some((c) => c.id === t.id) ?? false}
+                  className="size-4 shrink-0 accent-[var(--primary)]"
+                />
+                <span className="truncate">{t.name}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
 
         {/* El hidden va PRIMERO y el checkbox después: un checkbox desmarcado no
             envía nada, así que sin el hidden apagar la casilla nunca llegaría al

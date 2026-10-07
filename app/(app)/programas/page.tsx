@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ProgramsManager } from "@/components/programs-manager";
 import { CycleBar } from "@/components/cycle-bar";
 import { CycleOffer } from "@/components/cycle-offer";
+import { teaches } from "@/lib/teaching";
 
 export const metadata = { title: "Programas" };
 
@@ -35,10 +36,10 @@ export default async function ProgramsPage({
 
   const isDirectora = me.role === "DIRECTORA";
   const puedeGestionar = canManage(me.role);
-  // La terapeuta solo ve los programas a su cargo; la coordinación con área
+  // La terapeuta solo ve los programas que da (a cargo o con algún grupo suyo); la coordinación con área
   // asignada, los de su coordinación; el resto de gestión, la oferta completa.
   const visiblePrograms = (
-    puedeGestionar ? programs : programs.filter((prog) => prog.teacherId === me.id)
+    puedeGestionar ? programs : programs.filter((prog) => teaches(me.id, prog))
   ).filter((prog) => coversProgram(me, prog));
 
   return (

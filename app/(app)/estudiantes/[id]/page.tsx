@@ -44,6 +44,7 @@ import { LevelRecordsPanel } from "@/components/level-records-panel";
 import { StudentTimeline } from "@/components/student-timeline";
 import { AuditLog } from "@/components/audit-log";
 import { ResetPasswordButton } from "@/components/reset-password-button";
+import { teaches } from "@/lib/teaching";
 
 const genderLabel: Record<string, string> = {
   FEMENINO: "Femenino",
@@ -97,7 +98,7 @@ export default async function StudentDetailPage({
   const gradableProgramIds = !canGrade(me.role)
     ? []
     : (me.role === "TERAPEUTA"
-        ? programsWithLevels.filter((p) => p.teacherId === me.id)
+        ? programsWithLevels.filter((p) => teaches(me.id, p))
         : programsWithLevels
       )
         .filter((p) => coversProgram(me, p))

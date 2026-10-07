@@ -14,6 +14,7 @@ import {
   isReadOnly,
 } from "@/lib/roles";
 import type { Coordination, Role } from "@/lib/generated/prisma/client";
+import { teachesProgram } from "@/lib/teaching";
 
 /**
  * Capa de acceso a datos (DAL). Centraliza la verificación de sesión y autorización.
@@ -168,7 +169,7 @@ export async function requireVolunteer() {
 /**
  * Quién puede CALIFICAR en un programa (ubicar en nivel y poner la calificación
  * inicial y final): dirección y coordinación en cualquiera; la terapeuta SOLO en los
- * programas a su cargo (teacherId). La gestora de operaciones no califica.
+ * programas que da (a cargo o con algún grupo suyo, ver lib/teaching.ts). La gestora de operaciones no califica.
  */
 export async function requireGraderForProgram(programId: string) {
   const user = await getCurrentUser();
@@ -211,7 +212,7 @@ export async function canGradeProgram(programId: string): Promise<boolean> {
   if (!canGrade(user.role)) return false;
   if (user.role === "TERAPEUTA") {
     const own = await prisma.program.findFirst({
-      where: { id: programId, teacherId: user.id },
+      where: { id: programId, ...teachesProgram(user.id) },
       select: { id: true },
     });
     return Boolean(own);
@@ -236,10 +237,10 @@ export async function coversProgramId(
   return program != null && coversProgram(user, program);
 }
 
-/** El programa debe estar a cargo de esa terapeuta. */
+/** La terapeuta debe dar ese programa (a cargo o con algún grupo). */
 async function requireOwnProgram(userId: string, programId: string) {
   const own = await prisma.program.findFirst({
-    where: { id: programId, teacherId: userId },
+    where: { id: programId, ...teachesProgram(userId) },
     select: { id: true },
   });
   if (!own) throw new Error("No autorizado");

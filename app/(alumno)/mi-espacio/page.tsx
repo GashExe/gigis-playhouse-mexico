@@ -34,6 +34,7 @@ import { DonationCountdown } from "@/components/donation-countdown";
 import { TutorialVideo } from "@/components/tutorial-video";
 import { FamilyEnrollmentPicker } from "@/components/family-enrollment-picker";
 import { RichText } from "@/components/ui/rich-text";
+import { teacherNames } from "@/lib/teaching";
 
 export const metadata: Metadata = { title: "Mi espacio" };
 
@@ -338,7 +339,7 @@ export default async function MiEspacioPage() {
               ageMax: p.ageMax,
               studentCapacity: p.studentCapacity,
               allowFamilyEnroll: p.allowFamilyEnroll,
-              teacherName: p.teacher?.name ?? null,
+              teacherName: teacherNames(p.teacher, p.coTeachers),
               ageOk: p.ageOk,
               dropped: p.dropped,
               enrolled: offer.enrolledProgramIds.has(p.id),
@@ -434,11 +435,14 @@ export default async function MiEspacioPage() {
                         {horario}
                       </p>
                     )}
-                    {e.program.teacher && (
-                      <p className="mt-0.5 truncate text-xs text-subtle">
-                        Con {e.program.teacher.name}
-                      </p>
-                    )}
+                    {(() => {
+                      const con =
+                        e.group?.teacher?.name ??
+                        teacherNames(e.program.teacher, e.program.coTeachers);
+                      return con ? (
+                        <p className="mt-0.5 truncate text-xs text-subtle">Con {con}</p>
+                      ) : null;
+                    })()}
                   </div>
                 </li>
               );
