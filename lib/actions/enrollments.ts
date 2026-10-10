@@ -27,10 +27,13 @@ const ENROLLMENT_STATUS_LABEL: Record<string, string> = {
  * CICLO: el mismo alumno puede llevar un programa en Ene–Jun y repetirlo en Sep–Dic,
  * cada uno con su propio historial.
  */
-export async function addEnrollment(studentId: string, formData: FormData) {
+export async function addEnrollment(
+  studentId: string,
+  formData: FormData,
+): Promise<{ error?: string } | void> {
   await requireWriter("DIRECTORA", "COORDINADOR", "GESTORA_OPERACIONES");
   const programId = String(formData.get("programId") ?? "");
-  if (!programId) return;
+  if (!programId) return { error: "Escoge un programa." };
   // Grupo elegido. En los programas repartidos en grupos es lo que dice a qué hora
   // va: sin él, un participante de Prerrequisitos no sabría si le toca lunes o jueves.
   const chosenGroupId = String(formData.get("programGroupId") ?? "") || null;
@@ -40,14 +43,14 @@ export async function addEnrollment(studentId: string, formData: FormData) {
   const force = String(formData.get("force") ?? "") === "1";
 
   const cycle = await getActiveCycle();
-  if (!cycle) return;
+  if (!cycle) return { error: "No hay ciclo vigente." };
 
   // Solo programas ofertados en el ciclo activo: la directora arma esa oferta.
   const ofertado = await prisma.program.findFirst({
     where: { id: programId, cycles: { some: { id: cycle.id } } },
     select: { id: true, name: true, ageMin: true, ageMax: true },
   });
-  if (!ofertado) return;
+  if (!ofertado) return { error: "Ese programa no se ofrece en el ciclo vigente." };
 
   // Requisitos de la actividad. Sin confirmación explícita no se cuelan por URL.
   const student = await prisma.student.findUnique({
@@ -87,8 +90,17 @@ export async function addEnrollment(studentId: string, formData: FormData) {
   });
   // Programa con grupos y ninguno decidido: no se inscribe a ciegas. Meterlo al
   // primero que aparezca lo dejaría en un horario que nadie escogió.
-  if (hasGroups && !group) return;
-  if ((!ageOk || clash || load.full || groupFull) && !force) return;
+  if (hasGroups && !group) return { error: "Escoge a qué grupo va." };
+  // Ya no se rechaza en silencio: si el reparo no se vio en pantalla, que se diga cuál.
+  if ((!ageOk || clash || load.full || groupFull) && !force) {
+    const motivo = [
+      !ageOk && "está fuera del rango de edad",
+      clash && `se empalma con ${clash.programName} (${clash.label})`,
+      load.full && load.label?.toLowerCase(),
+      groupFull && "el grupo ya está lleno",
+    ].filter(Boolean).join(", ");
+    return { error: `No se inscribió: ${motivo}. Marca «Inscribir de todos modos» para autorizarlo.` };
+  }
 
   // Los reparos van a la bitácora: si dirección pasó por encima, que se sepa de qué.
   const reparos = [
