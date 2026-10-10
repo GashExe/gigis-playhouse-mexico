@@ -67,6 +67,21 @@ const EQUIPO: Alta[] = [
   { firstName: "Mariana", lastName: "Martínez", area: "Lectura y matemáticas" },
   { firstName: "Valeria", lastName: "Caraveo", area: "Matemáticas" },
   { firstName: "Adrián", lastName: "Carrillo", area: "Matemáticas" },
+  // Octubre 2026.
+  {
+    firstName: "Diana",
+    lastName: "Guerrero",
+    name: "Diana Guadalupe Guerrero Terrazas",
+    area: "Terapia educacional",
+  },
+  {
+    firstName: "Ana",
+    lastName: "Paniagua",
+    name: "Ana Ximena Paniagua Nieto",
+    area: "Coordinación de programas educacionales",
+    role: "COORDINADOR",
+    coordination: "EDUCACIONAL",
+  },
 ];
 
 /**

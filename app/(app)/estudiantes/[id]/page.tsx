@@ -26,6 +26,7 @@ import {
 } from "@/lib/queries";
 import {
   checkEnrollmentLoad,
+  findScheduleClash,
   findScheduleClashes,
   type ScheduleClash,
 } from "@/lib/enrollment-rules";
@@ -135,6 +136,20 @@ export default async function StudentDetailPage({
   const groupsOf = activeCycle
     ? await groupOptionsForPrograms(student.id, activeCycle.id, programs, studentAge)
     : new Map<string, GroupOption[]>();
+  // El empalme de cada grupo por separado. Cuando le cuadran dos (Prerrequisitos
+  // lunes o jueves) el empalme de arriba sale vacío —todavía no hay hora suya— y sin
+  // esto la pantalla no avisaba nada, no ofrecía pasar por encima y el servidor
+  // rechazaba en silencio el grupo que sí chocaba.
+  const groupClash = new Map<string, ScheduleClash>();
+  if (activeCycle) {
+    for (const [programId, gs] of groupsOf) {
+      if (gs.length < 2) continue;
+      for (const g of gs) {
+        const c = await findScheduleClash(student.id, activeCycle.id, programId, g.id);
+        if (c) groupClash.set(g.id, c);
+      }
+    }
+  }
   const programOptions = programs.map((p) => {
     const clash = clashes.get(p.id);
     return {
@@ -155,6 +170,9 @@ export default async function StudentDetailPage({
           .join(" · "),
         left: Math.max(0, g.capacity - g.occupied),
         full: g.full,
+        clashWarning: groupClash.has(g.id)
+          ? `Se empalma con ${groupClash.get(g.id)!.programName} (${groupClash.get(g.id)!.label})`
+          : null,
       })),
     };
   });

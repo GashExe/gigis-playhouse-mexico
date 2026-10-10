@@ -41,7 +41,14 @@ type ProgramOption = {
    * Grupos a los que puede entrar. Vacío = la actividad no reparte grupos. Con más
    * de uno hay que escoger a cuál va: es lo que dice su hora y su cupo.
    */
-  groups?: { id: string; label: string; left: number; full: boolean }[];
+  groups?: {
+    id: string;
+    label: string;
+    left: number;
+    full: boolean;
+    /** El empalme de ESTE grupo: con varios grupos el de la actividad no se sabe. */
+    clashWarning?: string | null;
+  }[];
 };
 
 export function EnrollmentsPanel({
@@ -67,18 +74,26 @@ export function EnrollmentsPanel({
   const [groupId, setGroupId] = useState("");
   const enrolledIds = new Set(enrollments.map((e) => e.program.id));
   const available = allPrograms.filter((p) => !enrolledIds.has(p.id));
+  const [error, setError] = useState<string | null>(null);
   const selected = available.find((p) => p.id === selectedId);
-  const warnings = [
-    selected?.ageWarning,
-    selected?.clashWarning,
-    selected ? loadWarning : null,
-  ].filter(Boolean) as string[];
-
   const grupos = selected?.groups ?? [];
   // Con un solo grupo no hay nada que preguntar: se resuelve solo en el servidor.
   const escogeGrupo = grupos.length > 1;
+  const grupo = escogeGrupo
+    ? grupos.find((g) => g.id === groupId)
+    : grupos.length === 1
+      ? grupos[0]
+      : undefined;
+  const warnings = [
+    selected?.ageWarning,
+    selected?.clashWarning,
+    grupo?.clashWarning,
+    grupo?.full ? "El grupo ya no tiene lugares" : null,
+    selected ? loadWarning : null,
+  ].filter(Boolean) as string[];
 
   function startAdding() {
+    setError(null);
     setSelectedId("");
     setGroupId("");
     setAdding(true);
@@ -99,7 +114,12 @@ export function EnrollmentsPanel({
       {adding && (
         <form
           action={async (fd) => {
-            await addEnrollment(studentId, fd);
+            const res = await addEnrollment(studentId, fd);
+            if (res?.error) {
+              setError(res.error);
+              return;
+            }
+            setError(null);
             setAdding(false);
             setSelectedId("");
             setGroupId("");
@@ -180,6 +200,12 @@ export function EnrollmentsPanel({
 
           {/* Reparos de la actividad. La familia no puede saltárselos desde Mi
               espacio; dirección sí, pero confirmando que lo hace a sabiendas. */}
+          {error && (
+            <p className="mt-3 text-sm font-semibold text-danger-strong" role="alert">
+              {error}
+            </p>
+          )}
+
           {warnings.length > 0 && (
             <div className="mt-3 rounded-[var(--radius-control)] border border-warning bg-warning-weak/40 p-3">
               <p className="flex items-center gap-1.5 text-sm font-bold text-warning-strong">
